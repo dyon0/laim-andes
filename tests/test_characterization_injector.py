@@ -12,14 +12,17 @@ def _text_frame(n: int) -> pl.DataFrame:
     })
 
 
-@pytest.mark.characterization_bug  # F-36: u64 hash % length wraps negative → str.slice fails
-def test_text_noise_crashes_on_large_frames():
+def test_text_noise_handles_large_frames():
+    """F-36 FIXED: hash%length no longer wraps negative; 500-row frames corrupt
+    cleanly (before the fix this raised InvalidOperationError on ~5% of rows)."""
     df = _text_frame(500)
     expr = TextNoise.corrupt_col(
         'sem_text', 'anomaly_severity', seed=12345,
         fractions={'chars': 0.25, 'loop': 0.25, 'foreign': 0.25, 'mojibake': 0.25})
-    with pytest.raises(pl.exceptions.InvalidOperationError, match='i64'):
-        df.with_columns(expr)
+    out = df.with_columns(expr)
+    assert out.height == 500
+    changed = (out['sem_text'] != df['sem_text']).sum()
+    assert changed == 500  # every row was corrupted (all rows are victims here)
 
 
 @pytest.mark.characterization

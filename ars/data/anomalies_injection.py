@@ -78,7 +78,10 @@ class TextNoise:
         ht      = idx.hash(seed = seed + 211)
         hs      = idx.hash(seed = seed + 331)
         hk      = idx.hash(seed = seed)
-        pos     = (hp % span).cast(pl.Int64)
+        # hash() is UInt64; `% <i64 expr>` promotes to i64 and wraps negative for
+        # ~half the hash range, which str.slice then rejects (finding F-36).
+        # Keep the modulo in u64: the result is < span, so the cast is lossless.
+        pos     = (hp % span.cast(pl.UInt64)).cast(pl.Int64)
         sep     = pl.lit(' ')
 
         choose      = lambda opts, h: reduce(
