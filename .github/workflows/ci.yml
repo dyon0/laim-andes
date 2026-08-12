@@ -1,0 +1,26 @@
+# CI contract: fast CPU suite must stay green.
+# (This file documents the contract even where remote runners are unavailable.)
+name: ci
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install (CPU torch)
+        run: |
+          python -m pip install -U pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -e '.[dev]'
+      - name: Fast suite (<2 min budget once cached)
+        run: python -m pytest -q -m "not slow and not gpu" --timeout 240
+      - name: Full suite
+        run: python -m pytest -q -m "not gpu"
