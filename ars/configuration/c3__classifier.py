@@ -16,6 +16,8 @@ class S3Config:
     run_id          : None | str
 
     select_metric   : MetricName    = 'f1'
+    # F-02: which split ranks experiments; 'test' only reproduces legacy bias
+    select_on       : str           = 'val'
 
     # F-06 guards: split fractions were hardcoded at the call site; a class below
     # min_per_class cannot be stratified 60/20/20 without empty splits.

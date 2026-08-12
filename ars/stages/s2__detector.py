@@ -552,9 +552,13 @@ def run_experiment(exp_cls: type[Experiment], data: PreparedData, cfg: S2Config)
     return results
 
 
-def _pick_best(all_results: Tuple[dict, ...], select_metric: MetricName) -> dict:
+def _pick_best(all_results: Tuple[dict, ...], select_metric: MetricName,
+               select_on: str = 'val') -> dict:
+    # F-02: model selection must not read TEST; 'val' is the default and 'test'
+    # remains available only for reproducing the legacy (biased) behavior.
+    key = 'val_metrics' if select_on == 'val' else 'test_metrics'
     return reduce(
-        lambda a, b: a if a['test_metrics'][select_metric] >= b['test_metrics'][select_metric] else b,
+        lambda a, b: a if a[key][select_metric] >= b[key][select_metric] else b,
         all_results)
 
 
@@ -571,10 +575,12 @@ def train_experiments(cfg: S2Config) -> Tuple[PreparedData, Tuple[dict, ...]]:
     all_results                 = tuple(map(lambda exp_cls: run_experiment(exp_cls, data, cfg), grid))
     print_summary_table(mcs, all_results)
     print_config_table (mcs, all_results)
-    best            = _pick_best(all_results, cfg.select_metric)
+    best            = _pick_best(all_results, cfg.select_metric, cfg.select_on)
     best_info       = {
         'best_experiment':  best['experiment'],
         'metric':           cfg.select_metric,
+        'selected_on':      cfg.select_on,
+        'selection_value':  float(best['val_metrics' if cfg.select_on == 'val' else 'test_metrics'][cfg.select_metric]),
         'value':            float(best['test_metrics'][cfg.select_metric]),
         'test_metrics':     best['test_metrics']}
     best_model_dir  = Path(cfg.output_dir) / 'best'
@@ -585,7 +591,7 @@ def train_experiments(cfg: S2Config) -> Tuple[PreparedData, Tuple[dict, ...]]:
 
 
 def _build_s2_meta(cfg: S2Config, data: PreparedData, all_results: Tuple[dict, ...]) -> S2Meta:
-    best            = _pick_best(all_results, cfg.select_metric)
+    best            = _pick_best(all_results, cfg.select_metric, cfg.select_on)
     experiment_name = best['experiment']
     experiment_dir  = Path(cfg.output_dir) / experiment_name
     combined_data   = FileIO.pickle_read(experiment_dir / 'combined_model.pkl')

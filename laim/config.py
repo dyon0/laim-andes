@@ -55,7 +55,7 @@ class DetectorConfig:
     """s2 knobs (mapped onto S2Config / experiment grid)."""
     threshold_metric: str = 'youden'      # configurable per mission requirement
     select_metric: str = 'youden'
-    select_on: str = 'test'               # 'test' = legacy (F-02); fix flips default to 'val'
+    select_on: str = 'val'                # F-02 fixed: selection on VAL ('test' = legacy bias)
     n_thresholds: int = 10000
     epochs: int = 10                      # legacy committed default (OQ-5)
     patience: int = 50
@@ -126,6 +126,7 @@ class RunConfig:
         return {
             'threshold_metric': det.threshold_metric,
             'select_metric': det.select_metric,
+            'select_on': det.select_on,
             'experiments': det.experiments,
             'epochs': det.epochs,
             'patience': det.patience,

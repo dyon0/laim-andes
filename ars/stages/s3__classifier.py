@@ -244,9 +244,11 @@ def _print_summary(mcs: ColorSchemeDataScience, all_results: Tuple[dict, ...]) -
         float_fmt       = '.4f', scheme = mcs)
 
 
-def _pick_best(all_results: Tuple[dict, ...], select_metric: str) -> dict:
+def _pick_best(all_results: Tuple[dict, ...], select_metric: str, select_on: str = 'val') -> dict:
+    # F-02: selection on val by default; 'test' only reproduces legacy bias
+    key = 'val_metrics' if select_on == 'val' else 'test_metrics'
     return reduce(
-        lambda a, b: a if a['test_metrics'][select_metric] >= b['test_metrics'][select_metric] else b,
+        lambda a, b: a if a[key][select_metric] >= b[key][select_metric] else b,
         all_results)
 
 
@@ -284,7 +286,7 @@ def train_experiments(cfg: S3Config) -> Tuple[FeatureData, Tuple[dict, ...]]:
     bar         = Progress.bar(EXPERIMENTS, desc = 'эксперименты s3', unit = 'exp', **mcs.tqdm_kwargs())
     all_results = tuple(map(lambda exp_cls: run_experiment(exp_cls, data, cfg), bar))
     _print_summary(mcs, all_results)
-    best        = _pick_best(all_results, cfg.select_metric)
+    best        = _pick_best(all_results, cfg.select_metric, cfg.select_on)
     best_dir    = Path(cfg.output_dir) / 'best'
     best_dir.mkdir(parents = True, exist_ok = True)
     FileIO.json_write(best_dir / 'best_info.json', {
@@ -299,7 +301,7 @@ def train_experiments(cfg: S3Config) -> Tuple[FeatureData, Tuple[dict, ...]]:
 
 
 def _build_s3_meta(cfg: S3Config, data: FeatureData, all_results: Tuple[dict, ...]) -> S3Meta:
-    best = _pick_best(all_results, cfg.select_metric)
+    best = _pick_best(all_results, cfg.select_metric, cfg.select_on)
     return S3Meta(
         output_dir          = Path(cfg.output_dir).as_posix(),
         experiment_dir      = (Path(cfg.output_dir) / best['experiment']).as_posix(),

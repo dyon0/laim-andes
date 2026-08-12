@@ -19,6 +19,8 @@ class S2Config:
 
     threshold_metric    : MetricName    = 'youden'
     select_metric       : MetricName    = 'youden'
+    # F-02: which split ranks experiments; 'test' only reproduces legacy bias
+    select_on           : Literal['val', 'test']    = 'val'
 
     # optional experiment-grid overrides; None keeps the values compiled into
     # ars/configuration/experiments/e2__detector.py (legacy behavior)
