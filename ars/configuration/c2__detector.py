@@ -44,6 +44,14 @@ class S2Config:
     max_len_cap         : None | int                        = None
     truncation_policy   : Literal['truncate', 'error']      = 'truncate'
 
+    # F-04: calibration degeneracy guards (MAD floors; min class counts and a
+    # weight cap for the Platt fit, with fallback to fixed priors)
+    cal_mad_floor_abs   : float = 1e-3
+    cal_mad_floor_rel   : float = 0.05
+    cal_min_pos         : int   = 5
+    cal_min_neg         : int   = 5
+    cal_w_cap           : float = 50.0
+
     seed    : int   = 12345
     eps     : float = 1e-8
     device  : str   = 'cpu'

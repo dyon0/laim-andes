@@ -443,7 +443,9 @@ def run_experiment(exp_cls: type[Experiment], data: PreparedData, cfg: S2Config)
     calibration = Calibrate.compute(
         models, data,
         best_threshold  = best_threshold, normalize_latent = exp_cfg.normalize_latent,
-        epi_mean        = mean_epi, epi_std = std_epi, sem_mean = mean_sem, sem_std = std_sem, eps = cfg.eps)
+        epi_mean        = mean_epi, epi_std = std_epi, sem_mean = mean_sem, sem_std = std_sem, eps = cfg.eps,
+        mad_floor_abs   = cfg.cal_mad_floor_abs, mad_floor_rel = cfg.cal_mad_floor_rel,
+        cal_min_pos     = cfg.cal_min_pos, cal_min_neg = cfg.cal_min_neg, cal_w_cap = cfg.cal_w_cap)
     mcs.print_subsection('Калибровка confidence')
     _ = tuple(starmap(lambda k, v: mcs.print_metric(k, f'{v:.6f}'), asdict(calibration).items()))
 

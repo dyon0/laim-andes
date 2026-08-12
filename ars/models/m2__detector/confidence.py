@@ -31,18 +31,29 @@ class Calibrate:
         return per_sample_sum / (per_sample_cnt + 1e-8), latent
 
     @staticmethod
-    def robust_stats(errors: Array) -> Tuple[Array, Array]:
+    def robust_stats(errors: Array, mad_floor_abs: float = 0.0, mad_floor_rel: float = 0.0) -> Tuple[Array, Array]:
+        '''F-04: MAD раскладывается в ноль на вырожденных распределениях
+        (например, ветвь, обученная на константных входах) — z-оценки тогда
+        взрываются до ~1e8. Пол MAD: max(mad, rel*|median|, abs).'''
         median  = jp.median(errors)
         mad     = jp.median(jp.abs(errors - median))
-        
+        mad     = jp.maximum(mad, jp.maximum(mad_floor_rel * jp.abs(median), mad_floor_abs))
+
         return median, mad
 
     @staticmethod
-    def fit_weights(logits_epi: Array, logits_sem: Array, logits_comb: Array, labels: Array) -> Tuple[Array, Array, Array, Array]:
+    def fit_weights(
+            logits_epi: Array, logits_sem: Array, logits_comb: Array, labels: Array,
+            min_pos: int = 5, min_neg: int = 5, w_cap: float = 50.0,
+    ) -> Tuple[Array, Array, Array, Array]:
+        '''F-04: балансированная логистическая калибровка с защитой от
+        вырождения. Возврат к priors, если: слишком мало примеров какого-либо
+        класса; BFGS вернул нечисловые/огромные веса; w_comb <= 0 (p_anomaly
+        обязана быть монотонна по комбинированной ошибке реконструкции).'''
         n_pos   = float(jp.sum(labels))
         n_neg   = float(labels.shape[0] - n_pos)
         priors  = jp.asarray((0.2, 0.2, 0.6, 0.0), dtype = jp.float32)
-        if (n_pos < 1.0) or (n_neg < 1.0):
+        if (n_pos < min_pos) or (n_neg < min_neg):
             return priors[0], priors[1], priors[2], priors[3]
         n_total         = n_pos + n_neg
         w_pos           = jp.asarray(n_total / (2.0 * n_pos), dtype = jp.float32)
@@ -56,9 +67,16 @@ class Calibrate:
             per_sample  = jp.maximum(z, 0.0) - z * y + jp.log1p(jp.exp(-jp.abs(z)))
             return jp.sum(per_sample * sample_weight) / jp.sum(sample_weight)
 
-        init    = jp.zeros(4, dtype = jp.float32)
-        result  = minimize(neg_log_likelihood, init, method = 'BFGS', options = {'maxiter': 200})
-        return result.x[0], result.x[1], result.x[2], result.x[3]
+        init        = jp.zeros(4, dtype = jp.float32)
+        result      = minimize(neg_log_likelihood, init, method = 'BFGS', options = {'maxiter': 200})
+        w           = result.x
+        degenerate  = (
+            (not bool(jp.isfinite(w).all())) or
+            float(jp.abs(w).max()) > w_cap or
+            float(w[2]) <= 0.0)
+        if degenerate:
+            return priors[0], priors[1], priors[2], priors[3]
+        return w[0], w[1], w[2], w[3]
 
     @staticmethod
     def compute(
@@ -71,6 +89,11 @@ class Calibrate:
             sem_mean            : None | Array,
             sem_std             : None | Array,
             eps                 : float,
+            mad_floor_abs       : float = 1e-3,
+            mad_floor_rel       : float = 0.05,
+            cal_min_pos         : int   = 5,
+            cal_min_neg         : int   = 5,
+            cal_w_cap           : float = 50.0,
     ) -> Calibration:
         train_epi_errs, train_epi_lat   = Calibrate.lstm_branch(
             models.epi_model, models.epi_state.params, prepared.train_epi_pad, prepared.train_epi_mask)
@@ -81,9 +104,10 @@ class Calibrate:
             train_sem_lat   = (train_sem_lat - sem_mean) / sem_std
         train_comb_errs = Branch.combined_errors(models.combined_state, models.combined_model, train_epi_lat, train_sem_lat)
 
-        epi_median, epi_mad     = Calibrate.robust_stats(train_epi_errs)
-        sem_median, sem_mad     = Calibrate.robust_stats(train_sem_errs)
-        comb_median, comb_mad   = Calibrate.robust_stats(train_comb_errs)
+        # floored MADs are STORED, so inference math needs no changes (F-04)
+        epi_median, epi_mad     = Calibrate.robust_stats(train_epi_errs,  mad_floor_abs, mad_floor_rel)
+        sem_median, sem_mad     = Calibrate.robust_stats(train_sem_errs,  mad_floor_abs, mad_floor_rel)
+        comb_median, comb_mad   = Calibrate.robust_stats(train_comb_errs, mad_floor_abs, mad_floor_rel)
 
         val_epi_errs, val_epi_lat_m = Calibrate.lstm_branch(
             models.epi_model, models.epi_state.params, prepared.val_epi_pad_mixed, prepared.val_epi_mask_mixed)
@@ -114,7 +138,9 @@ class Calibrate:
         logits_epi_val              = z_epi_val - aux_z_anomaly
         logits_sem_val              = z_sem_val - aux_z_anomaly
         logits_comb_val             = (val_comb_errs - best_threshold) / (comb_T + eps_safe)
-        w_epi, w_sem, w_comb, bias  = Calibrate.fit_weights(logits_epi_val, logits_sem_val, logits_comb_val, val_labels)
+        w_epi, w_sem, w_comb, bias  = Calibrate.fit_weights(
+            logits_epi_val, logits_sem_val, logits_comb_val, val_labels,
+            min_pos = cal_min_pos, min_neg = cal_min_neg, w_cap = cal_w_cap)
 
         return Calibration(
             epi_median          = float(epi_median),

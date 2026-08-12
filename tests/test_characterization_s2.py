@@ -53,13 +53,40 @@ def test_masked_loss_is_per_element():
     assert float(Loss.masked(recon, target, mask2, 'mse', 1.0, 1e-8)) == pytest.approx(1.0)
 
 
-@pytest.mark.characterization_bug  # F-04: zero-MAD calibration produces degenerate z-scores (fix pending)
-def test_zero_mad_makes_robust_z_explode():
+def test_mad_floor_bounds_robust_z():
+    """F-04 FIXED: degenerate error distributions get a floored MAD, so a unit
+    error maps to a bounded z-score (was ~1e8)."""
     errors = jp.zeros((16,), dtype=jp.float32)
-    median, mad = Calibrate.robust_stats(errors)
-    assert float(mad) == 0.0
+    median, mad = Calibrate.robust_stats(errors, mad_floor_abs=1e-3, mad_floor_rel=0.05)
+    assert float(mad) >= 1e-3
     z = (jp.asarray(1.0) - median) / (1.4826 * mad + 1e-8)
-    assert float(z) > 1e7  # a unit error maps to a ~1e8 z-score
+    assert float(z) < 1e4
+
+
+def test_fit_weights_falls_back_on_tiny_or_degenerate_val():
+    """F-04 FIXED: too-few val examples or insane fitted weights → fixed priors
+    with w_comb > 0 (monotonicity of p_anomaly in combined error)."""
+    # 3 positives < min_pos → priors
+    logits = jp.asarray([0.1, 0.2, 0.3, 0.4, 0.5, 0.6], dtype=jp.float32)
+    labels = jp.asarray([1, 1, 1, 0, 0, 0], dtype=jp.int32)
+    w_epi, w_sem, w_comb, bias = Calibrate.fit_weights(
+        logits, logits, logits, labels, min_pos=5, min_neg=5)
+    assert [float(w_epi), float(w_sem), float(w_comb), float(bias)] == \
+        pytest.approx([0.2, 0.2, 0.6, 0.0])
+    assert float(w_comb) > 0
+
+
+def test_fit_weights_keeps_monotone_direction_on_good_data():
+    """With separable data and enough examples, the fit runs — and w_comb must
+    stay positive (higher reconstruction error → higher p_anomaly)."""
+    key = jax.random.PRNGKey(0)
+    neg = jax.random.normal(key, (40,)) * 0.3 - 2.0
+    pos = jax.random.normal(jax.random.PRNGKey(1), (40,)) * 0.3 + 2.0
+    logits_comb = jp.concatenate([neg, pos])
+    zeros = jp.zeros_like(logits_comb)
+    labels = jp.concatenate([jp.zeros(40, dtype=jp.int32), jp.ones(40, dtype=jp.int32)])
+    _, _, w_comb, _ = Calibrate.fit_weights(zeros, zeros, logits_comb, labels)
+    assert float(w_comb) > 0
 
 
 def test_latent_std_floor_bounds_normalized_latents():
