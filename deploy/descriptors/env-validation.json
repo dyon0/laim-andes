@@ -1,0 +1,263 @@
+{
+    "id": "c4e2a1f7-6b08-4d39-8a51-2f9c7e0b4d16",
+    "name": "laim-ars | validation",
+    "description": "Валидация спанов и отчёт о готовности данных к мониторингу",
+    "fullDescription": "",
+    "shortNameToDisplay": "validation",
+    "ports": [
+        {
+            "in": true,
+            "name": "received_codebase",
+            "label": "received_codebase",
+            "description": "base64-кодовая база воркера (строка). Соединяется с codebase_validation ноды кодовой базы.",
+            "type": "default",
+            "required": true,
+            "order": 1
+        },
+        {
+            "in": true,
+            "name": "received_checksum",
+            "label": "received_checksum",
+            "description": "sha256 кодовой базы в hex (строка) для проверки целостности.",
+            "type": "default",
+            "required": true,
+            "order": 2
+        },
+        {
+            "in": true,
+            "name": "path_spans",
+            "label": "path_spans",
+            "description": "Путь к parquet со спанами для валидации. Платформа кладёт файл в /tmp, нода сканирует его polars. Один строгий параметр-источник.",
+            "type": "default",
+            "shape": "shape_dataframe",
+            "order": 3,
+            "getPortAsLocalPath": true
+        },
+        {
+            "in": false,
+            "name": "report_html",
+            "label": "report_html",
+            "description": "Самодостаточный HTML-отчёт валидации (одна строка). Для Results.",
+            "type": "hidden",
+            "order": 4
+        },
+        {
+            "in": false,
+            "name": "status",
+            "label": "status",
+            "description": "Светофор валидности: green — данные валидны, red — есть нарушения целостности.",
+            "type": "traffic_light",
+            "order": 5
+        },
+        {
+            "in": false,
+            "name": "verdict",
+            "label": "verdict",
+            "description": "Вердикт целостности (JSON): null_violations/missing/rule_violations/duplicate_keys/trace_breaks/valid.",
+            "type": "default",
+            "order": 6
+        }
+    ],
+    "script": {
+        "type": "python",
+        "deployType": "docker",
+        "baseImageKey": "py312-gpu",
+        "runConfiguration": {
+            "sourceFiles": [
+                "main.py"
+            ],
+            "functionName": "main",
+            "functionParameters": [],
+            "output": {
+                "type": "json",
+                "output": []
+            }
+        }
+    },
+    "ui": {
+        "settings": [
+            {
+                "page": "General",
+                "title": "Источник и политика",
+                "components": [
+                    {
+                        "type": "text",
+                        "label": "Как заполнять параметры",
+                        "config": {
+                            "datasets": [
+                                {
+                                    "value": "Валидация датасета спанов (схема ТЗ 1.9.2) и отчёт о готовности к мониторингу.\n• Источник: подключите порт path_spans — путь к parquet со спанами (например, parquet_path ноды synth). Платформа кладёт файл в /tmp, нода сканирует его polars (один строгий параметр-источник).\n• Политика готовности (Policy): пороги/центры для оценки объёма, качества и динамики.\n  window_days — окно по времени, дней; volume_target/volume_steepness — центр и крутизна логистики объёма (в эффективных трассах); rate_target — целевой приток трасс/корзину; min_eff_traces/max_loss/min_quality — жёсткие гейты вердикта; ready_at/pilot_at — пороги итоговой готовности.\n  Для небольших тестовых датасетов снижайте volume_target и min_eff_traces (иначе всё уйдёт в not_ready).\nНа выходе: HTML-отчёт (report_html, рендерится в Results), светофор валидности (status) и вердикт целостности (verdict, JSON) для downstream-нод."
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "type": "form",
+                        "label": "источник и политика готовности",
+                        "config": {
+                            "components": [
+                                {
+                                    "parameter": "device",
+                                    "label": "device — устройство сборки polars (cpu / gpu)",
+                                    "defaultValue": "cpu",
+                                    "uiComponent": "select",
+                                    "placeholder": "Select value",
+                                    "allowedValues": [
+                                        {
+                                            "cpu": "cpu"
+                                        },
+                                        {
+                                            "gpu": "gpu"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "parameter": "significance",
+                                    "label": "significance — пресет значимости (A строжайший … E мягкий), задаёт центры/гейты политики",
+                                    "defaultValue": "C",
+                                    "uiComponent": "select",
+                                    "placeholder": "Select value",
+                                    "allowedValues": [
+                                        {
+                                            "A": "A"
+                                        },
+                                        {
+                                            "B": "B"
+                                        },
+                                        {
+                                            "C": "C"
+                                        },
+                                        {
+                                            "D": "D"
+                                        },
+                                        {
+                                            "E": "E"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "parameter": "window_days",
+                                    "label": "window_days — окно по времени, дней",
+                                    "type": "string",
+                                    "defaultValue": "30",
+                                    "placeholder": "целое > 0",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "volume_target",
+                                    "label": "volume_target — центр логистики объёма (эфф. трасс)",
+                                    "type": "string",
+                                    "defaultValue": "100000",
+                                    "placeholder": "напр. 100000",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "volume_steepness",
+                                    "label": "volume_steepness — крутизна логистики объёма",
+                                    "type": "string",
+                                    "defaultValue": "1.5",
+                                    "placeholder": "напр. 1.5",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "rate_target",
+                                    "label": "rate_target — целевой приток трасс/корзину",
+                                    "type": "string",
+                                    "defaultValue": "1000",
+                                    "placeholder": "напр. 1000",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "min_eff_traces",
+                                    "label": "min_eff_traces — гейт: минимум эффективных трасс",
+                                    "type": "string",
+                                    "defaultValue": "10000",
+                                    "placeholder": "напр. 10000",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "max_loss",
+                                    "label": "max_loss — гейт: макс. доля отбраковки",
+                                    "type": "string",
+                                    "defaultValue": "0.30",
+                                    "placeholder": "0..1",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "min_quality",
+                                    "label": "min_quality — гейт: минимум качества",
+                                    "type": "string",
+                                    "defaultValue": "0.80",
+                                    "placeholder": "0..1",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "ready_at",
+                                    "label": "ready_at — порог готовности (ready)",
+                                    "type": "string",
+                                    "defaultValue": "0.70",
+                                    "placeholder": "0..1",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "pilot_at",
+                                    "label": "pilot_at — порог пилота (pilot)",
+                                    "type": "string",
+                                    "defaultValue": "0.50",
+                                    "placeholder": "0..1",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "recast",
+                                    "label": "recast — выравнивание типов через строки (если в parquet кривые типы)",
+                                    "type": "boolean",
+                                    "defaultValue": true,
+                                    "uiComponent": "checkbox"
+                                },
+                                {
+                                    "parameter": "dont_colorize_log",
+                                    "label": "dont_colorize_log — без раскраски логов",
+                                    "type": "boolean",
+                                    "defaultValue": true,
+                                    "uiComponent": "checkbox"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ],
+        "result": {
+            "title": "Results",
+            "components": [
+                {
+                    "type": "semaphore",
+                    "label": "Готовность данных",
+                    "config": {
+                        "datasets": [
+                            {
+                                "value": "$.status.value",
+                                "title": "$.status.title"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "type": "html",
+                    "uiComponent": "html",
+                    "name": "$.report_html",
+                    "parameter": "$.report_html",
+                    "label": "Отчёт валидации",
+                    "config": {
+                        "datasets": [
+                            {
+                                "data": "$.report_html"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    },
+    "shape": "other"
+}

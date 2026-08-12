@@ -1,0 +1,78 @@
+{
+    "id": "cdc2a798-9d38-487e-80a9-94d19c60b8bd",
+    "name": "laim-ars | codebase (validation)",
+    "description": "Поставка кодовой базы системы в виде упакованного содержимого модулей и контрольных сумм",
+    "fullDescription": "",
+    "shortNameToDisplay": "codebase",
+    "ports": [
+        {
+            "in": false,
+            "name": "codebase_validation",
+            "label": "codebase_validation",
+            "description": "Содержимое кодовой базы воркера validation",
+            "type": "default",
+            "order": 1
+        },
+        {
+            "in": false,
+            "name": "checksum_validation",
+            "label": "checksum_validation",
+            "description": "Контрольная сумма sha256 архива кодовой базы validation",
+            "type": "default",
+            "order": 2
+        }
+    ],
+    "script": {
+        "type": "python",
+        "deployType": "docker",
+        "baseImageKey": "py312-simple",
+        "runConfiguration": {
+            "sourceFiles": [
+                "main.py"
+            ],
+            "functionName": "main",
+            "functionParameters": [],
+            "output": {
+                "type": "json",
+                "output": []
+            }
+        }
+    },
+    "ui": {
+        "settings": [
+            {
+                "page": "Settings",
+                "title": "Настройки",
+                "components": [
+                    {
+                        "type": "form",
+                        "label": "Настройки не требуются",
+                        "config": {
+                            "components": []
+                        }
+                    }
+                ]
+            }
+        ],
+        "result": {
+            "title": "Результат",
+            "components": [
+                {
+                    "type": "text",
+                    "uiComponent": "text",
+                    "name": "$.checksum_validation",
+                    "parameter": "$.checksum_validation",
+                    "label": "sha256 кодовой базы validation",
+                    "config": {
+                        "datasets": [
+                            {
+                                "value": "$.checksum_validation"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    },
+    "shape": "other"
+}

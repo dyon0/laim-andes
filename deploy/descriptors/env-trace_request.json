@@ -1,0 +1,230 @@
+{
+    "id": "d7f57ccd-ab70-4588-87be-ca478b5a3f31",
+    "name": "laim-ars | trace_request",
+    "description": "Генерация SQL-запросов выборки трейсов агентов (full / train / test)",
+    "fullDescription": "",
+    "shortNameToDisplay": "trace_request",
+    "ports": [
+        {
+            "in": true,
+            "name": "received_codebase",
+            "label": "received_codebase",
+            "description": "base64-содержимое кодовой базы воркера (строка). Соединяется с портом codebase_trace_request ноды кодовой базы.",
+            "type": "default",
+            "required": true,
+            "order": 1
+        },
+        {
+            "in": true,
+            "name": "received_checksum",
+            "label": "received_checksum",
+            "description": "sha256 кодовой базы в hex (строка) для проверки целостности. Соединяется с портом sha_trace_request ноды кодовой базы.",
+            "type": "default",
+            "required": true,
+            "order": 2
+        },
+        {
+            "in": false,
+            "name": "sql_query_full",
+            "label": "sql_query_full",
+            "description": "Готовый SQL-запрос (строка): все трассы выборки с полем holdout.",
+            "type": "default",
+            "order": 3
+        },
+        {
+            "in": false,
+            "name": "sql_query_train",
+            "label": "sql_query_train",
+            "description": "Готовый SQL-запрос (строка): только тренировочные трассы (holdout = false).",
+            "type": "default",
+            "order": 4
+        },
+        {
+            "in": false,
+            "name": "sql_query_test",
+            "label": "sql_query_test",
+            "description": "Готовый SQL-запрос (строка): только тестовые трассы (holdout = true).",
+            "type": "default",
+            "order": 5
+        },
+        {
+            "in": false,
+            "name": "report_html",
+            "label": "report_html",
+            "description": "HTML-предпросмотр трёх сгенерированных запросов для панели результата.",
+            "type": "hidden",
+            "order": 6
+        }
+    ],
+    "script": {
+        "type": "python",
+        "deployType": "docker",
+        "baseImageKey": "py312-simple",
+        "runConfiguration": {
+            "sourceFiles": [
+                "main.py"
+            ],
+            "functionName": "main",
+            "functionParameters": [],
+            "output": {
+                "type": "json",
+                "output": []
+            }
+        }
+    },
+    "ui": {
+        "settings": [
+            {
+                "page": "Settings",
+                "title": "Параметры выборки",
+                "components": [
+                    {
+                        "type": "text",
+                        "label": "Как заполнять параметры",
+                        "config": {
+                            "datasets": [
+                                {
+                                    "value": "Нода выдаёт три готовых SQL-запроса: sql_query_full (все трассы с полем holdout), sql_query_train (holdout = false) и sql_query_test (holdout = true). Параметры подставляются в запрос уже экранированными.\n\nФорматы полей:\n• dialect — диалект SQL (FreeSQL / SQLite / DuckDB / Postgres)\n• agents — имена агентов через запятую например: CI09840650, CE12345678\n• t_min / t_max — границы времени UTC в формате yyyy.mm.dd-hh:mm:<11 цифр наносекунд внутри минуты>, например: 2025.05.25-00:00:00000000000\n• limit — целое > 0 или пусто (пусто = без ограничения числа записей)\n• inclusive — брать трассу, только если она целиком внутри окна и все её спаны из нужных агентов (имеет приоритет над eligible)\n• eligible — брать трассу целиком, если хотя бы один её спан подходит (действует, когда inclusive выключен; если оба выключены — фильтр на уровне отдельных спанов, и трейсы могут быть обрезаны!)\n• holdout_method — recent (свежие по времени) или random (детерминированно по seed)\n• holdout_percent — доля holdout (тестовой части) в процентах, 0..100\n• seed — целое зерно для random или пусто (пусто = недетерминированно)"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "type": "form",
+                        "label": "настройки SQL-генератора",
+                        "config": {
+                            "components": [
+                                {
+                                    "parameter": "table",
+                                    "label": "table — таблица с сырыми записями",
+                                    "type": "string",
+                                    "defaultValue": "t_team_valid_autovalid.aef_trace_expanded",
+                                    "placeholder": "t_team_valid_autovalid.aef_trace_expanded",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "dialect",
+                                    "label": "dialect — диалект SQL для генерации запроса",
+                                    "defaultValue": "FreeSQL",
+                                    "uiComponent": "select",
+                                    "placeholder": "Select value",
+                                    "allowedValues": [
+                                        {
+                                            "FreeSQL": "FreeSQL"
+                                        },
+                                        {
+                                            "SQLite": "SQLite"
+                                        },
+                                        {
+                                            "DuckDB": "DuckDB"
+                                        },
+                                        {
+                                            "Postgres": "Postgres"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "parameter": "agents",
+                                    "label": "agents — agent_id через запятую",
+                                    "type": "string",
+                                    "defaultValue": "CI09840650",
+                                    "placeholder": "CI09840650",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "t_min",
+                                    "label": "t_min — нижняя граница времени (UTC)",
+                                    "type": "string",
+                                    "defaultValue": "2025.05.25-00:00:00000000000",
+                                    "placeholder": "yyyy.mm.dd-hh:mm:<11 цифр нс>",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "t_max",
+                                    "label": "t_max — верхняя граница времени (UTC)",
+                                    "type": "string",
+                                    "defaultValue": "2025.06.01-23:59:59999999999",
+                                    "placeholder": "yyyy.mm.dd-hh:mm:<11 цифр нс>",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "limit",
+                                    "label": "limit — жесткий лимит записей (пусто = без лимита)",
+                                    "type": "string",
+                                    "defaultValue": "",
+                                    "placeholder": "целое > 0 или пусто",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "inclusive",
+                                    "label": "inclusive (strict): трасса целиком в окне и только нужные агенты; приоритетнее eligible",
+                                    "type": "boolean",
+                                    "defaultValue": false,
+                                    "uiComponent": "checkbox"
+                                },
+                                {
+                                    "parameter": "eligible",
+                                    "label": "eligible (loose): трасса целиком, если хотя бы один ее спан подходит",
+                                    "type": "boolean",
+                                    "defaultValue": true,
+                                    "uiComponent": "checkbox"
+                                },
+                                {
+                                    "parameter": "holdout_method",
+                                    "label": "holdout_method — метод выделения holdout",
+                                    "defaultValue": "recent",
+                                    "uiComponent": "select",
+                                    "placeholder": "Select value",
+                                    "allowedValues": [
+                                        {
+                                            "recent": "recent"
+                                        },
+                                        {
+                                            "random": "random"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "parameter": "holdout_percent",
+                                    "label": "holdout_percent — доля holdout, %",
+                                    "type": "string",
+                                    "defaultValue": "20.0",
+                                    "placeholder": "0..100",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "seed",
+                                    "label": "seed — зерно для random (пусто = недетерминированно)",
+                                    "type": "string",
+                                    "defaultValue": "42",
+                                    "placeholder": "целое или пусто",
+                                    "uiComponent": "input"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ],
+        "result": {
+            "title": "Результат",
+            "components": [
+                {
+                    "type": "html",
+                    "uiComponent": "html",
+                    "name": "$.report_html",
+                    "parameter": "$.report_html",
+                    "label": "Сгенерированные SQL-запросы",
+                    "config": {
+                        "datasets": [
+                            {
+                                "data": "$.report_html"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    },
+    "shape": "other"
+}

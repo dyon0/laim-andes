@@ -1,0 +1,78 @@
+{
+    "id": "d71ea63b-7371-428f-8031-b1a75aeb339a",
+    "name": "laim-ars | codebase (trace_request)",
+    "description": "Поставка кодовой базы системы в виде упакованного содержимого модулей и контрольных сумм",
+    "fullDescription": "",
+    "shortNameToDisplay": "codebase",
+    "ports": [
+        {
+            "in": false,
+            "name": "codebase_trace_request",
+            "label": "codebase_trace_request",
+            "description": "Содержимое кодовой базы воркера trace_request",
+            "type": "default",
+            "order": 1
+        },
+        {
+            "in": false,
+            "name": "checksum_trace_request",
+            "label": "checksum_trace_request",
+            "description": "Контрольная сумма sha256 архива кодовой базы trace_request",
+            "type": "default",
+            "order": 2
+        }
+    ],
+    "script": {
+        "type": "python",
+        "deployType": "docker",
+        "baseImageKey": "py312-simple",
+        "runConfiguration": {
+            "sourceFiles": [
+                "main.py"
+            ],
+            "functionName": "main",
+            "functionParameters": [],
+            "output": {
+                "type": "json",
+                "output": []
+            }
+        }
+    },
+    "ui": {
+        "settings": [
+            {
+                "page": "Settings",
+                "title": "Настройки",
+                "components": [
+                    {
+                        "type": "form",
+                        "label": "Настройки не требуются",
+                        "config": {
+                            "components": []
+                        }
+                    }
+                ]
+            }
+        ],
+        "result": {
+            "title": "Результат",
+            "components": [
+                {
+                    "type": "text",
+                    "uiComponent": "text",
+                    "name": "$.checksum_trace_request",
+                    "parameter": "$.checksum_trace_request",
+                    "label": "sha256 кодовой базы trace_request",
+                    "config": {
+                        "datasets": [
+                            {
+                                "value": "$.checksum_trace_request"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    },
+    "shape": "other"
+}

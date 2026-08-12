@@ -1,0 +1,78 @@
+{
+    "id": "0e3eb985-5797-4553-93be-300baaf09ade",
+    "name": "laim-ars | codebase (synthesis)",
+    "description": "Поставка кодовой базы системы в виде упакованного содержимого модулей и контрольных сумм",
+    "fullDescription": "",
+    "shortNameToDisplay": "codebase",
+    "ports": [
+        {
+            "in": false,
+            "name": "codebase_synthesis",
+            "label": "codebase_synthesis",
+            "description": "Содержимое кодовой базы воркера synthesis",
+            "type": "default",
+            "order": 1
+        },
+        {
+            "in": false,
+            "name": "checksum_synthesis",
+            "label": "checksum_synthesis",
+            "description": "Контрольная сумма sha256 архива кодовой базы synthesis",
+            "type": "default",
+            "order": 2
+        }
+    ],
+    "script": {
+        "type": "python",
+        "deployType": "docker",
+        "baseImageKey": "py312-simple",
+        "runConfiguration": {
+            "sourceFiles": [
+                "main.py"
+            ],
+            "functionName": "main",
+            "functionParameters": [],
+            "output": {
+                "type": "json",
+                "output": []
+            }
+        }
+    },
+    "ui": {
+        "settings": [
+            {
+                "page": "Settings",
+                "title": "Настройки",
+                "components": [
+                    {
+                        "type": "form",
+                        "label": "Настройки не требуются",
+                        "config": {
+                            "components": []
+                        }
+                    }
+                ]
+            }
+        ],
+        "result": {
+            "title": "Результат",
+            "components": [
+                {
+                    "type": "text",
+                    "uiComponent": "text",
+                    "name": "$.checksum_synthesis",
+                    "parameter": "$.checksum_synthesis",
+                    "label": "sha256 кодовой базы synthesis",
+                    "config": {
+                        "datasets": [
+                            {
+                                "value": "$.checksum_synthesis"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    },
+    "shape": "other"
+}

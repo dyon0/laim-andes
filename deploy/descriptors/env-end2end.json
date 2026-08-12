@@ -1,0 +1,678 @@
+{
+    "id": "a1e1ac18-c5df-43e3-8f09-d8bfb01cb7f5",
+    "name": "laim-ars | end2end",
+    "description": "Подготовка данных (s1), обучение детектора (s2), обучение классификатора (s3)",
+    "fullDescription": "",
+    "shortNameToDisplay": "end2end",
+    "ports": [
+        {
+            "in": true,
+            "name": "received_codebase",
+            "label": "received_codebase",
+            "description": "base64-кодовая база воркера (строка). Соединяется с codebase_synth ноды кодовой базы.",
+            "type": "default",
+            "required": true,
+            "order": 1
+        },
+        {
+            "in": true,
+            "name": "received_checksum",
+            "label": "received_checksum",
+            "description": "sha256 кодовой базы в hex (строка) для проверки целостности. Соединяется с sha_synth.",
+            "type": "default",
+            "required": true,
+            "order": 2
+        },
+        {
+            "name": "path_traces_train",
+            "label": "path_traces_train",
+            "in": true,
+            "type": "default",
+            "shape": "shape_dataframe",
+            "description": "Путь к parquet с ОБУЧАЮЩИМ набором трасс (формат aef, до адаптера) С РАЗМЕТКОЙ аномалий (колонки class/anomaly_type или результат инъекции). Платформа кладёт файл в /tmp, нода сканирует его polars. Идёт на s1→s2.",
+            "required": true,
+            "order": 3,
+            "getPortAsLocalPath": true
+        },
+        {
+            "name": "path_traces_test",
+            "label": "path_traces_test",
+            "in": true,
+            "type": "default",
+            "shape": "shape_dataframe",
+            "description": "Путь к parquet с ТЕСТОВЫМ набором трасс (формат aef, до адаптера) СТРОГО БЕЗ разметки аномалий — только инференс s2/s3. Платформа кладёт файл в /tmp, нода сканирует его polars.",
+            "required": true,
+            "order": 4,
+            "getPortAsLocalPath": true
+        },
+        {
+            "name": "path_embedder",
+            "label": "path_embedder",
+            "in": true,
+            "type": "default",
+            "shape": "shape_model",
+            "description": "Путь к модели векторизатора текстов (encodechka).",
+            "getPortAsLocalPath": true,
+            "required": true,
+            "order": 5
+        },
+        {
+            "name": "detector_metrics_holdout",
+            "label": "detector_metrics_holdout",
+            "in": false,
+            "type": "default",
+            "shape": "shape_model",
+            "description": "Метрики детектора аномалий на hold-out выборке.",
+            "order": 6
+        },
+        {
+            "name": "classifier_metrics_holdout",
+            "label": "classifier_metrics_holdout",
+            "in": false,
+            "type": "default",
+            "shape": "shape_model",
+            "description": "Метрики классификатора аномалий на hold-out выборке (заглушка на текущем этапе).",
+            "order": 7
+        },
+        {
+            "name": "anomaly_traces",
+            "label": "anomaly_traces",
+            "in": false,
+            "type": "dataframe",
+            "shape": "shape_dataframe",
+            "description": "Трассы из тестового набора, детектированные как аномальные (id трассы, уверенность детектора, класс, уверенность классификатора, rca).",
+            "order": 8
+        },
+        {
+            "name": "html_reports",
+            "label": "html_reports",
+            "in": false,
+            "type": "default",
+            "shape": "shape_model",
+            "description": "Словарь HTML-отчётов этапов (подготовка данных s1, обучение детектора s2). Ключи задаёт collect_reports в s5_reports.",
+            "order": 9
+        },
+        {
+            "in": false,
+            "name": "test_anomalies",
+            "label": "test_anomalies",
+            "description": "JSON-объект {\"anomalies\": [...]} по аномалиям, выявленным на отложенной test-подвыборке. Поля каждой записи: trace_id; starttime/endtime (ISO-8601 UTC, вычислены по границам спанов трейса из сырого test-parquet); confidence (0..100 = detector_confidence×100); anomaly_type (заглушка от s3-классификатора); business_description / user_query / agent_response / tech_details / rca_results / _comment (заглушки от модуля RCA). Те же поля добавлены и в датафрейм anomaly_traces.",
+            "type": "default",
+            "order": 10
+        }
+    ],
+    "script": {
+        "type": "python",
+        "baseImageKey": "py312-gpu",
+        "deployType": "docker",
+        "runConfiguration": {
+            "sourceFiles": [
+                "main.py"
+            ],
+            "functionName": "main",
+            "functionParameters": [],
+            "output": {
+                "type": "json",
+                "output": []
+            }
+        }
+    },
+    "ui": {
+        "settings": [
+            {
+                "page": "General",
+                "title": "Запуск",
+                "components": [
+                    {
+                        "type": "text",
+                        "label": "О настройках",
+                        "config": {
+                            "datasets": [
+                                {
+                                    "value": "Базовые параметры запуска run_all + тонкие настройки этапов s1 и s2 (вкладки s1/s2). Поля s1_*/s2_* пробрасываются в S1Config/S2Config (см. правки run_all). Структурные поля (пути, словари fill_*, шаблоны промптов, winsorize_limits) остаются в конфигах по умолчанию."
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "type": "form",
+                        "label": "Параметры run_all",
+                        "config": {
+                            "components": [
+                                {
+                                    "parameter": "output_prefix",
+                                    "label": "output_prefix — префикс артефактов/отчётов",
+                                    "type": "string",
+                                    "defaultValue": "demo",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "dont_colorize_log",
+                                    "label": "dont_colorize_log — без раскраски логов",
+                                    "type": "boolean",
+                                    "defaultValue": true,
+                                    "uiComponent": "checkbox"
+                                },
+                                {
+                                    "parameter": "recast",
+                                    "label": "recast — выравнивание типов через строки (если в parquet кривые типы)",
+                                    "type": "boolean",
+                                    "defaultValue": false,
+                                    "uiComponent": "checkbox"
+                                },
+                                {
+                                    "parameter": "disable_progress",
+                                    "label": "disable_progress — отключить прогресс-бары (на платформе — включить)",
+                                    "type": "boolean",
+                                    "defaultValue": true,
+                                    "uiComponent": "checkbox"
+                                },
+                                {
+                                    "parameter": "progress_every",
+                                    "label": "progress_every — доля для шага прогресс-бара (0 = по умолчанию)",
+                                    "type": "number",
+                                    "defaultValue": 0,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "track_peak_memory",
+                                    "label": "track_peak_memory — измерять пиковую память (трекинг ВКЛ по умолчанию)",
+                                    "type": "boolean",
+                                    "defaultValue": true,
+                                    "uiComponent": "checkbox"
+                                },
+                                {
+                                    "parameter": "read_extensions",
+                                    "label": "read_extensions — распознавать расширение пути векторизатора (.zip → распаковать, иначе каталог как есть)",
+                                    "type": "boolean",
+                                    "defaultValue": true,
+                                    "uiComponent": "checkbox"
+                                },
+                                {
+                                    "parameter": "device",
+                                    "label": "device — единое устройство (cpu / gpu): jax-детектор + сборка polars + эмбеддер s1",
+                                    "defaultValue": "cpu",
+                                    "uiComponent": "select",
+                                    "placeholder": "Select value",
+                                    "allowedValues": [
+                                        {
+                                            "cpu": "cpu"
+                                        },
+                                        {
+                                            "gpu": "gpu"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+            {
+                "page": "s1",
+                "title": "Этап s1 — подготовка данных/признаки",
+                "components": [
+                    {
+                        "type": "form",
+                        "label": "S1Config",
+                        "config": {
+                            "components": [
+                                {
+                                    "parameter": "s1_embedding_batch_size",
+                                    "label": "embedding_batch_size",
+                                    "type": "integer",
+                                    "defaultValue": 32,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s1_embedding_max_length",
+                                    "label": "embedding_max_length",
+                                    "type": "integer",
+                                    "defaultValue": 1024,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s1_min_fill_rate",
+                                    "label": "min_fill_rate — порог заполненности признака",
+                                    "type": "float",
+                                    "defaultValue": 0.5,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s1_max_static_rate",
+                                    "label": "max_static_rate — порог константности",
+                                    "type": "float",
+                                    "defaultValue": 0.95,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s1_max_correlation",
+                                    "label": "max_correlation — порог корреляции (отсев)",
+                                    "type": "float",
+                                    "defaultValue": 0.999,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s1_use_meta_sem",
+                                    "label": "use_meta_sem — мета-семантика",
+                                    "type": "boolean",
+                                    "defaultValue": false,
+                                    "uiComponent": "checkbox"
+                                },
+                                {
+                                    "parameter": "s1_use_llm_sem",
+                                    "label": "use_llm_sem — LLM-семантика",
+                                    "type": "boolean",
+                                    "defaultValue": false,
+                                    "uiComponent": "checkbox"
+                                },
+                                {
+                                    "parameter": "s1_llm_sem_use_stub",
+                                    "label": "llm_sem_use_stub — заглушка LLM-семантики",
+                                    "type": "boolean",
+                                    "defaultValue": true,
+                                    "uiComponent": "checkbox"
+                                },
+                                {
+                                    "parameter": "s1_llm_sem_model",
+                                    "label": "llm_sem_model",
+                                    "type": "string",
+                                    "defaultValue": "deepvk/USER-bge-m3",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s1_llm_sem_max_new_tokens",
+                                    "label": "llm_sem_max_new_tokens",
+                                    "type": "integer",
+                                    "defaultValue": 64,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s1_llm_sem_temperature",
+                                    "label": "llm_sem_temperature",
+                                    "type": "float",
+                                    "defaultValue": 0.7,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s1_llm_sem_batch_size",
+                                    "label": "llm_sem_batch_size",
+                                    "type": "integer",
+                                    "defaultValue": 8,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s1_llm_sem_do_sample",
+                                    "label": "llm_sem_do_sample",
+                                    "type": "boolean",
+                                    "defaultValue": true,
+                                    "uiComponent": "checkbox"
+                                },
+                                {
+                                    "parameter": "s1_norm_train_ratio",
+                                    "label": "norm_train_ratio — доля train (норма)",
+                                    "type": "float",
+                                    "defaultValue": 0.7,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s1_norm_val_ratio",
+                                    "label": "norm_val_ratio — доля val (норма)",
+                                    "type": "float",
+                                    "defaultValue": 0.15,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s1_anom_val_ratio",
+                                    "label": "anom_val_ratio — доля val (аномалии)",
+                                    "type": "float",
+                                    "defaultValue": 0.7,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s1_anom_test_ratio",
+                                    "label": "anom_test_ratio — доля test (аномалии)",
+                                    "type": "float",
+                                    "defaultValue": 0.3,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s1_epi_normalization",
+                                    "label": "epi_normalization",
+                                    "defaultValue": "robust",
+                                    "uiComponent": "select",
+                                    "placeholder": "Select value",
+                                    "allowedValues": [
+                                        {
+                                            "zscore": "zscore"
+                                        },
+                                        {
+                                            "robust": "robust"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "parameter": "s1_winsorize_epi",
+                                    "label": "winsorize_epi — винзоризация epi",
+                                    "type": "boolean",
+                                    "defaultValue": true,
+                                    "uiComponent": "checkbox"
+                                },
+                                {
+                                    "parameter": "s1_eps_normalization",
+                                    "label": "eps_normalization",
+                                    "type": "float",
+                                    "defaultValue": 1e-06,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s1_eps_divide",
+                                    "label": "eps_divide",
+                                    "type": "float",
+                                    "defaultValue": 1e-08,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s1_duration_scale_to_sec",
+                                    "label": "duration_scale_to_sec",
+                                    "type": "float",
+                                    "defaultValue": 1000000000.0,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s1_default_agent_id",
+                                    "label": "default_agent_id",
+                                    "type": "string",
+                                    "defaultValue": "CI1",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s1_output_max_collection_len",
+                                    "label": "output_max_collection_len",
+                                    "type": "integer",
+                                    "defaultValue": 10,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s1_export_features",
+                                    "label": "export_features — сохранить фрейм признаков (для injection)",
+                                    "type": "boolean",
+                                    "defaultValue": false,
+                                    "uiComponent": "checkbox"
+                                },
+                                {
+                                    "parameter": "s1_seed_random",
+                                    "label": "seed_random",
+                                    "type": "integer",
+                                    "defaultValue": 12345,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s1_seed_polars",
+                                    "label": "seed_polars",
+                                    "type": "integer",
+                                    "defaultValue": 12345,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s1_seed_torch",
+                                    "label": "seed_torch",
+                                    "type": "integer",
+                                    "defaultValue": 12345,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s1_seed_split",
+                                    "label": "seed_split",
+                                    "type": "integer",
+                                    "defaultValue": 12345,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s1_seed_synth",
+                                    "label": "seed_synth",
+                                    "type": "integer",
+                                    "defaultValue": 12345,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s1_seed_llm",
+                                    "label": "seed_llm",
+                                    "type": "integer",
+                                    "defaultValue": 12345,
+                                    "uiComponent": "input"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+            {
+                "page": "s1.injection",
+                "title": "инъекции синтетических аномалий",
+                "components": [
+                    {
+                        "type": "form",
+                        "label": "InjectionConfig",
+                        "config": {
+                            "components": []
+                        }
+                    }
+                ]
+            },
+            {
+                "page": "s2",
+                "title": "Этап s2 — обучение детектора",
+                "components": [
+                    {
+                        "type": "form",
+                        "label": "S2Config",
+                        "config": {
+                            "components": [
+                                {
+                                    "parameter": "s2_threshold_metric",
+                                    "label": "threshold_metric — метрика выбора порога",
+                                    "defaultValue": "youden",
+                                    "uiComponent": "select",
+                                    "placeholder": "Select value",
+                                    "allowedValues": [
+                                        {
+                                            "accuracy": "accuracy"
+                                        },
+                                        {
+                                            "precision": "precision"
+                                        },
+                                        {
+                                            "recall": "recall"
+                                        },
+                                        {
+                                            "specificity": "specificity"
+                                        },
+                                        {
+                                            "f1": "f1"
+                                        },
+                                        {
+                                            "youden": "youden"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "parameter": "s2_select_metric",
+                                    "label": "select_metric — метрика выбора лучшего эксперимента",
+                                    "defaultValue": "youden",
+                                    "uiComponent": "select",
+                                    "placeholder": "Select value",
+                                    "allowedValues": [
+                                        {
+                                            "accuracy": "accuracy"
+                                        },
+                                        {
+                                            "precision": "precision"
+                                        },
+                                        {
+                                            "recall": "recall"
+                                        },
+                                        {
+                                            "specificity": "specificity"
+                                        },
+                                        {
+                                            "f1": "f1"
+                                        },
+                                        {
+                                            "youden": "youden"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "parameter": "s2_n_thresholds",
+                                    "label": "n_thresholds — число порогов в свипе",
+                                    "type": "integer",
+                                    "defaultValue": 10000,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s2_inference_normal_count",
+                                    "label": "inference_normal_count",
+                                    "type": "integer",
+                                    "defaultValue": 100000,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s2_inference_anomalous_count",
+                                    "label": "inference_anomalous_count",
+                                    "type": "integer",
+                                    "defaultValue": 100000,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s2_seed",
+                                    "label": "seed",
+                                    "type": "integer",
+                                    "defaultValue": 12345,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s2_eps",
+                                    "label": "eps",
+                                    "type": "float",
+                                    "defaultValue": 1e-08,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s2_encode_chunk",
+                                    "label": "s2_encode_chunk — размер чанка энкодинга LSTM-AE (память; меньше = меньше VRAM)",
+                                    "type": "number",
+                                    "defaultValue": 1024,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s2_seq_pad_chunk",
+                                    "label": "s2_seq_pad_chunk — размер чанка извлечения/паддинга трасс (память; меньше = меньше пикового буфера)",
+                                    "type": "number",
+                                    "defaultValue": 8192,
+                                    "uiComponent": "input"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+            {
+                "page": "s3",
+                "title": "Этап s3 — обучение классификатора",
+                "components": [
+                    {
+                        "type": "form",
+                        "label": "S3Config",
+                        "config": {
+                            "components": [
+                                {
+                                    "parameter": "s3_select_metric",
+                                    "label": "s3_select_metric — метрика выбора лучшего эксперимента классификатора",
+                                    "defaultValue": "macro_f1",
+                                    "uiComponent": "select",
+                                    "placeholder": "Select value",
+                                    "allowedValues": [
+                                        {
+                                            "accuracy": "accuracy"
+                                        },
+                                        {
+                                            "macro_f1": "macro_f1"
+                                        },
+                                        {
+                                            "macro_recall": "macro_recall"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "parameter": "s3_seed",
+                                    "label": "s3_seed — зерно ГПСЧ классификатора",
+                                    "type": "string",
+                                    "defaultValue": "12345",
+                                    "placeholder": "целое",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "s3_eps",
+                                    "label": "s3_eps — числовой эпсилон классификатора",
+                                    "type": "string",
+                                    "defaultValue": "1e-8",
+                                    "placeholder": "напр. 1e-8",
+                                    "uiComponent": "input"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ],
+        "result": {
+            "title": "Results",
+            "components": [
+                {
+                    "type": "html",
+                    "uiComponent": "html",
+                    "name": "$.html_reports.data",
+                    "parameter": "$.html_reports.data",
+                    "label": "Этап 1 — подготовка данных (s1)",
+                    "config": {
+                        "datasets": [
+                            {
+                                "data": "$.html_reports.data"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "type": "html",
+                    "uiComponent": "html",
+                    "name": "$.html_reports.detector",
+                    "parameter": "$.html_reports.detector",
+                    "label": "Этап 2 — обучение детектора (s2)",
+                    "config": {
+                        "datasets": [
+                            {
+                                "data": "$.html_reports.detector"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "type": "html",
+                    "uiComponent": "html",
+                    "name": "$.html_reports.classifier",
+                    "parameter": "$.html_reports.classifier",
+                    "label": "Этап 3 — классификатор типов аномалий (s3)",
+                    "config": {
+                        "datasets": [
+                            {
+                                "data": "$.html_reports.classifier"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    },
+    "shape": "other"
+}

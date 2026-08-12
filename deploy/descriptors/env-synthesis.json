@@ -1,0 +1,218 @@
+{
+    "id": "b2f1d6a4-3c9e-4a17-9d52-7e0a1c4f8b63",
+    "name": "laim-ars | synthesis",
+    "description": "Генерация синтетического датасета трейс-спанов с единым рычагом объёма",
+    "fullDescription": "",
+    "shortNameToDisplay": "synthesis",
+    "ports": [
+        {
+            "in": true,
+            "name": "received_codebase",
+            "label": "received_codebase",
+            "description": "base64-кодовая база воркера (строка). Соединяется с codebase_synth ноды кодовой базы.",
+            "type": "default",
+            "required": true,
+            "order": 1
+        },
+        {
+            "in": true,
+            "name": "received_checksum",
+            "label": "received_checksum",
+            "description": "sha256 кодовой базы в hex (строка) для проверки целостности. Соединяется с sha_synth.",
+            "type": "default",
+            "required": true,
+            "order": 2
+        },
+        {
+            "in": false,
+            "name": "report_html",
+            "label": "report_html",
+            "description": "Самодостаточный HTML-отчёт о датасете (одна строка, картинки внутри как base64). Для Results.",
+            "type": "hidden",
+            "order": 3
+        },
+        {
+            "in": false,
+            "name": "parquet_path",
+            "label": "parquet_path",
+            "description": "Путь к записанному parquet-файлу (строка) для downstream-нод.",
+            "type": "default",
+            "shape": "shape_dataframe",
+            "order": 4
+        },
+        {
+            "in": false,
+            "name": "summary",
+            "label": "summary",
+            "description": "Статистика датасета JSON-строкой: {\"spans\":..,\"traces\":..,\"agents\":..,\"kinds\":..}.",
+            "type": "default",
+            "order": 5
+        }
+    ],
+    "script": {
+        "type": "python",
+        "deployType": "docker",
+        "baseImageKey": "py312-gpu",
+        "runConfiguration": {
+            "sourceFiles": [
+                "main.py"
+            ],
+            "functionName": "main",
+            "functionParameters": [],
+            "output": {
+                "type": "json",
+                "output": []
+            }
+        }
+    },
+    "ui": {
+        "settings": [
+            {
+                "page": "General",
+                "title": "Параметры генерации",
+                "components": [
+                    {
+                        "type": "text",
+                        "label": "Как заполнять параметры",
+                        "config": {
+                            "datasets": [
+                                {
+                                    "value": "Генерация синтетических трейс-спанов (ТЗ 1.9.2). Один рычаг объёма — target_spans. Форматы полей:\n• target_spans — желаемое число записей-спанов (целое > 0). Модуль распределит его по агентам (в пропорции базовых долей) и сценариям; фактический объём «+- близко».\n• out_path — путь записи parquet (смонтированный/общий том).\n• seed — целое зерно ГПСЧ.\n• window_days — окно по времени, дней.\n• traces_per_session — трасс на сессию.\n• id_length — длина base64-идентификаторов.\n• corrupt_rate — базовая доля порчи (0..1).\n• error_rate — доля STATUS_CODE_ERROR (0..1).\n• unset_rate — доля STATUS_CODE_UNSET (0..1)."
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "type": "form",
+                        "label": "настройки генератора синтетики",
+                        "config": {
+                            "components": [
+                                {
+                                    "parameter": "target_spans",
+                                    "label": "target_spans — желаемое число спанов (единый рычаг объёма)",
+                                    "type": "string",
+                                    "defaultValue": "100000",
+                                    "placeholder": "целое > 0, напр. 100000",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "out_path",
+                                    "label": "out_path — путь записи parquet",
+                                    "type": "string",
+                                    "defaultValue": "/mnt/data/traces/raw/parquet/spans_example.parquet",
+                                    "placeholder": "/mnt/data/.../spans.parquet",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "seed",
+                                    "label": "seed — зерно ГПСЧ",
+                                    "type": "string",
+                                    "defaultValue": "20250601",
+                                    "placeholder": "целое",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "window_days",
+                                    "label": "window_days — окно по времени, дней",
+                                    "type": "string",
+                                    "defaultValue": "40",
+                                    "placeholder": "целое > 0",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "traces_per_session",
+                                    "label": "traces_per_session — трасс на сессию",
+                                    "type": "string",
+                                    "defaultValue": "3",
+                                    "placeholder": "целое > 0",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "id_length",
+                                    "label": "id_length — длина base64-идентификаторов",
+                                    "type": "string",
+                                    "defaultValue": "10",
+                                    "placeholder": "целое > 0",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "corrupt_rate",
+                                    "label": "corrupt_rate — базовая доля порчи",
+                                    "type": "string",
+                                    "defaultValue": "0.25",
+                                    "placeholder": "0..1",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "error_rate",
+                                    "label": "error_rate — доля ошибок (STATUS_CODE_ERROR)",
+                                    "type": "string",
+                                    "defaultValue": "0.10",
+                                    "placeholder": "0..1",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "unset_rate",
+                                    "label": "unset_rate — доля STATUS_CODE_UNSET",
+                                    "type": "string",
+                                    "defaultValue": "0.05",
+                                    "placeholder": "0..1",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "device",
+                                    "label": "device — устройство сборки polars (cpu / gpu)",
+                                    "defaultValue": "cpu",
+                                    "uiComponent": "select",
+                                    "placeholder": "Select value",
+                                    "allowedValues": [
+                                        {
+                                            "cpu": "cpu"
+                                        },
+                                        {
+                                            "gpu": "gpu"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "parameter": "recast",
+                                    "label": "recast — выравнивание типов через строки (если в parquet кривые типы)",
+                                    "type": "boolean",
+                                    "defaultValue": false,
+                                    "uiComponent": "checkbox"
+                                },
+                                {
+                                    "parameter": "dont_colorize_log",
+                                    "label": "dont_colorize_log — без раскраски логов",
+                                    "type": "boolean",
+                                    "defaultValue": true,
+                                    "uiComponent": "checkbox"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ],
+        "result": {
+            "title": "Results",
+            "components": [
+                {
+                    "type": "html",
+                    "label": "HTML-отчёт генерации",
+                    "config": {
+                        "datasets": [
+                            {
+                                "data": "$.report_html"
+                            }
+                        ]
+                    },
+                    "uiComponent": "html",
+                    "name": "$.report_html",
+                    "parameter": "$.report_html"
+                }
+            ]
+        }
+    },
+    "shape": "other"
+}

@@ -1,0 +1,78 @@
+{
+    "id": "c234e3ea-a1a3-474d-ac60-8e9621f6d374",
+    "name": "laim-ars | codebase (end2end)",
+    "description": "Поставка кодовой базы системы в виде упакованного содержимого модулей и контрольных сумм",
+    "fullDescription": "",
+    "shortNameToDisplay": "codebase",
+    "ports": [
+        {
+            "in": false,
+            "name": "codebase_end2end",
+            "label": "codebase_end2end",
+            "description": "Содержимое кодовой базы воркера end2end",
+            "type": "default",
+            "order": 1
+        },
+        {
+            "in": false,
+            "name": "checksum_end2end",
+            "label": "checksum_end2end",
+            "description": "Контрольная сумма sha256 архива кодовой базы end2end",
+            "type": "default",
+            "order": 2
+        }
+    ],
+    "script": {
+        "type": "python",
+        "deployType": "docker",
+        "baseImageKey": "py312-simple",
+        "runConfiguration": {
+            "sourceFiles": [
+                "main.py"
+            ],
+            "functionName": "main",
+            "functionParameters": [],
+            "output": {
+                "type": "json",
+                "output": []
+            }
+        }
+    },
+    "ui": {
+        "settings": [
+            {
+                "page": "Settings",
+                "title": "Настройки",
+                "components": [
+                    {
+                        "type": "form",
+                        "label": "Настройки не требуются",
+                        "config": {
+                            "components": []
+                        }
+                    }
+                ]
+            }
+        ],
+        "result": {
+            "title": "Результат",
+            "components": [
+                {
+                    "type": "text",
+                    "uiComponent": "text",
+                    "name": "$.checksum_end2end",
+                    "parameter": "$.checksum_end2end",
+                    "label": "sha256 кодовой базы end2end",
+                    "config": {
+                        "datasets": [
+                            {
+                                "value": "$.checksum_end2end"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    },
+    "shape": "other"
+}

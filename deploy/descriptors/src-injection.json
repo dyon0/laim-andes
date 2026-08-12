@@ -1,0 +1,78 @@
+{
+    "id": "91b6ff45-cd8a-4930-bffd-6f36cdce060e",
+    "name": "laim-ars | codebase (injection)",
+    "description": "Поставка кодовой базы системы в виде упакованного содержимого модулей и контрольных сумм",
+    "fullDescription": "",
+    "shortNameToDisplay": "codebase",
+    "ports": [
+        {
+            "in": false,
+            "name": "codebase_injection",
+            "label": "codebase_injection",
+            "description": "Содержимое кодовой базы воркера injection",
+            "type": "default",
+            "order": 1
+        },
+        {
+            "in": false,
+            "name": "checksum_injection",
+            "label": "checksum_injection",
+            "description": "Контрольная сумма sha256 архива кодовой базы injection",
+            "type": "default",
+            "order": 2
+        }
+    ],
+    "script": {
+        "type": "python",
+        "deployType": "docker",
+        "baseImageKey": "py312-simple",
+        "runConfiguration": {
+            "sourceFiles": [
+                "main.py"
+            ],
+            "functionName": "main",
+            "functionParameters": [],
+            "output": {
+                "type": "json",
+                "output": []
+            }
+        }
+    },
+    "ui": {
+        "settings": [
+            {
+                "page": "Settings",
+                "title": "Настройки",
+                "components": [
+                    {
+                        "type": "form",
+                        "label": "Настройки не требуются",
+                        "config": {
+                            "components": []
+                        }
+                    }
+                ]
+            }
+        ],
+        "result": {
+            "title": "Результат",
+            "components": [
+                {
+                    "type": "text",
+                    "uiComponent": "text",
+                    "name": "$.checksum_injection",
+                    "parameter": "$.checksum_injection",
+                    "label": "sha256 кодовой базы injection",
+                    "config": {
+                        "datasets": [
+                            {
+                                "value": "$.checksum_injection"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    },
+    "shape": "other"
+}

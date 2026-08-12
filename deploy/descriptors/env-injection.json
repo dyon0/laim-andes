@@ -1,0 +1,299 @@
+{
+    "id": "a7d3e9c1-5f24-4b8e-9c06-1d2a3f4b5e60",
+    "name": "laim-ars | injection",
+    "description": "Инъекция синтетических аномалий в датасет признаков",
+    "fullDescription": "",
+    "shortNameToDisplay": "injection",
+    "ports": [
+        {
+            "in": true,
+            "name": "received_codebase",
+            "label": "received_codebase",
+            "description": "base64-кодовая база воркера (строка). Соединяется с codebase_injection ноды кодовой базы.",
+            "type": "default",
+            "required": true,
+            "order": 1
+        },
+        {
+            "in": true,
+            "name": "received_checksum",
+            "label": "received_checksum",
+            "description": "sha256 кодовой базы в hex (строка) для проверки целостности.",
+            "type": "default",
+            "required": true,
+            "order": 2
+        },
+        {
+            "in": true,
+            "name": "path_features",
+            "label": "path_features",
+            "description": "Путь к parquet с признаковыми спанами (features). Платформа кладёт файл в /tmp, нода сканирует его polars. Один строгий параметр-источник: имя порта = именованному аргументу main.",
+            "type": "default",
+            "shape": "shape_dataframe",
+            "order": 3,
+            "getPortAsLocalPath": true
+        },
+        {
+            "in": false,
+            "name": "parquet_path",
+            "label": "parquet_path",
+            "description": "Путь к записанному parquet с аномалиями (строка) для downstream-нод.",
+            "type": "default",
+            "shape": "shape_dataframe",
+            "order": 5
+        },
+        {
+            "in": false,
+            "name": "report_html",
+            "label": "report_html",
+            "description": "Самодостаточный HTML-отчёт инъекции (одна строка). Для Results.",
+            "type": "hidden",
+            "order": 6
+        },
+        {
+            "in": false,
+            "name": "separability",
+            "label": "separability",
+            "description": "Разделимость по классам аномалий: AUC под плотностью нормы (JSON {класс: auc}).",
+            "type": "default",
+            "order": 7
+        }
+    ],
+    "script": {
+        "type": "python",
+        "deployType": "docker",
+        "baseImageKey": "py312-gpu",
+        "runConfiguration": {
+            "sourceFiles": [
+                "main.py"
+            ],
+            "functionName": "main",
+            "functionParameters": [],
+            "output": {
+                "type": "json",
+                "output": []
+            }
+        }
+    },
+    "ui": {
+        "settings": [
+            {
+                "page": "General",
+                "title": "Источник и план инъекции",
+                "components": [
+                    {
+                        "type": "text",
+                        "label": "Как заполнять параметры",
+                        "config": {
+                            "datasets": [
+                                {
+                                    "value": "Инъекция синтетических аномалий в датасет с УЖЕ ИЗВЛЕЧЁННЫМИ ПРИЗНАКАМИ (схема features).\n• Источник: подключите порт path_features — путь к parquet с признаками. Платформа кладёт файл в /tmp, нода сканирует его polars (один строгий параметр-источник).\n• Обязательные колонки-признаки: epi_vector (эпизодический вектор, List[Float]) и sem_vector (семантический эмбеддинг, List[Float] размерности 1024) + служебные trace_id/session_id/agent_id/aef_kind/start_time_ns.\n• frac_* — доли аномалий по классам (dpi/ipi/mp/hallucination/bias).\n• severity_low/high — диапазон силы аномалии; band_low/band_high — целевой коридор разделимости (AUC).\n• seed — зерно ГПСЧ.\nНа выходе: путь к parquet с аномалиями (parquet_path), HTML-отчёт (report_html) и AUC по классам (separability).\n• embedder_path — путь к эмбеддеру (zip-архив encodechka или каталог USER-bge-m3); нужен, чтобы построить семантические направления аномалий из текстов-якорей. Без него семантические направления вырождаются (эпизодическая часть инъекции остаётся реальной).\n• device — устройство сборки polars: cpu (streaming) или gpu (collect(engine='gpu') с авто-откатом на CPU; признаки List-векторные, поэтому GPU по ним обычно падает в CPU-fallback)."
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "type": "form",
+                        "label": "источник, доли классов и сила аномалий",
+                        "config": {
+                            "components": [
+                                {
+                                    "parameter": "out_path",
+                                    "label": "out_path — путь записи parquet с аномалиями",
+                                    "type": "string",
+                                    "defaultValue": "/mnt/data/traces/features_spans_injected.parquet",
+                                    "placeholder": "/mnt/data/.../injected.parquet",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "embedder_path",
+                                    "label": "embedder_path — путь к эмбеддеру (zip или каталог USER-bge-m3) для семантических направлений",
+                                    "type": "string",
+                                    "defaultValue": "/mnt/data/models/embedders/encodechka/encodechka.zip",
+                                    "placeholder": "/mnt/data/.../encodechka.zip",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "device",
+                                    "label": "device — устройство сборки polars (cpu / gpu)",
+                                    "defaultValue": "cpu",
+                                    "uiComponent": "select",
+                                    "placeholder": "Select value",
+                                    "allowedValues": [
+                                        {
+                                            "cpu": "cpu"
+                                        },
+                                        {
+                                            "gpu": "gpu"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "parameter": "seed",
+                                    "label": "seed — зерно ГПСЧ",
+                                    "type": "string",
+                                    "defaultValue": "12345",
+                                    "placeholder": "целое",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "frac_dpi",
+                                    "label": "frac_dpi — доля аномалий класса dpi",
+                                    "type": "string",
+                                    "defaultValue": "0.04",
+                                    "placeholder": "0..1",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "frac_ipi",
+                                    "label": "frac_ipi — доля аномалий класса ipi",
+                                    "type": "string",
+                                    "defaultValue": "0.04",
+                                    "placeholder": "0..1",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "frac_mp",
+                                    "label": "frac_mp — доля аномалий класса mp",
+                                    "type": "string",
+                                    "defaultValue": "0.03",
+                                    "placeholder": "0..1",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "frac_hallucination",
+                                    "label": "frac_hallucination — доля класса hallucination",
+                                    "type": "string",
+                                    "defaultValue": "0.05",
+                                    "placeholder": "0..1",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "frac_bias",
+                                    "label": "frac_bias — доля класса bias",
+                                    "type": "string",
+                                    "defaultValue": "0.04",
+                                    "placeholder": "0..1",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "severity_low",
+                                    "label": "severity_low — нижняя граница силы аномалии",
+                                    "type": "string",
+                                    "defaultValue": "0.30",
+                                    "placeholder": "0..1",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "severity_high",
+                                    "label": "severity_high — верхняя граница силы аномалии",
+                                    "type": "string",
+                                    "defaultValue": "1.00",
+                                    "placeholder": "0..1",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "band_low",
+                                    "label": "band_low — нижняя граница коридора разделимости (AUC)",
+                                    "type": "string",
+                                    "defaultValue": "0.75",
+                                    "placeholder": "0..1",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "band_high",
+                                    "label": "band_high — верхняя граница коридора разделимости (AUC)",
+                                    "type": "string",
+                                    "defaultValue": "0.92",
+                                    "placeholder": "0..1",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "text_col",
+                                    "label": "text_col — текстовая колонка для порчи (галлюцинации: TextNoise → пере-эмбеддинг). Пусто = прямой сдвиг вектора",
+                                    "type": "string",
+                                    "defaultValue": "",
+                                    "placeholder": "напр. sem_text / output_text",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "text_noise",
+                                    "label": "text_noise — включить текстовый шум для hallucination",
+                                    "type": "boolean",
+                                    "defaultValue": true,
+                                    "uiComponent": "checkbox"
+                                },
+                                {
+                                    "parameter": "noise_chars",
+                                    "label": "noise_chars — доля шума: случайные символы",
+                                    "type": "string",
+                                    "defaultValue": "0.25",
+                                    "placeholder": "0..1",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "noise_loop",
+                                    "label": "noise_loop — доля шума: повтор фраз/циклы",
+                                    "type": "string",
+                                    "defaultValue": "0.25",
+                                    "placeholder": "0..1",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "noise_foreign",
+                                    "label": "noise_foreign — доля шума: иноязычные фрагменты",
+                                    "type": "string",
+                                    "defaultValue": "0.25",
+                                    "placeholder": "0..1",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "noise_mojibake",
+                                    "label": "noise_mojibake — доля шума: слом кодировки (mojibake)",
+                                    "type": "string",
+                                    "defaultValue": "0.25",
+                                    "placeholder": "0..1",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "recast",
+                                    "label": "recast — выравнивание типов через строки (если в parquet кривые типы)",
+                                    "type": "boolean",
+                                    "defaultValue": false,
+                                    "uiComponent": "checkbox"
+                                },
+                                {
+                                    "parameter": "dont_colorize_log",
+                                    "label": "dont_colorize_log — без раскраски логов",
+                                    "type": "boolean",
+                                    "defaultValue": true,
+                                    "uiComponent": "checkbox"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ],
+        "result": {
+            "title": "Результат",
+            "components": [
+                {
+                    "type": "html",
+                    "uiComponent": "html",
+                    "name": "$.report_html",
+                    "parameter": "$.report_html",
+                    "label": "Отчёт инъекции аномалий",
+                    "config": {
+                        "datasets": [
+                            {
+                                "data": "$.report_html"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    },
+    "shape": "other"
+}
