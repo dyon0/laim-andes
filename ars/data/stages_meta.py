@@ -36,6 +36,10 @@ class S1Meta:
     test_normal_count   : int
     test_anomaly_count  : int
 
+    # F-10: fingerprint of the embedding model the artifacts were built with;
+    # None only for legacy artifacts predating the field
+    embedding_fingerprint : None | str = None
+
 
 @dataclass(frozen = True)
 class S2Meta:

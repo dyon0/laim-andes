@@ -455,99 +455,40 @@ def calculate_features(
     return result, epi_feature_names
 
 
-"""
 @benchmark('вычисление sem-признаков')
-def compute_semantic_embeddings(df: pl.DataFrame, cfg: S1Config, text_col: str, out_col: str) -> pl.DataFrame:
-    #return df.with_columns(pl.lit((0.0,) * 1024).alias(out_col))
-    
+def compute_semantic_embeddings(
+    df       : pl.DataFrame,
+    cfg      : S1Config,
+    text_col : str,
+    out_col  : str,
+    embed    : 'None | Callable[[tuple[str, ...]], jp.ndarray]' = None,
+) -> pl.DataFrame:
+    """F-01: РЕАЛЬНЫЕ эмбеддинги для каждого спана (легаси возвращал нулевые
+    заглушки, из-за чего семантическая ветвь детектировала факт инъекции, а не
+    семантику). embed — общая функция с инъектором (make_embedder), чтобы
+    нормальные и аномальные спаны кодировались одной моделью."""
     MyColorScheme = cfg.output_color_scheme
     MyColorScheme.print_section(f'ЭМБЕДДИНГИ: {text_col} -> {out_col}')
     sprint(f'Модель: {cfg.embedder_path.name}, устройство: {cfg.device}', style_code = MyColorScheme.info)
 
-    texts = df[text_col].to_list()
-    MyColorScheme.print_metric('Всего текстов',     (num_texts := len(texts)))
-    MyColorScheme.print_metric('Пустых текстов',    sum(map(lambda _: 1, filterfalse(None, texts))))
-    
-    #Path(cfg.embedding_cache).mkdir(parents = True, exist_ok = True)
-    tokenizer   = AutoTokenizer.from_pretrained(
-        cfg.embedder_path,
-        local_files_only = True,)
-    embedder    = AutoModel.from_pretrained(
-        cfg.embedder_path,
-        local_files_only = True,).to(cfg.device).eval()
+    texts = df[text_col].cast(pl.Utf8).fill_null('').to_list()
+    MyColorScheme.print_metric('Всего текстов', len(texts))
 
-    def _embed_batch(batch: list[str]) -> list[list[float]]:
-        encoded = tokenizer(batch, padding = True, truncation = True, max_length = cfg.embedding_max_length, return_tensors = 'pt').to(cfg.device)
-        with tr.no_grad(): outputs = embedder(**encoded)
-        cls_emb = tr.nn.functional.normalize(outputs.last_hidden_state[:, 0, :], p = 2, dim = 1)
-        
-        return cls_emb.cpu().tolist()
-    
-    batch_size  = cfg.embedding_batch_size
-    num_batches = (num_texts + batch_size - 1) // batch_size
+    if embed is None:
+        embed = make_embedder(cfg)
 
-    batch_indices   = range(0, num_texts, batch_size)
-    batch_gen       = map(lambda i: texts[i:i + batch_size], batch_indices)
-    batch_gen       = Progress.bar(
-        batch_gen,
-        total   = num_batches,
-        desc    = out_col,
-        unit    = 'batch',
-        **MyColorScheme.tqdm_kwargs())
-    
-    embeddings      = tuple(chain.from_iterable(map(_embed_batch, batch_gen)))
-
-    if len(embeddings) != df.height:
-        raise ValueError('Количество эмбеддингов не совпадает с числом спанов')
-
-    df = df.with_columns(pl.Series(out_col, embeddings))
-    MyColorScheme.print_metric(f'Размерность SEM[{out_col}]', len(embeddings[0]) if embeddings else 0)
-
-    del embedder, tokenizer
-    collect()
-    if tr.cuda.is_available():
-        tr.cuda.empty_cache()
-        tr.cuda.synchronize()
-    
-    return df
-"""
-
-def compute_semantic_embeddings(df: pl.DataFrame, cfg: S1Config, text_col: str, out_col: str) -> pl.DataFrame:
-    return df.with_columns(pl.lit((0.0,) * 1024).alias(out_col))
-    
-    MyColorScheme = cfg.output_color_scheme
-    MyColorScheme.print_section(f'ЭМБЕДДИНГИ: {text_col} -> {out_col}')
-    sprint(f'Модель: {cfg.embedder_path.name}, устройство: {cfg.device}', style_code = MyColorScheme.info)
-
-    texts = df[text_col].to_list()
-    MyColorScheme.print_metric('Всего текстов',     (num_texts := len(texts)))
-    MyColorScheme.print_metric('Пустых текстов',    sum(map(lambda _: 1, filterfalse(None, texts))))
-    
-    model = SentenceTransformer(
-        cfg.embedder_path.as_posix(),
-        device              = cfg.device,
-        local_files_only    = True
-    )
-
-    embeddings = model.encode(
-        texts,
-        batch_size              = cfg.embedding_batch_size,
-        show_progress_bar       = True,
-        normalize_embeddings    = True,
-        convert_to_tensor       = False
-    )
+    chunk       = max(1, cfg.embedding_batch_size) * 32
+    parts       = tuple(map(
+        lambda i: embed(tuple(texts[i:i + chunk])),
+        range(0, len(texts), chunk)))
+    import numpy as _np
+    embeddings  = _np.concatenate(tuple(map(_np.asarray, parts)), axis = 0) if parts else _np.zeros((0, 1024))
 
     if len(embeddings) != df.height:
         raise ValueError('количество эмбеддингов не совпадает с числом спанов')
 
     df = df.with_columns(pl.Series(out_col, embeddings.tolist()))
     MyColorScheme.print_metric(f'Размерность SEM[{out_col}]', embeddings.shape[1] if len(embeddings) else 0)
-    
-    del model
-    collect()
-    if tr.cuda.is_available():
-        tr.cuda.empty_cache()
-        tr.cuda.synchronize()
 
     return df
 
@@ -969,6 +910,7 @@ def save_datasets(
         seed_synth          = cfg.seed_synth,
         seed_llm            = cfg.seed_llm,
         embedding_model     = cfg.embedder_path.as_posix(),
+        embedding_fingerprint = _embedder_fingerprint_or_none(cfg),
         epi_dim             = epi_dim,
         epi_features        = epi_features,
         epi_normalization   = norm_params,
@@ -1019,6 +961,14 @@ def save_datasets(
             datasets))
 
     return meta
+
+
+def _embedder_fingerprint_or_none(cfg: S1Config) -> None | str:
+    from ars.tools.utilities.fingerprint import model_fingerprint
+    try:
+        return model_fingerprint(cfg.embedder_path)
+    except FileNotFoundError:
+        return None
 
 
 def _set_seeds(cfg: S1Config, mcs: None | ColorSchemeDataScience) -> None:
@@ -1078,7 +1028,9 @@ def main(
     
     # этапы генерации альтернативных семантик и синтетики ...
     
-    spans                           = compute_semantic_embeddings(spans, cfg, 'sem_text', 'sem_vector')
+    shared_embedder                 = make_embedder(cfg)
+    spans                           = compute_semantic_embeddings(
+        spans, cfg, 'sem_text', 'sem_vector', embed = shared_embedder)
 
     if cfg.export_features:
         spans.write_parquet((cfg.output_dir / 'spans_features.parquet').as_posix())
@@ -1092,7 +1044,7 @@ def main(
                 spans_w_anoms = inject_anomalies(
                     spans_w_features,
                     InjectionConfig(sem_cols = ('sem_vector',), text_col = 'sem_text'),
-                    embedder = make_embedder(cfg))
+                    embedder = shared_embedder)
             spans_w_anoms = spans_w_anoms.with_columns(
                 (pl.col(DataObject.sublabel) != 'NonAnomaly').cast(pl.Int8).alias(DataObject.is_anomaly))            
             #spans_w_anoms = fill_missing_values(spans_w_anoms, cfg)
@@ -1196,6 +1148,10 @@ def prepare_test_data(
 
     #_set_seeds(cfg_test, mcs)
     
+    # F-10: the serving embedder must be the one the artifacts were built with
+    from ars.tools.utilities.fingerprint import verify_fingerprint
+    verify_fingerprint(cfg_test.embedder_path, getattr(s1_meta, 'embedding_fingerprint', None))
+
     raw_schema          = RawSchema()
     feature_patterns    = FeaturePatterns()
     features_span       = FeaturesSpan()
