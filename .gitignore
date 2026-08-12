@@ -8,3 +8,4 @@ baseline/runs/*/test_spans.parquet
 .hypothesis/
 artifacts/
 runs/
+runs_validation/

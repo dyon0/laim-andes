@@ -1,0 +1,208 @@
+{
+  "created_utc": "2026-08-12T12:58:34Z",
+  "git_sha": "e4b105d09a51ebf14929510db369d9cf5c13e894",
+  "python": "3.12.3 (main, Mar  3 2026, 12:15:18) [GCC 13.3.0]",
+  "platform": "Linux-6.18.5-fc-v20-x86_64-with-glibc2.39",
+  "config": {
+    "paths": {
+      "train_spans": "/tmp/synth_train.parquet",
+      "infer_spans": "/tmp/synth_infer.parquet",
+      "embedder": "/tmp/models/USER-bge-m3-standin",
+      "output_root": "runs_validation"
+    },
+    "runtime": {
+      "device": "cpu",
+      "seed": 12345,
+      "recast": true,
+      "progress": false,
+      "log_level": "INFO"
+    },
+    "data": {
+      "min_fill_rate": 0.5,
+      "max_static_rate": 0.95,
+      "max_correlation": 0.999,
+      "winsorize_epi": true,
+      "epi_normalization": "robust",
+      "norm_train_ratio": 0.7,
+      "norm_val_ratio": 0.15,
+      "anom_val_ratio": 0.7,
+      "anom_test_ratio": 0.3,
+      "inject_anomalies": true,
+      "validation_gate": "warn",
+      "scale_floor": 0.0
+    },
+    "detector": {
+      "threshold_metric": "youden",
+      "select_metric": "youden",
+      "select_on": "val",
+      "n_thresholds": 10000,
+      "epochs": 10,
+      "patience": 50,
+      "encode_chunk": 1024,
+      "seq_pad_chunk": 8192,
+      "experiments": [
+        "hub_mse_mse_08_4",
+        "hub_mse_hub_32_4_deep"
+      ]
+    },
+    "classifier": {
+      "enabled": true,
+      "seed": 12345
+    },
+    "eval": {
+      "target_fpr": 0.1,
+      "assumed_prevalence": 0.01,
+      "calibration_bins": 10,
+      "latency_reps": 50,
+      "attribution_top_k": 5
+    },
+    "synth": {
+      "target_spans": 20000,
+      "seed": 20250601,
+      "out_path": ""
+    }
+  },
+  "config_hash": "43d0159ce118",
+  "inputs": {
+    "train_spans": {
+      "path": "/tmp/synth_train.parquet",
+      "exists": true,
+      "bytes": 427814,
+      "sha256": "2eb18243e502a1509c2d4d77cc78e1c10eeacddb02812af5f77191af37d41d95"
+    },
+    "embedder": {
+      "path": "/tmp/models/USER-bge-m3-standin/config.json",
+      "exists": true,
+      "bytes": 667,
+      "sha256": "f9eac2f00a06edaa2a3b0b39acc7ecaa449e6fbe0092b38f2ceba093c0e9cee2"
+    },
+    "infer_spans": {
+      "path": "/tmp/synth_infer.parquet",
+      "exists": true,
+      "bytes": 71194,
+      "sha256": "bdd4db8b3946c711f1687888caee2d5abe00d955a3ad36f656b2bbecccb4061a"
+    }
+  },
+  "stages": {
+    "prepare": {
+      "seconds": 411.181,
+      "status": "ok"
+    },
+    "train_detector": {
+      "seconds": 1937.366,
+      "status": "ok"
+    },
+    "train_classifier": {
+      "seconds": 921.164,
+      "status": "ok"
+    },
+    "eval": {
+      "seconds": 13.58,
+      "status": "ok"
+    },
+    "infer": {
+      "seconds": 15.33,
+      "status": "ok"
+    }
+  },
+  "metrics": {
+    "validation_gate": {
+      "mode": "warn",
+      "traces_total": 2536,
+      "traces_rejected": 113
+    },
+    "prepare": {
+      "epi_dim": 36,
+      "train_traces": 1458,
+      "val_traces": 626,
+      "test_traces": 452,
+      "anomaly_types": [
+        "bias",
+        "dpi",
+        "hallucination",
+        "ipi",
+        "mp"
+      ]
+    },
+    "train_detector": {
+      "best_experiment": "hub_mse_mse_08_4",
+      "best_threshold": 0.033259227871894836,
+      "test_metrics_as_reported": {
+        "accuracy": 0.732300877571106,
+        "precision": 0.5913978219032288,
+        "recall": 0.39855071902275085,
+        "sensitivity": 0.39855071902275085,
+        "specificity": 0.8789808750152588,
+        "f1": 0.4761904776096344,
+        "youden": 0.27753162384033203
+      },
+      "calibration": {
+        "epi_median": 0.19418880343437195,
+        "epi_mad": 0.17842601239681244,
+        "sem_median": 3.0916703508410137e-07,
+        "sem_mad": 0.0010000000474974513,
+        "comb_median": 0.027395574375987053,
+        "comb_mad": 0.0058577898889780045,
+        "comb_temperature": 0.03459542617201805,
+        "aux_z_anomaly": 2.0,
+        "w_epi": -0.38100066781044006,
+        "w_sem": -1.0000041723251343,
+        "w_comb": 0.09657301008701324,
+        "bias": 0.5000016093254089
+      }
+    },
+    "train_classifier": {
+      "best_experiment": "trees_ensemble",
+      "test_metrics_as_reported": {
+        "accuracy": 0.9204545617103577,
+        "precision": 0.9196428656578064,
+        "recall": 0.9145097732543945,
+        "sensitivity": 0.9145097732543945,
+        "specificity": 0.9796953201293945,
+        "f1": 0.9151731729507446,
+        "youden": 0.8942052721977234
+      }
+    },
+    "eval": {
+      "test_overall": {
+        "tp": 55,
+        "fp": 38,
+        "fn": 83,
+        "tn": 276,
+        "precision": 0.5913978494623656,
+        "recall": 0.39855072463768115,
+        "fpr": 0.12101910828025478,
+        "f1": 0.4761904761904762,
+        "roc_auc": 0.6048070709867995,
+        "pr_auc": 0.45443237454264906
+      },
+      "test_recall_at_fpr": {
+        "recall": 0.10144927536231885,
+        "fpr": 0.0,
+        "threshold": 0.1346440315246582
+      },
+      "test_calibration_ece": 0.651946036029706,
+      "latency": {
+        "p50_ms": 32.65346900025179,
+        "p95_ms": 40.12709449984868,
+        "p99_ms": 40.53827301007914,
+        "mean_ms": 33.8132320000841,
+        "reps": 50,
+        "device": "cpu",
+        "batch": 1
+      }
+    },
+    "infer": {
+      "n_traces_scored": 282,
+      "n_detected": 29,
+      "n_truncated": 0,
+      "out_path": "runs_validation/20260812_125834_all_43d0159ce118/detections.parquet"
+    }
+  },
+  "artifacts": {
+    "s1_output_dir": "runs_validation/20260812_125834_all_43d0159ce118/traces_train",
+    "s2_experiment_dir": "runs_validation/20260812_125834_all_43d0159ce118/traces_train/models/hub_mse_mse_08_4",
+    "eval_report": "runs_validation/20260812_125834_all_43d0159ce118/eval_report.json",
+    "detections": "runs_validation/20260812_125834_all_43d0159ce118/detections.parquet"
+  }
+}

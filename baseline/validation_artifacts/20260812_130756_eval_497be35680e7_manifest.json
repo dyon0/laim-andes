@@ -1,0 +1,181 @@
+{
+  "created_utc": "2026-08-12T13:07:56Z",
+  "git_sha": "e4b105d09a51ebf14929510db369d9cf5c13e894",
+  "python": "3.12.3 (main, Mar  3 2026, 12:15:18) [GCC 13.3.0]",
+  "platform": "Linux-6.18.5-fc-v20-x86_64-with-glibc2.39",
+  "config": {
+    "paths": {
+      "train_spans": "baseline/runs/real_a/train_spans.parquet",
+      "infer_spans": "",
+      "embedder": "/tmp/models/USER-bge-m3-standin",
+      "output_root": "runs_validation"
+    },
+    "runtime": {
+      "device": "cpu",
+      "seed": 12345,
+      "recast": true,
+      "progress": false,
+      "log_level": "INFO"
+    },
+    "data": {
+      "min_fill_rate": 0.5,
+      "max_static_rate": 0.95,
+      "max_correlation": 0.999,
+      "winsorize_epi": true,
+      "epi_normalization": "robust",
+      "norm_train_ratio": 0.7,
+      "norm_val_ratio": 0.15,
+      "anom_val_ratio": 0.7,
+      "anom_test_ratio": 0.3,
+      "inject_anomalies": true,
+      "validation_gate": "warn",
+      "scale_floor": 0.0
+    },
+    "detector": {
+      "threshold_metric": "youden",
+      "select_metric": "youden",
+      "select_on": "val",
+      "n_thresholds": 10000,
+      "epochs": 10,
+      "patience": 50,
+      "encode_chunk": 1024,
+      "seq_pad_chunk": 8192,
+      "experiments": [
+        "hub_mse_mse_08_4"
+      ]
+    },
+    "classifier": {
+      "enabled": true,
+      "seed": 12345
+    },
+    "eval": {
+      "target_fpr": 0.1,
+      "assumed_prevalence": 0.01,
+      "calibration_bins": 10,
+      "latency_reps": 50,
+      "attribution_top_k": 5
+    },
+    "synth": {
+      "target_spans": 20000,
+      "seed": 20250601,
+      "out_path": ""
+    }
+  },
+  "config_hash": "497be35680e7",
+  "inputs": {
+    "train_spans": {
+      "path": "baseline/runs/real_a/train_spans.parquet",
+      "exists": true,
+      "bytes": 292698,
+      "sha256": "028e7ee5faa5cf0bb7771c51e4911afb7de253c8ffe31c50fd9ffd7fbbb840b2"
+    },
+    "embedder": {
+      "path": "/tmp/models/USER-bge-m3-standin/config.json",
+      "exists": true,
+      "bytes": 667,
+      "sha256": "f9eac2f00a06edaa2a3b0b39acc7ecaa449e6fbe0092b38f2ceba093c0e9cee2"
+    }
+  },
+  "stages": {
+    "prepare": {
+      "seconds": 60.595,
+      "status": "ok"
+    },
+    "train_detector": {
+      "seconds": 147.809,
+      "status": "ok"
+    },
+    "train_classifier": {
+      "seconds": 0.749,
+      "status": "failed: ValueError: классификатор: недостаточно примеров на класс (минимум 5): {'bias': 2, 'dpi': 2, 'hallucination': 1, 'ipi': 2, 'mp': 1}. Увеличьте корпус/долю инъекций или отключите классификатор (classifier.enabled=false)."
+    },
+    "eval": {
+      "seconds": 13.818,
+      "status": "ok"
+    }
+  },
+  "metrics": {
+    "validation_gate": {
+      "mode": "warn",
+      "traces_total": 34,
+      "traces_rejected": 0
+    },
+    "prepare": {
+      "epi_dim": 45,
+      "train_traces": 18,
+      "val_traces": 6,
+      "test_traces": 10,
+      "anomaly_types": [
+        "bias",
+        "dpi",
+        "hallucination",
+        "ipi",
+        "mp"
+      ]
+    },
+    "train_detector": {
+      "best_experiment": "hub_mse_mse_08_4",
+      "best_threshold": 0.03474029153585434,
+      "test_metrics_as_reported": {
+        "accuracy": 0.6000000238418579,
+        "precision": 0.5555555820465088,
+        "recall": 1.0,
+        "sensitivity": 1.0,
+        "specificity": 0.20000000298023224,
+        "f1": 0.7142857313156128,
+        "youden": 0.20000004768371582
+      },
+      "calibration": {
+        "epi_median": 0.4973341226577759,
+        "epi_mad": 0.024866705760359764,
+        "sem_median": 0.0006364153232425451,
+        "sem_mad": 0.0010000000474974513,
+        "comb_median": 0.06439290195703506,
+        "comb_mad": 0.02313365414738655,
+        "comb_temperature": 0.19994601607322693,
+        "aux_z_anomaly": 2.0,
+        "w_epi": 0.20000000298023224,
+        "w_sem": 0.20000000298023224,
+        "w_comb": 0.6000000238418579,
+        "bias": 0.0
+      }
+    },
+    "train_classifier": {
+      "failed": "классификатор: недостаточно примеров на класс (минимум 5): {'bias': 2, 'dpi': 2, 'hallucination': 1, 'ipi': 2, 'mp': 1}. Увеличьте корпус/долю инъекций или отключите классификатор (classifier.enabled=false)."
+    },
+    "eval": {
+      "test_overall": {
+        "tp": 5,
+        "fp": 4,
+        "fn": 0,
+        "tn": 1,
+        "precision": 0.5555555555555556,
+        "recall": 1.0,
+        "fpr": 0.8,
+        "f1": 0.7142857142857143,
+        "roc_auc": 0.6399999999999999,
+        "pr_auc": 0.7087301587301587
+      },
+      "test_recall_at_fpr": {
+        "recall": 0.2,
+        "fpr": 0.0,
+        "threshold": 1.5778032541275024
+      },
+      "test_calibration_ece": 0.24929307103157045,
+      "latency": {
+        "p50_ms": 83.84565699998348,
+        "p95_ms": 100.22901364998232,
+        "p99_ms": 152.78016709018613,
+        "mean_ms": 86.72585049996997,
+        "reps": 50,
+        "device": "cpu",
+        "batch": 1
+      }
+    }
+  },
+  "artifacts": {
+    "s1_output_dir": "runs_validation/20260812_130756_eval_497be35680e7/traces_train",
+    "s2_experiment_dir": "runs_validation/20260812_130756_eval_497be35680e7/traces_train/models/hub_mse_mse_08_4",
+    "eval_report": "runs_validation/20260812_130756_eval_497be35680e7/eval_report.json"
+  }
+}
