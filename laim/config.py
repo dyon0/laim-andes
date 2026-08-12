@@ -147,8 +147,12 @@ def _merge(base: Any, patch: dict) -> Any:
             p = patch[f.name]
             if dataclasses.is_dataclass(val) and isinstance(p, dict):
                 kwargs[f.name] = _merge(val, p)
-            elif isinstance(val, tuple) and isinstance(p, list):
-                kwargs[f.name] = tuple(p)
+            elif isinstance(val, tuple):
+                if isinstance(p, (list, tuple)):
+                    kwargs[f.name] = tuple(p)
+                else:
+                    raise ValueError(
+                        f'{f.name} expects a list (e.g. ["a","b"]), got {p!r}')
             else:
                 kwargs[f.name] = type(val)(p) if val is not None and not isinstance(p, type(val)) and not dataclasses.is_dataclass(val) else p
         else:
@@ -160,6 +164,11 @@ def _coerce(raw: str) -> Any:
     low = raw.strip().lower()
     if low in ('true', 'false'):
         return low == 'true'
+    if raw.strip()[:1] in ('[', '{'):
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            pass
     for cast in (int, float):
         try:
             return cast(raw)
