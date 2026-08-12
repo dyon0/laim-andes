@@ -49,18 +49,41 @@ def test_local_feature_stats_pinned(features, golden):
         assert s.null_count() == expect['nulls'], name
 
 
-@pytest.mark.characterization_bug  # F-50: (end-start)-(end-start) ≡ 0
-def test_duration_diff_is_identically_zero(features, golden):
-    assert golden['duration_diff_is_all_zero'] is True
-    assert features.select((pl.col('duration_diff') == 0).all()).item()
+def test_duration_diff_carries_signal(features, golden):
+    """F-50 FIXED: duration_diff is the step-to-step duration change (was ≡0)."""
+    assert golden['duration_diff_is_all_zero'] is False
+    assert features.select((pl.col('duration_diff') != 0).any()).item()
 
 
-@pytest.mark.characterization_bug  # F-07: sentinel -1 written into a real-valued feature
-def test_tool_compression_uses_sentinel_for_non_tool_spans(features):
+def test_tool_compression_is_null_for_non_tool_spans(features):
+    """F-07 FIXED: 'not applicable' is null (skipped by aggregates), not -1."""
     non_tool = features.filter(pl.col('aef_kind') != 'tool')
-    # signed log1p of -1 = -log(2)
-    assert non_tool.select(
-        (pl.col('tool_compression') - (-math.log(2))).abs().max()).item() < 1e-6
+    assert non_tool['tool_compression'].null_count() == non_tool.height
+
+
+def test_llm_token_sentinel_does_not_shift_aggregates():
+    """F-07 proof: an LLM span with llm_total_tokens = -1 (unknown) must not
+    move llm_tokens aggregates — the spec says sentinels are ignored."""
+    from tests.conftest import _valid_span_row
+    from ars.data.features import FeaturesSpan, FeaturePatterns
+    base = {**_valid_span_row(), 'aef_kind': 'llm', 'llm_model': 'm',
+            'llm_total_tokens': 100, 'llm_prompt_tokens': 60,
+            'llm_completion_tokens': 40, 'llm_temperature': 0.5,
+            'llm_top_p': 0.9, 'llm_max_tokens': 512, 'llm_repetition_penalty': 1.0}
+    rows = [
+        {**base, 'span_id': 'c3BhbjE=', 'start_time_ns': 1_000, 'end_time_ns': 2_000},
+        {**base, 'span_id': 'c3BhbjI=', 'start_time_ns': 3_000, 'end_time_ns': 4_000,
+         'llm_total_tokens': 300},
+    ]
+    sentinel_row = {**base, 'span_id': 'c3BhbjM=', 'start_time_ns': 5_000,
+                    'end_time_ns': 6_000, 'llm_total_tokens': -1}
+    label_stub = {'class': 'unknown', 'anomaly_type': 'unknown', 'is_anomaly': None}
+    df_clean = pl.DataFrame([{**r, **label_stub} for r in rows])
+    df_dirty = pl.DataFrame([{**r, **label_stub} for r in rows + [sentinel_row]])
+    f_clean = FeaturesSpan().make_features(df_clean, FeaturePatterns())
+    f_dirty = FeaturesSpan().make_features(df_dirty, FeaturePatterns())
+    # per-trace mean over valid tokens must be identical (sentinel ignored)
+    assert f_clean['llm_tokens_mean'][0] == pytest.approx(f_dirty['llm_tokens_mean'][0])
 
 
 @pytest.mark.characterization

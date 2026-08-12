@@ -105,7 +105,11 @@ class FeaturesSpan:
         aggs_static     = full_agg,
         aggs_dynamic    = full_agg)
     duration_diff   : FeatureDefinition = FeatureDefinition('duration_diff',
-        expr_builder    = lambda: ((pl.col('end_time_ns') - pl.col('start_time_ns')) - (pl.col('end_time_ns') - pl.col('start_time_ns'))).cast(pl.Float64),
+        # F-50: was (end-start)-(end-start) == 0; now the step-to-step duration
+        # change within the (trace, agent) sequence
+        expr_builder    = lambda object_aggregation: (pl.col('end_time_ns') - pl.col('start_time_ns'))
+                            .diff(n = 1).over(object_aggregation, order_by = 'start_time_ns')
+                            .cast(pl.Float64).fill_null(0.0),
         log_transform   = True,
         aggs_static     = full_agg,
         aggs_dynamic    = full_agg)
@@ -121,7 +125,14 @@ class FeaturesSpan:
         aggs_dynamic    = full_agg)
 
     llm_tokens      : FeatureDefinition = FeatureDefinition('llm_tokens',
-        expr_builder    = lambda: pl.when(pl.col('aef_kind') == 'llm').then(pl.col('llm_total_tokens')).otherwise(0).cast(pl.Float64),
+        # F-07: -1 is the "unknown" sentinel, not a token count — the data spec
+        # (section 7) requires aggregations to ignore sentinel values, so an LLM
+        # span with unknown usage becomes null (skipped by polars aggregates)
+        expr_builder    = lambda: pl.when((pl.col('aef_kind') == 'llm') & (pl.col('llm_total_tokens') >= 0))
+                                    .then(pl.col('llm_total_tokens'))
+                                    .when(pl.col('aef_kind') != 'llm')
+                                    .then(0)
+                                    .otherwise(None).cast(pl.Float64),
         log_transform   = True,
         aggs_static     = full_agg,
         aggs_dynamic    = full_agg)
@@ -297,7 +308,9 @@ class FeaturesSpan:
         aggs_dynamic    = frozenset({'sum'}))
 
     tool_compression    : FeatureDefinition = FeatureDefinition('tool_compression',
-        expr_builder    = lambda feature_cfg: pl.when(pl.col('aef_kind') == 'tool').then(pl.col('output_text').str.len_chars().truediv(pl.col('input_text').str.len_chars() + feature_cfg.eps)).otherwise(-1),
+        # F-07: non-tool spans are "not applicable" (null, skipped by
+        # aggregates), not the sentinel -1 pretending to be a measurement
+        expr_builder    = lambda feature_cfg: pl.when(pl.col('aef_kind') == 'tool').then(pl.col('output_text').str.len_chars().truediv(pl.col('input_text').str.len_chars() + feature_cfg.eps)).otherwise(None),
         log_transform   = True,
         aggs_static     = spread_agg,
         aggs_dynamic    = spread_agg)

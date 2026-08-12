@@ -71,8 +71,8 @@
       "nulls": 0
     },
     "duration_diff": {
-      "mean": 0.0,
-      "std": 0.0,
+      "mean": -5.57491389,
+      "std": 18.012636272,
       "nulls": 0
     },
     "error_flag": {
@@ -206,9 +206,9 @@
       "nulls": 429
     },
     "tool_compression": {
-      "mean": -0.679285826,
-      "std": 0.308707034,
-      "nulls": 0
+      "mean": 6.182084902,
+      "std": 0.0,
+      "nulls": 495
     },
     "tool_duration": {
       "mean": 0.037759885,
@@ -241,7 +241,7 @@
       "nulls": 0
     }
   },
-  "duration_diff_is_all_zero": true,
+  "duration_diff_is_all_zero": false,
   "epi_feature_names": [
     "action_entropy",
     "actions_per_agent",
