@@ -70,6 +70,7 @@ class S1Config:
     # normalized values; 0.0 disables either (legacy behavior).
     scale_floor                 : float                                 = 1e-2
     norm_z_clip                 : float                                 = 20.0
+    max_abs_feature             : float                                 = 1e6
 
     recast                      : bool                                  = False
     eps_normalization           : float                                 = 1e-6

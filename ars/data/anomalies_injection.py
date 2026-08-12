@@ -906,6 +906,18 @@ def inject(normal: Frame, profile: Profile, cfg: InjectionConfig = InjectionConf
     return Inject.run(normal, profile, resolved, embedder)
 
 
+def planned_trace_labels(frame: Frame, cfg: InjectionConfig = InjectionConfig()) -> Frame:
+    """Per-trace anomaly class the injector WILL assign — label assignment is a
+    pure hash of (trace_id, plan.seed), so downstream consumers (train/val/test
+    trace split, train-only feature selection — F-11) can know the membership
+    before the expensive injection runs. Returns columns (trace_col, label_col)."""
+    return (frame
+            .select(pl.col(cfg.trace_col))
+            .unique()
+            .sort(cfg.trace_col)
+            .with_columns(Assign.label(cfg.plan, cfg)))
+
+
 def inject_anomalies(normal: Frame, cfg: InjectionConfig = InjectionConfig(), embedder: None | Callable[[tuple[str, ...]], Array] = None, examples: None | Frame = None) -> Frame:
     inject_color_scheme(globals(), cfg.output_color_scheme)
     profile = analyze(normal, cfg, embedder, examples)

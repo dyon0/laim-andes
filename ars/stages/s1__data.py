@@ -213,29 +213,33 @@ def load_spans(cfg: S1Config, raw_schema: RawSchema) -> pl.DataFrame:
 
 
 @benchmark('отбор признаков')
-def select_features(df: pl.DataFrame, cfg: S1Config, protected: FrozenSet[str]) -> pl.DataFrame:
-    '''отбор (числовых) признаков'''
+def select_features(df: pl.DataFrame, cfg: S1Config, protected: FrozenSet[str],
+                    stats_df: None | pl.DataFrame = None) -> pl.DataFrame:
+    '''отбор (числовых) признаков; статистики отбора считаются на stats_df
+    (train-normal спаны, F-11), а прореживаются колонки всего df'''
 
     MyColorScheme = cfg.output_color_scheme
     MyColorScheme.print_section('ОТБОР ПРИЗНАКОВ')
 
+    stats_df = df if stats_df is None else stats_df
     candidate_cols = sorted(
         df.drop(pl.selectors.by_name(protected, require_all = False), ~pl.selectors.numeric()).columns)
-    
-    sprint(f'Кандидатов для очистки: {(n_initial := len(candidate_cols))}', style_code = MyColorScheme.info)
+
+    sprint(f'Кандидатов для очистки: {(n_initial := len(candidate_cols))} '
+           f'(статистики на {stats_df.height} спанах)', style_code = MyColorScheme.info)
     if n_initial == 0: return df
 
     fill_exprs      = map(
-        lambda c: (pl.lit(1.0).sub(pl.col(c).null_count().truediv(pl.lit(df.height)))).alias(f'{c}_fill'),
+        lambda c: (pl.lit(1.0).sub(pl.col(c).null_count().truediv(pl.lit(stats_df.height)))).alias(f'{c}_fill'),
         candidate_cols)
     
     static_exprs    = map(
         lambda c: (pl.col(c).value_counts(sort = True).head(1).struct.field('count').first()
-                        .truediv(pl.lit(df.height))).fill_null(0.0).alias(f'{c}_static'),
+                        .truediv(pl.lit(stats_df.height))).fill_null(0.0).alias(f'{c}_static'),
         candidate_cols)
 
-    df_fill     = df.select(fill_exprs)
-    df_static   = df.select(static_exprs)
+    df_fill     = stats_df.select(fill_exprs)
+    df_static   = stats_df.select(static_exprs)
 
     fill_long   = df_fill.unpivot().rename({'variable': 'column', 'value': 'fill_rate'})
     static_long = df_static.unpivot().rename({'variable': 'column', 'value': 'static_rate'})
@@ -254,7 +258,7 @@ def select_features(df: pl.DataFrame, cfg: S1Config, protected: FrozenSet[str]) 
         f'После фильтрации заполненности/статичности: {(n_after := len(cols_after))} (удалено {n_initial - n_after})',
         style_code = MyColorScheme.info)
     
-    corr_df = df.select(cols_after).corr()
+    corr_df = stats_df.select(cols_after).corr()
 
     _viz_dir = cfg.output_dir / 'visualizations'
     #viz.save_correlation(corr_df, tuple(cols_after), _viz_dir, 'feature_correlation', 'Корреляции отобранных признаков')
@@ -300,8 +304,8 @@ def select_features(df: pl.DataFrame, cfg: S1Config, protected: FrozenSet[str]) 
         f'После удаления корреляций: {(n_final := len(cols_final))} признаков (удалено {n_after - n_final})',
         style_code = MyColorScheme.info)
     
-    mean_fill = (df.select(
-        pl.col(cols_final).null_count().truediv(pl.lit(df.height)))
+    mean_fill = (stats_df.select(
+        pl.col(cols_final).null_count().truediv(pl.lit(stats_df.height)))
         .mean_horizontal()
         .item()
     ) if cols_final else None
@@ -314,10 +318,11 @@ def select_features(df: pl.DataFrame, cfg: S1Config, protected: FrozenSet[str]) 
 
 @benchmark('вычисление epi-признаков')
 def calculate_features(
-    df          : pl.DataFrame,
-    cfg         : S1Config,
-    feature_cfg : FeaturePatterns,
-    raw_schema  : RawSchema
+    df              : pl.DataFrame,
+    cfg             : S1Config,
+    feature_cfg     : FeaturePatterns,
+    raw_schema      : RawSchema,
+    selection_ids   : None | pl.DataFrame = None,
 ) -> Tuple[pl.DataFrame, Tuple[str, ...]]:
     MyColorScheme = cfg.output_color_scheme
     MyColorScheme.print_section('ВЫЧИСЛЕНИЕ EPI-ПРИЗНАКОВ')
@@ -396,7 +401,10 @@ def calculate_features(
         _ = viz.save_bars(missing_info, 'col', 'pct', _viz_dir, 'features_missingness', 'Пропуски признаков, %')
     
     # 4. удаление (около)пустых, (около)констант, сильно коррелированных, неинформативных колонок
-    refined = select_features(spans_enriched, cfg, protected)
+    #    (F-11: статистики отбора — только на train-normal трассах, если заданы)
+    stats_scope = (spans_enriched.join(selection_ids, on = DataObject.trace_id, how = 'semi')
+                   if selection_ids is not None else None)
+    refined = select_features(spans_enriched, cfg, protected, stats_df = stats_scope)
     
     # 5. определение итогового набора EPI-признаков (все числовые колонки, исключая служебные и сырые)
     epi_candidate_cols = (
@@ -411,8 +419,10 @@ def calculate_features(
     filled = fill_missing_values(refined, cfg)
     
     # 7. фильтрация признаков с аномально большими значениями
-    max_abs_threshold = 1e6 # todo: вынести в конфиг
-    suspicious = (filled
+    max_abs_threshold = cfg.max_abs_feature  # F-11: и этот фильтр — на train-normal статистиках
+    abs_scope = (filled.join(selection_ids, on = DataObject.trace_id, how = 'semi')
+                 if selection_ids is not None else filled)
+    suspicious = (abs_scope
         .select(pl.col(epi_candidate_cols).abs().max())
         .unpivot()
         .filter(pl.col('value') > pl.lit(max_abs_threshold))
@@ -705,27 +715,17 @@ def build_traces(df: pl.DataFrame, sem_vec_names: Tuple[str, ...], cfg: S1Config
     return traces
 
 
-@benchmark('разделение выборок')
-def stratified_split(df: pl.DataFrame, strata_col: str, cfg: S1Config):
-    MyColorScheme = cfg.output_color_scheme
-    MyColorScheme.print_section('РАЗБИЕНИЕ НА ВЫБОРКИ')
-    sprint(f'Стратификация по колонке: {strata_col}', style_code = MyColorScheme.info)
-    sprint('Нормальные трассы >> случайно в train/val/test по norm_*_ratio', style_code = MyColorScheme.debug)
-    sprint('Аномальные трассы >> только в val/test стратифицированно по anom_*_ratio', style_code = MyColorScheme.debug)
-    
-    df = df.filter(pl.col(strata_col) != DataObject.class_sentinel)
 
-    # F-08: the split unit is the TRACE - every (trace, agent) row of a trace
-    # goes to the same split; otherwise trace-level aggregate features leak
-    # across splits on multi-agent traces. Class order is sorted so pl.concat
-    # order never depends on group_by iteration order.
+def split_trace_ids(units: pl.DataFrame, strata_col: str, cfg: S1Config):
+    """Deterministic trace-level split (F-08/F-11): `units` has one row per
+    trace_id with its (planned or actual) anomaly class. Returns id-frames
+    (norm_train, norm_val, norm_test, anom_val, anom_test). Because injection
+    labels are a pure hash of trace_id, this can run BEFORE features/injection
+    and will agree with the post-injection split."""
     is_normal   = (
         pl.col(strata_col).is_null() |
         pl.col(strata_col).cast(pl.Utf8).str.to_lowercase().is_in(('', 'nonanomaly')))
-    units       = (df
-        .group_by(DataObject.trace_id)
-        .agg(pl.col(strata_col).drop_nulls().first().alias(strata_col))
-        .sort(DataObject.trace_id))
+    units       = units.sort(DataObject.trace_id)
     norm_units  = units.filter(is_normal)
     anom_units  = units.filter(~is_normal)
 
@@ -755,6 +755,25 @@ def stratified_split(df: pl.DataFrame, strata_col: str, cfg: S1Config):
     empty_ids       = units.head(0).select(DataObject.trace_id)
     anom_val_ids    = pl.concat(tuple(map(itemgetter(0), anom_pairs))) if anom_pairs else empty_ids
     anom_test_ids   = pl.concat(tuple(map(itemgetter(1), anom_pairs))) if anom_pairs else empty_ids
+
+    return norm_train_ids, norm_val_ids, norm_test_ids, anom_val_ids, anom_test_ids
+
+
+@benchmark('разделение выборок')
+def stratified_split(df: pl.DataFrame, strata_col: str, cfg: S1Config):
+    MyColorScheme = cfg.output_color_scheme
+    MyColorScheme.print_section('РАЗБИЕНИЕ НА ВЫБОРКИ')
+    sprint(f'Стратификация по колонке: {strata_col}', style_code = MyColorScheme.info)
+    sprint('Нормальные трассы >> случайно в train/val/test по norm_*_ratio', style_code = MyColorScheme.debug)
+    sprint('Аномальные трассы >> только в val/test стратифицированно по anom_*_ratio', style_code = MyColorScheme.debug)
+    
+    df = df.filter(pl.col(strata_col) != DataObject.class_sentinel)
+
+    units = (df
+        .group_by(DataObject.trace_id)
+        .agg(pl.col(strata_col).drop_nulls().first().alias(strata_col))
+        .sort(DataObject.trace_id))
+    norm_train_ids, norm_val_ids, norm_test_ids, anom_val_ids, anom_test_ids = split_trace_ids(units, strata_col, cfg)
 
     member  = lambda id_frame: df.join(id_frame, on = DataObject.trace_id, how = 'semi')
     train   = member(norm_train_ids)
@@ -1037,7 +1056,25 @@ def main(
     spans                           = load_spans(cfg, raw_schema)
     spans_raw                       = spans.clone()
 
-    spans, epi_feature_names        = calculate_features(spans, cfg, feature_cfg, raw_schema)
+    # F-11: the trace-level split is knowable BEFORE features (injection labels
+    # are a pure hash of trace_id), so feature-selection statistics can be
+    # restricted to train-normal traces instead of peeking at val/test.
+    if cfg.inject_anomalies:
+        from ars.data.anomalies_injection import planned_trace_labels
+        planned = planned_trace_labels(
+            spans, InjectionConfig(sem_cols = ('sem_vector',), text_col = 'sem_text'))
+        planned = planned.rename({'anomaly_type': DataObject.sublabel}) \
+            if DataObject.sublabel != 'anomaly_type' else planned
+    else:
+        planned = (spans
+            .group_by(DataObject.trace_id)
+            .agg(pl.col(DataObject.sublabel).drop_nulls().first())
+            .sort(DataObject.trace_id))
+    planned_units       = planned.filter(pl.col(DataObject.sublabel) != DataObject.class_sentinel)
+    planned_train_ids   = split_trace_ids(planned_units, DataObject.sublabel, cfg)[0]
+
+    spans, epi_feature_names        = calculate_features(
+        spans, cfg, feature_cfg, raw_schema, selection_ids = planned_train_ids)
     
     # этапы генерации альтернативных семантик и синтетики ...
     
@@ -1068,6 +1105,17 @@ def main(
     
     strata                          = DataObject.sublabel if DataObject.sublabel in traces.columns else DataObject.is_anomaly
     train, val, test                = stratified_split(traces, strata, cfg)
+
+    if cfg.inject_anomalies:
+        # the planned (pre-feature) split must agree with the actual one;
+        # a mismatch means injector label assignment drifted (hard error)
+        actual_train    = set(train.get_column(DataObject.trace_id).unique().to_list())
+        planned_train   = set(planned_train_ids.get_column(DataObject.trace_id).to_list())
+        if actual_train != planned_train:
+            raise RuntimeError(
+                'плановый train-сплит не совпал с фактическим: '
+                f'{len(actual_train ^ planned_train)} расхождений — '
+                'проверьте согласованность seed/plan инъекции')
     
     (train, val, test), norm_params = normalize_epi_features(train, val, test, cfg)
     
