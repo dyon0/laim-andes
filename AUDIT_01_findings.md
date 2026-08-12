@@ -432,3 +432,24 @@ gate (F-34) handles; recast default documented.
 | Trace rejection per spec | Implemented in unused module only | F-34 |
 | session_id flags handled | Validated in spec expr (`spec.py:571-591`), never consumed as features or checks in pipeline | F-34 note |
 | Single source of truth for schema | **Yes** — `ars/specification/spec.py` is genuinely good and reused by validation/synthesis; features hardcode column names as strings but they resolve to the same spec names | Partial credit |
+
+---
+
+## Post-refactor discovery (found by the Phase 5 guards during Phase 7)
+
+### F-40 · P0 · Zero-full-batch epochs trained nothing and shipped random init
+**Where.** `ars/models/m2__detector/train.py` `_run_lstm_epoch`/`_run_fmlp_epoch`:
+`n_batches = num_samples // batch_size` = 0 when the corpus is smaller than the
+batch (`hub_mse_hub_32_4_deep` batch 32 vs 18 train traces on the shipped
+sample); the epoch scan runs over zero batches, `jp.mean(empty)` = NaN.
+**Why wrong (legacy).** NaN never satisfied `val_loss < best_val`, so
+`_train_loop` silently returned the INITIAL random parameters — which were then
+thresholded, calibrated, evaluated and eligible to win model selection. The
+frozen baseline's deep-experiment "metrics" (test youden 0.40) are artifacts of
+an untrained network: its loss curves are `[nan, nan, …]` in
+`baseline` artifacts — verified.
+**How found.** The F-21 finiteness guard aborted the Phase 7 validation run at
+epoch 1 — the guard did exactly its job.
+**Fix.** `train_lstm_ae`/`train_fmlp_ae` raise a typed ValueError when
+`batch_size > n_train` with an actionable message.
+**Proof.** `test_zero_batch_training_raises` (fails on legacy: silent NaN).

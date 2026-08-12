@@ -52,6 +52,25 @@ def test_all_sentinel_llm_trace_produces_finite_features(valid_span_row):
     assert not any(bad.row(0)), [c for c, v in zip(bad.columns, bad.row(0)) if v]
 
 
+def test_zero_batch_training_raises():
+    """F-40: batch_size > n_train used to scan zero batches, produce NaN losses
+    and silently ship the random init as the 'trained' model."""
+    from ars.models.m2__detector.architecture import HyperParamsLSTMAE, LSTM_AE
+    from ars.models.m2__detector.train import Trainer
+    key = jax.random.PRNGKey(SEED)
+    xs = jax.random.normal(key, (4, 5, 3), dtype=jp.float32)
+    mask = jp.ones((4, 5), dtype=bool)
+    hp = HyperParamsLSTMAE(sz_features=3, sz_latent=4,
+                           layers_arch=(('unidirectional', 8),))
+    with pytest.raises(ValueError, match='batch_size'):
+        Trainer.train_lstm_ae(
+            model=LSTM_AE(hp), train_padded=xs, train_mask=mask,
+            val_padded=xs, val_mask=mask,
+            learning_rate=1e-3, num_epochs=2, batch_size=32, rng=key,
+            input_shape=(5, 3), weight_decay=0.0, clip_grad=1.0,
+            schedule_fn=None, patience=10, target_loss=None)
+
+
 def test_training_aborts_on_nonfinite_loss():
     """F-21: NaN inputs must abort with FloatingPointError, not train through."""
     from ars.models.m2__detector.architecture import HyperParamsLSTMAE, LSTM_AE

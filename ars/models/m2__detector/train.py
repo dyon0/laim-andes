@@ -226,6 +226,14 @@ class Trainer:
             target_loss     : None | float,
             val_batched     : bool = False,
     ) -> Tuple[TrainState, Tuple[float, ...]]:
+        # F-40: batch_size > n_train means zero full batches per epoch; the
+        # legacy code then trained on nothing (NaN losses) and silently kept
+        # the random init as the "best" model — which was ranked and shipped.
+        if train_padded.shape[0] < batch_size:
+            raise ValueError(
+                f'batch_size={batch_size} больше числа обучающих трасс '
+                f'({train_padded.shape[0]}): эпоха не содержит ни одного батча. '
+                f'Уменьшите batch_size эксперимента или увеличьте корпус.')
         state       = TRAIN.make_train_state(
             rng, model, learning_rate,
             weight_decay = weight_decay, clip_grad = clip_grad, schedule_fn = schedule_fn, input_shape = input_shape)
@@ -257,6 +265,11 @@ class Trainer:
             target_loss     : None | float,
             val_batched     : bool = False,
     ) -> Tuple[TrainState, Tuple[float, ...]]:
+        if train_epi.shape[0] < batch_size:  # F-40, see train_lstm_ae
+            raise ValueError(
+                f'batch_size={batch_size} больше числа обучающих трасс '
+                f'({train_epi.shape[0]}): эпоха не содержит ни одного батча. '
+                f'Уменьшите batch_size эксперимента или увеличьте корпус.')
         state       = TRAIN.make_train_state(
             rng, model, learning_rate,
             weight_decay = weight_decay, clip_grad = clip_grad, schedule_fn = schedule_fn, input_shape = None)
