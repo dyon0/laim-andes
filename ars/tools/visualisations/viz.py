@@ -14,6 +14,10 @@ import  jax                             as jx
 
 import  altair                          as al
 
+# F-30: altair's default 5000-row cap raised MaxRowsError mid-run on any test
+# set with >5k spans, killing training AFTER the models were fitted
+al.data_transformers.disable_max_rows()
+
 from    ars.configuration.c2__detector  import S2Config
 
 
@@ -432,7 +436,13 @@ def save_chart(chart: Chart, path: PurePath) -> None | PurePath:
     target = path.with_suffix('.png')
     if find_spec('vl_convert') is None: return None
 
-    chart.save(ensure(target).as_posix(), scale_factor = 2.0)
+    # F-30: a render failure (fonts, memory, vega) must degrade to a missing
+    # image in the report, never abort the pipeline that already trained models
+    try:
+        chart.save(ensure(target).as_posix(), scale_factor = 2.0)
+    except Exception as render_error:
+        print(f'viz: не удалось отрисовать {target.name}: {render_error!r}')
+        return None
 
     return target
 

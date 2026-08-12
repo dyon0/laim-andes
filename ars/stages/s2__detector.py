@@ -723,10 +723,13 @@ def predict_trace(epi_pad: Array, epi_mask: Array, sem_pad: Array, sem_mask: Arr
         is_anomaly              = bool(out.is_anomaly[0]))
 
 
-def detect_anomalies(data: pl.LazyFrame, s2_meta: S2Meta, only_anomalies: bool = True) -> pl.LazyFrame:
+def detect_anomalies(data: pl.LazyFrame, s2_meta: S2Meta, only_anomalies: bool = True,
+                     attribution_top_k: int = 0) -> pl.LazyFrame:
     '''инференс детектора. only_anomalies=True — legacy-контракт (только
     аномальные трассы, без колонки is_anomaly); False — полный аудиторский
-    след: каждая трасса со всеми оценками и флагами (F-27).'''
+    след: каждая трасса со всеми оценками и флагами (F-27).
+    attribution_top_k > 0 добавляет RCA-поверхность (M11): топ-k спанов по
+    ошибке реконструкции EPI-ветви и топ-k EPI-признаков на трассу.'''
     meta, models            = load_models_for_inference(s2_meta)
     df                      = data.collect()
     # F-09: silent truncation of over-length traces is now flagged per trace
@@ -740,6 +743,19 @@ def detect_anomalies(data: pl.LazyFrame, s2_meta: S2Meta, only_anomalies: bool =
         raise FloatingPointError(
             'детектор вернул нечисловые оценки (NaN/Inf) — проверьте нормализацию '
             'латентов и входные данные; инференс прерван')
+    extra_cols = {}
+    if attribution_top_k > 0:
+        from ars.models.m2__detector.attribution import per_feature_errors, per_span_errors, top_k
+        span_err            = per_span_errors(models.epi_model, models.epi_state.params, epi_padded, epi_mask)
+        feat_err            = per_feature_errors(models.epi_model, models.epi_state.params, epi_padded, epi_mask)
+        span_idx, span_val  = top_k(span_err, attribution_top_k)
+        feat_idx, feat_val  = top_k(feat_err, attribution_top_k)
+        extra_cols = {
+            'rca_top_span_indices':     span_idx.tolist(),
+            'rca_top_span_errors':      span_val.tolist(),
+            'rca_top_feature_indices':  feat_idx.tolist(),
+            'rca_top_feature_errors':   feat_val.tolist()}
+
     scored = pl.concat((
                 df.drop(('epi_sequence', 'sem_sequence_sem_vector')).lazy(),
                 pl.DataFrame({
@@ -751,7 +767,8 @@ def detect_anomalies(data: pl.LazyFrame, s2_meta: S2Meta, only_anomalies: bool =
                     'detector_z_epi':                   out.z_epi.tolist(),
                     'detector_z_sem':                   out.z_sem.tolist(),
                     'detector_truncated':               truncated,
-                    'detector_is_anomaly':              map(jp.asarray, out.is_anomaly)}).lazy()),
+                    'detector_is_anomaly':              map(jp.asarray, out.is_anomaly),
+                    **extra_cols}).lazy()),
         how = 'horizontal')
     return (scored.filter(pl.col('detector_is_anomaly').eq(True)).drop('detector_is_anomaly')
             if only_anomalies else scored)

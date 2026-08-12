@@ -76,6 +76,7 @@ class EvalConfig:
     assumed_prevalence: float = 0.01      # production anomaly rate for PPV projection
     calibration_bins: int = 10
     latency_reps: int = 50
+    attribution_top_k: int = 5            # RCA seam: top-k spans/features per trace (0 = off)
 
 
 @dataclass(frozen=True)

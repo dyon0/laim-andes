@@ -89,15 +89,56 @@ def cmd_validate(cfg: RunConfig, run_dir: Path, manifest: Manifest,
     return result
 
 
+def _validation_gate(cfg: RunConfig, run_dir: Path, manifest: Manifest) -> str:
+    """F-34: enforce the data contract before training. Returns the (possibly
+    filtered) train-spans path. Modes: off | warn (log rejects, train on all) |
+    strict (train only on traces with zero mandatory-field violations)."""
+    mode = cfg.data.validation_gate
+    if mode == 'off':
+        return cfg.paths.train_spans
+    import polars as pl
+    from ars.data.validation import Quality
+    from ars.specification.spec import recast
+    lf = pl.scan_parquet(cfg.paths.train_spans)
+    if cfg.runtime.recast:
+        lf = recast(lf)
+    tagged = Quality(lf).tagged().collect()
+    by_trace = tagged.group_by('trace_id').agg(pl.col('rejected').any())
+    n_total, n_rejected = by_trace.height, int(by_trace['rejected'].sum())
+    manifest.record_metrics('validation_gate', {
+        'mode': mode, 'traces_total': n_total, 'traces_rejected': n_rejected})
+    if n_rejected == 0:
+        log.info('validation gate: all %d traces conform', n_total)
+        return cfg.paths.train_spans
+    if mode == 'warn':
+        log.warning('validation gate (warn): %d/%d traces violate the contract '
+                    'and STILL enter training', n_rejected, n_total)
+        return cfg.paths.train_spans
+    # strict: train only on conformant traces
+    keep = by_trace.filter(~pl.col('rejected')).select('trace_id')
+    if keep.height == 0:
+        raise ValueError(
+            f'validation gate (strict): все {n_total} трасс нарушают контракт данных — '
+            f'обучение невозможно (см. run.py validate для деталей)')
+    filtered = tagged.join(keep, on='trace_id', how='semi').drop('rejected')
+    out = run_dir / 'train_spans_validated.parquet'
+    filtered.write_parquet(out)
+    log.warning('validation gate (strict): rejected %d/%d traces; training on %s',
+                n_rejected, n_total, out)
+    manifest.record_artifact('validated_train_spans', out)
+    return str(out)
+
+
 def cmd_prepare(cfg: RunConfig, run_dir: Path, manifest: Manifest) -> dict:
     """s1: spans parquet → features → injection → traces → split → normalize."""
     from ars.stages.s1__data import process_train_data
     manifest.record_input('train_spans', cfg.paths.train_spans)
     manifest.record_input('embedder', Path(cfg.paths.embedder) / 'config.json')
+    train_spans = _validation_gate(cfg, run_dir, manifest)
     run_id = f's{cfg.runtime.seed}'
     with StageTimer(manifest, 'prepare', log):
         s1_cfg, s1_meta = process_train_data(
-            PurePath(cfg.paths.train_spans),
+            PurePath(train_spans),
             PurePath(cfg.paths.embedder),
             PurePath(run_dir), 'laim', run_id,
             recast=cfg.runtime.recast,
@@ -254,8 +295,10 @@ def cmd_infer(cfg: RunConfig, run_dir: Path, manifest: Manifest,
     with StageTimer(manifest, 'infer', log):
         lf = prepare_test_data(s1_cfg, PurePath(spans_path), s1_meta,
                                PurePath(run_dir), 'laim')
-        # F-27: full audit trail — every trace scored, detections flagged
-        scored = detect_anomalies(lf, s2_meta, only_anomalies=False).collect()
+        # F-27: full audit trail — every trace scored, detections flagged;
+        # M11: attribution surface for RCA
+        scored = detect_anomalies(lf, s2_meta, only_anomalies=False,
+                                  attribution_top_k=cfg.eval.attribution_top_k).collect()
     out_path = run_dir / 'detections.parquet'
     scored.write_parquet(out_path)
     manifest.record_artifact('detections', out_path)
