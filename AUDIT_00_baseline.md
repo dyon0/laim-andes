@@ -117,7 +117,23 @@ Full detail: `baseline/baseline_metrics.json`.
 
 ### 4.3 Synthetic corpus baseline
 
-<!-- SYNTH_NUMBERS -->
+**Unavailable — the pipeline crashes before training on the synthetic corpus.**
+`GenConfig(target_spans=20000, seed=20250601)` (≈950 traces from the repo's own
+generator) dies during hallucination text-noise injection:
+`polars.exceptions.InvalidOperationError: conversion from i64 to u64 failed …
+values: [-128, -64, … -1024]` — `TextNoise.corrupt_col`
+(`ars/data/anomalies_injection.py:71-108`) computes slice positions as
+`u64_hash % length` which wraps negative under i64 promotion; `str.slice` then
+rejects the negative offsets. ~5% of spans hit a wrapping hash, so any corpus
+beyond a few hundred spans in the hallucination class fails deterministically.
+The 43-trace real sample passed only because its few hallucination victims missed
+the wrapping hash values.
+
+Consequence: **the legacy pipeline has no obtainable baseline on a realistic-size
+corpus** — the honest synthetic baseline is "unknown / crash" (log:
+`logs/baseline_synth_a.log`). A synthetic-corpus reference run is deferred to
+Phase 7 (after the injector fix F-36), where it will be reported side-by-side with
+the recovered detector-only real baseline above.
 
 ### 4.4 Diagnosed numeric pathologies behind the baseline numbers
 
