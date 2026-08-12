@@ -306,9 +306,12 @@ def _compute_branch_latents(cfg: S2Config, epi_model: LSTM_AE, epi_state: TrainS
         Branch.encode(sem_model, sem_state, data.val_sem_pad_mixed,  data.val_sem_mask_mixed,  chunk = cfg.encode_chunk))
 
 
-def _normalize_latent_arrays(train_lat: Array, others: Tuple[Array, ...], eps: float) -> Tuple[Array, Array, Tuple[Array, ...]]:
+def _normalize_latent_arrays(train_lat: Array, others: Tuple[Array, ...], eps: float, std_floor: float = 0.0) -> Tuple[Array, Array, Tuple[Array, ...]]:
     mean    = jp.mean(train_lat, axis = 0, keepdims = True)
-    std     = jp.std (train_lat, axis = 0, keepdims = True) + eps
+    # F-03: a constant latent dimension gives std=0; dividing by std+eps (1e-8)
+    # turned any inference-time deviation into ~1e8-scale values and overflowed
+    # the combined branch. Floor the std instead.
+    std     = jp.maximum(jp.std(train_lat, axis = 0, keepdims = True), max(eps, std_floor))
     normed  = tuple(map(lambda x: (x - mean) / std, chain((train_lat,), others)))
     return mean, std, normed
 
@@ -400,9 +403,9 @@ def run_experiment(exp_cls: type[Experiment], data: PreparedData, cfg: S2Config)
 
     if exp_cfg.normalize_latent:
         mean_epi, std_epi, (train_epi_lat, val_epi_lat_n, val_epi_lat_m) = _normalize_latent_arrays(
-            train_epi_lat, (val_epi_lat_n, val_epi_lat_m), cfg.eps)
+            train_epi_lat, (val_epi_lat_n, val_epi_lat_m), cfg.eps, cfg.latent_std_floor)
         mean_sem, std_sem, (train_sem_lat, val_sem_lat_n, val_sem_lat_m) = _normalize_latent_arrays(
-            train_sem_lat, (val_sem_lat_n, val_sem_lat_m), cfg.eps)
+            train_sem_lat, (val_sem_lat_n, val_sem_lat_m), cfg.eps, cfg.latent_std_floor)
         epi_latent_mean = _maybe_tolist(mean_epi.squeeze())
         epi_latent_std  = _maybe_tolist(std_epi.squeeze())
         sem_latent_mean = _maybe_tolist(mean_sem.squeeze())
@@ -706,6 +709,11 @@ def detect_anomalies(data: pl.LazyFrame, s2_meta: S2Meta) -> pl.LazyFrame:
     epi_padded, epi_mask    = Pad.split(df, 'epi_sequence',            s2_meta.epi_dim, s2_meta.max_len, s2_meta.seq_pad_chunk)
     sem_padded, sem_mask    = Pad.split(df, 'sem_sequence_sem_vector', s2_meta.sem_dim, s2_meta.max_len, s2_meta.seq_pad_chunk)
     out                     = Predict.batch(meta, models, epi_padded, epi_mask, sem_padded, sem_mask)
+    # F-21: never emit non-finite scores as if they were detections
+    if df.height and not bool(jp.isfinite(out.e_comb).all() & jp.isfinite(out.p_anomaly).all()):
+        raise FloatingPointError(
+            'детектор вернул нечисловые оценки (NaN/Inf) — проверьте нормализацию '
+            'латентов и входные данные; инференс прерван')
     epi_lat                 = Branch.encode(models.epi_model, models.epi_state, epi_padded, epi_mask)
     sem_lat                 = Branch.encode(models.sem_model, models.sem_state, sem_padded, sem_mask)
     z_epi                   = (epi_lat - meta.epi_latent_mean) / meta.epi_latent_std if meta.normalize_latent else epi_lat

@@ -32,6 +32,10 @@ class S2Config:
     encode_chunk                : int   = 1024
     seq_pad_chunk               : int   = 8192
 
+    # F-03: floor for train-latent std in latent normalization (0.0 = legacy
+    # behavior of std+eps, which overflowed on degenerate dimensions)
+    latent_std_floor    : float = 1e-3
+
     seed    : int   = 12345
     eps     : float = 1e-8
     device  : str   = 'cpu'

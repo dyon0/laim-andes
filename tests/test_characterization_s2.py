@@ -53,13 +53,25 @@ def test_masked_loss_is_per_element():
     assert float(Loss.masked(recon, target, mask2, 'mse', 1.0, 1e-8)) == pytest.approx(1.0)
 
 
-@pytest.mark.characterization_bug  # F-03/F-04: zero-MAD calibration produces degenerate z-scores
+@pytest.mark.characterization_bug  # F-04: zero-MAD calibration produces degenerate z-scores (fix pending)
 def test_zero_mad_makes_robust_z_explode():
     errors = jp.zeros((16,), dtype=jp.float32)
     median, mad = Calibrate.robust_stats(errors)
     assert float(mad) == 0.0
     z = (jp.asarray(1.0) - median) / (1.4826 * mad + 1e-8)
     assert float(z) > 1e7  # a unit error maps to a ~1e8 z-score
+
+
+def test_latent_std_floor_bounds_normalized_latents():
+    """F-03 FIXED: constant train latents no longer produce 1e8-scale z-values."""
+    from ars.stages.s2__detector import _normalize_latent_arrays
+    train = jp.zeros((10, 4), dtype=jp.float32)          # degenerate: all-constant
+    probe = jp.ones((1, 4), dtype=jp.float32)            # off-manifold point
+    _, std, (train_n, probe_n) = _normalize_latent_arrays(
+        train, (probe,), eps=1e-8, std_floor=1e-3)
+    assert float(std.min()) >= 1e-3
+    assert float(jp.abs(probe_n).max()) <= 1e3
+    assert bool(jp.isfinite(probe_n).all())
 
 
 def test_pad_split_empty_frame_yields_empty_tensors():

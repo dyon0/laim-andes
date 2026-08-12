@@ -1,6 +1,7 @@
 from    typing                                  import Tuple, Callable, cast
 from    dataclasses                             import dataclass
 from    functools                               import reduce, partial
+from    math                                    import isfinite
 
 import  jax                                     as jx
 import  jax.numpy                               as jp
@@ -181,6 +182,11 @@ class Trainer:
             state, avg_loss, rng                                = run_epoch(state, rng)
             val_loss                                            = float(compute_val(state))
             avg_loss_py                                         = float(avg_loss)
+            # F-21: a non-finite loss must abort loudly, not train on garbage
+            if not (isfinite(avg_loss_py) and isfinite(val_loss)):
+                raise FloatingPointError(
+                    f'{label}эпоха {epoch_idx + 1}: невалидная ошибка '
+                    f'(train={avg_loss_py}, val={val_loss}) — обучение прервано')
             print(f'Epoch {epoch_idx + 1}, {label}Loss: {avg_loss_py:.6f}, Val Loss: {val_loss:.6f}')
             improved        = val_loss < best_val
             new_best_state  = state    if improved else best_state
