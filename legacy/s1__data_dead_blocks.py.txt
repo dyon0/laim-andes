@@ -1,0 +1,61 @@
+# Commented-out code blocks archived from ars/stages/s1__data.py
+# (kept verbatim; see CHANGELOG.md). Not importable on purpose.
+
+"""
+def fill_missing_values(df: pl.DataFrame, cfg: S1Config) -> pl.DataFrame:
+    '''заполняет пропуски в EPI-колонках согласно стратегии fill_values с возможностью подсчета статистик внутри групп меток'''
+
+    def _build_stat_for_column(col: str, stat_name: str, group_col: None | str) -> pl.Expr:
+        match stat_name:
+            case 'mean':    base = pl.col(col).mean()
+            case 'median':  base = pl.col(col).median()
+            case _: raise NotImplementedError(f'неподдерживаемый тип агрегации: {stat_name}')
+        
+        if group_col: base = base.over(group_col)
+
+        return pl.col(col).fill_null(base)
+    
+    is_stat_key     = lambda kv: next(iter(kv)) in ('mean', 'median')
+    
+    const_fill_cols = filterfalse(is_stat_key, cfg.fill_values.items())
+    stat_fill_cols  = filter(is_stat_key, cfg.fill_values.items())
+    
+    const_exprs     = starmap(lambda val, cols: pl.col(*cols).fill_null(val), const_fill_cols)    
+    stat_exprs      = chain.from_iterable(
+        starmap(
+            lambda stat_name, cols: map(
+                lambda c: _build_stat_for_column(c, stat_name, cfg.fill_group_col[c] if c in cfg.fill_group_col else None),
+                cols),
+            stat_fill_cols))
+    
+    print(df.schema)
+    
+    filled_cols     = chain.from_iterable(cfg.fill_values.values())
+    default_expr    = pl.exclude(tuple(filled_cols) + (DataObject.is_anomaly,)).fill_null(cfg.default_fill_value)
+
+    return df.with_columns(default_expr, *const_exprs, *stat_exprs)
+"""
+
+"""
+def make_embedder(cfg: S1Config) -> Callable[[tuple[str, ...]], jp.ndarray]:
+    tokenizer   = AutoTokenizer.from_pretrained(
+        cfg.embedder_path,
+        local_files_only = True,)
+    embedder    = AutoModel.from_pretrained(
+        cfg.embedder_path,
+        local_files_only = True,).to(cfg.device).eval()
+
+    def embed(texts: tuple[str, ...]) -> jp.ndarray:
+        enc = tokenizer(texts,
+                        padding         = True,
+                        truncation      = True,
+                        max_length      = cfg.embedding_max_length,
+                        return_tensors  = 'pt').to(cfg.device)
+        
+        with tr.no_grad(): out = embedder(**enc)
+        cls = tr.nn.functional.normalize(out.last_hidden_state[:, 0, :], p = 2, dim = 1)
+
+        return jp.asarray(cls.cpu().numpy())
+
+    return embed
+"""
