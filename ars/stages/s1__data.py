@@ -5,6 +5,7 @@ from    dataclasses                     import asdict, replace
 from    itertools                       import starmap, chain, filterfalse, islice
 
 from    argparse                        import ArgumentParser
+from    operator                        import itemgetter
 from    pathlib                         import PurePath, Path
 from    random                          import seed
 from    json                            import dump, dumps
@@ -714,13 +715,21 @@ def stratified_split(df: pl.DataFrame, strata_col: str, cfg: S1Config):
     
     df = df.filter(pl.col(strata_col) != DataObject.class_sentinel)
 
+    # F-08: the split unit is the TRACE - every (trace, agent) row of a trace
+    # goes to the same split; otherwise trace-level aggregate features leak
+    # across splits on multi-agent traces. Class order is sorted so pl.concat
+    # order never depends on group_by iteration order.
     is_normal   = (
         pl.col(strata_col).is_null() |
         pl.col(strata_col).cast(pl.Utf8).str.to_lowercase().is_in(('', 'nonanomaly')))
-    norm_all    = df.filter(is_normal)
-    anom_all    = df.filter(~is_normal)
-    
-    norm_shuffled   = norm_all.sample(fraction = 1.0, shuffle = True, seed = cfg.seed_split)
+    units       = (df
+        .group_by(DataObject.trace_id)
+        .agg(pl.col(strata_col).drop_nulls().first().alias(strata_col))
+        .sort(DataObject.trace_id))
+    norm_units  = units.filter(is_normal)
+    anom_units  = units.filter(~is_normal)
+
+    norm_shuffled   = norm_units.sample(fraction = 1.0, shuffle = True, seed = cfg.seed_split)
     n_norm          = norm_shuffled.height
     n_train, n_val  = tuple(map(
         lambda r: int(n_norm * r),
@@ -728,29 +737,30 @@ def stratified_split(df: pl.DataFrame, strata_col: str, cfg: S1Config):
     n_test          = n_norm - n_train - n_val
     assert n_train + n_val + n_test == n_norm, 'некорректный сплит нормальных объектов'
 
-    norm_train  = norm_shuffled.slice(0, n_train)
-    norm_val    = norm_shuffled.slice(n_train,  n_val)
-    norm_test   = norm_shuffled.slice(n_train + n_val, n_test)
-    
-    def _split_anom_group(name_df):
-        _, group_df     = name_df
-        group_shuffled  = group_df.sample(fraction = 1.0, shuffle = True, seed = cfg.seed_split)
-        n_group         = group_shuffled.height
-        n_val_anom      = int(n_group * cfg.anom_val_ratio)
+    ids             = lambda part: part.select(DataObject.trace_id)
+    norm_train_ids  = ids(norm_shuffled.slice(0, n_train))
+    norm_val_ids    = ids(norm_shuffled.slice(n_train,  n_val))
+    norm_test_ids   = ids(norm_shuffled.slice(n_train + n_val, n_test))
 
-        return (
-            group_shuffled.slice(0, n_val_anom),
-            group_shuffled.slice(n_val_anom, n_group - n_val_anom))
+    def _split_anom_class(class_name: str):
+        group_shuffled  = (anom_units
+            .filter(pl.col(strata_col) == class_name)
+            .sample(fraction = 1.0, shuffle = True, seed = cfg.seed_split))
+        n_val_anom      = int(group_shuffled.height * cfg.anom_val_ratio)
+        return (ids(group_shuffled.slice(0, n_val_anom)),
+                ids(group_shuffled.slice(n_val_anom)))
 
-    anom_val_test_pairs = tuple(map(_split_anom_group, anom_all.group_by(strata_col)))
-    anom_val_parts, anom_test_parts = zip(*anom_val_test_pairs) if anom_val_test_pairs else ((), ())
-    anom_val  = pl.concat(anom_val_parts)  if anom_val_parts  else pl.DataFrame(schema = anom_all.schema)
-    anom_test = pl.concat(anom_test_parts) if anom_test_parts else pl.DataFrame(schema = anom_all.schema)
-    
-    train = norm_train
-    val   = pl.concat((norm_val,  anom_val))
-    test  = pl.concat((norm_test, anom_test))
-    
+    class_names     = sorted(anom_units[strata_col].unique().to_list())
+    anom_pairs      = tuple(map(_split_anom_class, class_names))
+    empty_ids       = units.head(0).select(DataObject.trace_id)
+    anom_val_ids    = pl.concat(tuple(map(itemgetter(0), anom_pairs))) if anom_pairs else empty_ids
+    anom_test_ids   = pl.concat(tuple(map(itemgetter(1), anom_pairs))) if anom_pairs else empty_ids
+
+    member  = lambda id_frame: df.join(id_frame, on = DataObject.trace_id, how = 'semi')
+    train   = member(norm_train_ids)
+    val     = pl.concat((member(norm_val_ids),  member(anom_val_ids)))
+    test    = pl.concat((member(norm_test_ids), member(anom_test_ids)))
+
     MyColorScheme.print_metric('Train (обучение реконструкции, только нормальные)', train.height)
     MyColorScheme.print_metric('Val   (подбор порога)\t\t\t\t', val.height)
     MyColorScheme.print_metric('Test  (выбор модели)\t\t\t\t', test.height)
