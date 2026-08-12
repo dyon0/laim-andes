@@ -206,7 +206,19 @@ def prepare_arrays(train_df: pl.DataFrame, val_df: pl.DataFrame, test_df: pl.Dat
     mcs.print_metric('EPI размерность', epi_dim)
     mcs.print_metric('SEM размерность', sem_dim)
 
-    max_len = Pad.max_len((train_df, val_df, test_df), 'epi_sequence')
+    # F-09: tensor sizing derives from TRAIN only (test lengths are unknowable
+    # in production); longer val/test traces follow cfg.truncation_policy.
+    max_len = Pad.max_len((train_df,), 'epi_sequence')
+    if cfg.max_len_cap is not None:
+        max_len = min(max_len, cfg.max_len_cap)
+    observed = Pad.max_len((val_df, test_df), 'epi_sequence')
+    if observed > max_len:
+        if cfg.truncation_policy == 'error':
+            raise ValueError(
+                f'трассы длиннее train max_len={max_len} (наблюдалось {observed}); '
+                f'truncation_policy=error')
+        sprint(f'ВНИМАНИЕ: val/test трассы длиннее train max_len={max_len} '
+               f'(до {observed} спанов) будут усечены', style_code = mcs.warning)
     mcs.print_metric('Максимальная длина (в спанах)', max_len)
 
     train_epi_pad, train_epi_mask   = Pad.split(train_df, 'epi_sequence', epi_dim, max_len, chunk)
@@ -703,22 +715,24 @@ def predict_trace(epi_pad: Array, epi_mask: Array, sem_pad: Array, sem_mask: Arr
         is_anomaly              = bool(out.is_anomaly[0]))
 
 
-def detect_anomalies(data: pl.LazyFrame, s2_meta: S2Meta) -> pl.LazyFrame:
+def detect_anomalies(data: pl.LazyFrame, s2_meta: S2Meta, only_anomalies: bool = True) -> pl.LazyFrame:
+    '''инференс детектора. only_anomalies=True — legacy-контракт (только
+    аномальные трассы, без колонки is_anomaly); False — полный аудиторский
+    след: каждая трасса со всеми оценками и флагами (F-27).'''
     meta, models            = load_models_for_inference(s2_meta)
     df                      = data.collect()
+    # F-09: silent truncation of over-length traces is now flagged per trace
+    truncated               = (df.get_column('epi_sequence').list.len() > s2_meta.max_len)
     epi_padded, epi_mask    = Pad.split(df, 'epi_sequence',            s2_meta.epi_dim, s2_meta.max_len, s2_meta.seq_pad_chunk)
     sem_padded, sem_mask    = Pad.split(df, 'sem_sequence_sem_vector', s2_meta.sem_dim, s2_meta.max_len, s2_meta.seq_pad_chunk)
+    # F-27: one forward pass — Predict.batch already computes normalized latents
     out                     = Predict.batch(meta, models, epi_padded, epi_mask, sem_padded, sem_mask)
     # F-21: never emit non-finite scores as if they were detections
     if df.height and not bool(jp.isfinite(out.e_comb).all() & jp.isfinite(out.p_anomaly).all()):
         raise FloatingPointError(
             'детектор вернул нечисловые оценки (NaN/Inf) — проверьте нормализацию '
             'латентов и входные данные; инференс прерван')
-    epi_lat                 = Branch.encode(models.epi_model, models.epi_state, epi_padded, epi_mask)
-    sem_lat                 = Branch.encode(models.sem_model, models.sem_state, sem_padded, sem_mask)
-    z_epi                   = (epi_lat - meta.epi_latent_mean) / meta.epi_latent_std if meta.normalize_latent else epi_lat
-    z_sem                   = (sem_lat - meta.sem_latent_mean) / meta.sem_latent_std if meta.normalize_latent else sem_lat
-    return pl.concat((
+    scored = pl.concat((
                 df.drop(('epi_sequence', 'sem_sequence_sem_vector')).lazy(),
                 pl.DataFrame({
                     'detector_reconstruction_error':    map(jp.asarray, out.e_comb),
@@ -726,10 +740,13 @@ def detect_anomalies(data: pl.LazyFrame, s2_meta: S2Meta) -> pl.LazyFrame:
                     'detector_e_sem':                   map(jp.asarray, out.e_sem),
                     'detector_p_anomaly':               map(jp.asarray, out.p_anomaly),
                     'detector_confidence':              map(jp.asarray, out.confidence),
-                    'detector_z_epi':                   z_epi.tolist(),
-                    'detector_z_sem':                   z_sem.tolist(),
+                    'detector_z_epi':                   out.z_epi.tolist(),
+                    'detector_z_sem':                   out.z_sem.tolist(),
+                    'detector_truncated':               truncated,
                     'detector_is_anomaly':              map(jp.asarray, out.is_anomaly)}).lazy()),
-        how = 'horizontal').filter(pl.col('detector_is_anomaly').eq(True)).drop('detector_is_anomaly')
+        how = 'horizontal')
+    return (scored.filter(pl.col('detector_is_anomaly').eq(True)).drop('detector_is_anomaly')
+            if only_anomalies else scored)
 
 
 def load_best_model(cfg: S2Config) -> Tuple[InferenceMeta, Models]:

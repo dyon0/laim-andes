@@ -254,11 +254,15 @@ def cmd_infer(cfg: RunConfig, run_dir: Path, manifest: Manifest,
     with StageTimer(manifest, 'infer', log):
         lf = prepare_test_data(s1_cfg, PurePath(spans_path), s1_meta,
                                PurePath(run_dir), 'laim')
-        detected = detect_anomalies(lf, s2_meta).collect()
+        # F-27: full audit trail — every trace scored, detections flagged
+        scored = detect_anomalies(lf, s2_meta, only_anomalies=False).collect()
     out_path = run_dir / 'detections.parquet'
-    detected.write_parquet(out_path)
+    scored.write_parquet(out_path)
     manifest.record_artifact('detections', out_path)
-    result = {'n_detected': detected.height, 'out_path': str(out_path)}
+    result = {'n_traces_scored': scored.height,
+              'n_detected': int(scored['detector_is_anomaly'].sum()),
+              'n_truncated': int(scored['detector_truncated'].sum()),
+              'out_path': str(out_path)}
     manifest.record_metrics('infer', result)
     log.info('infer: %s', result)
     return result

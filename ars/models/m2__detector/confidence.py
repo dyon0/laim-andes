@@ -181,7 +181,9 @@ class Predict:
             e_comb      = e_comb,
             p_anomaly   = p_anom,
             confidence  = jp.maximum(p_anom, 1.0 - p_anom),
-            is_anomaly  = e_comb > best_threshold)
+            is_anomaly  = e_comb > best_threshold,
+            z_epi       = epi_lat_n,
+            z_sem       = sem_lat_n)
 
     @staticmethod
     def batch(meta: InferenceMeta, models: Models, epi_padded: Array, epi_mask: Array, sem_padded: Array, sem_mask: Array) -> Confidence:

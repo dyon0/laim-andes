@@ -73,6 +73,9 @@ class Confidence:
     p_anomaly   : Array
     confidence  : Array
     is_anomaly  : Array
+    # F-27: normalized latents ride along so callers don't re-encode
+    z_epi       : Array
+    z_sem       : Array
 
 
 @dataclass(frozen = True)
@@ -106,7 +109,8 @@ class PreparedData:
 
 jx.tree_util.register_pytree_node(
     Confidence,
-    lambda c: ((c.e_epi, c.e_sem, c.e_comb, c.p_anomaly, c.confidence, c.is_anomaly), None),
+    lambda c: ((c.e_epi, c.e_sem, c.e_comb, c.p_anomaly, c.confidence, c.is_anomaly,
+                c.z_epi, c.z_sem), None),
     lambda _aux, children: Confidence(*children))
 
 

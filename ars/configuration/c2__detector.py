@@ -1,3 +1,4 @@
+from    typing                  import Literal
 from    dataclasses             import dataclass, field
 
 from    pathlib                 import PurePath
@@ -35,6 +36,11 @@ class S2Config:
     # F-03: floor for train-latent std in latent normalization (0.0 = legacy
     # behavior of std+eps, which overflowed on degenerate dimensions)
     latent_std_floor    : float = 1e-3
+
+    # F-09: sequence length budget is fitted on TRAIN only; longer val/test/
+    # inference traces follow truncation_policy ('truncate' logs, 'error' raises)
+    max_len_cap         : None | int                        = None
+    truncation_policy   : Literal['truncate', 'error']      = 'truncate'
 
     seed    : int   = 12345
     eps     : float = 1e-8
