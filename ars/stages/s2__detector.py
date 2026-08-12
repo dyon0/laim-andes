@@ -364,6 +364,8 @@ def run_experiment(exp_cls: type[Experiment], data: PreparedData, cfg: S2Config)
     '''полный пайплайн обучения детектора по одному эксперименту'''
     mcs             = cfg.output_color_scheme
     exp_cfg         = exp_cls()
+    if cfg.epochs   is not None: exp_cfg = replace(exp_cfg, epochs   = cfg.epochs)
+    if cfg.patience is not None: exp_cfg = replace(exp_cfg, patience = cfg.patience)
     experiment_name = exp_cfg.name
     experiment_dir  = Path(cfg.output_dir) / experiment_name
     experiment_dir.mkdir(parents = True, exist_ok = True)
@@ -544,7 +546,11 @@ def train_experiments(cfg: S2Config) -> Tuple[PreparedData, Tuple[dict, ...]]:
     mcs                         = cfg.output_color_scheme
     train_df, val_df, test_df   = load_prepared_data(cfg)
     data                        = prepare_arrays(train_df, val_df, test_df, cfg.s1_meta, cfg)
-    all_results                 = tuple(map(lambda exp_cls: run_experiment(exp_cls, data, cfg), EXPERIMENTS))
+    grid                        = (EXPERIMENTS if cfg.experiments is None
+                                   else tuple(filter(lambda e: e().name in cfg.experiments, EXPERIMENTS)))
+    if not grid:
+        raise ValueError(f'ни один эксперимент не совпал с фильтром: {cfg.experiments}')
+    all_results                 = tuple(map(lambda exp_cls: run_experiment(exp_cls, data, cfg), grid))
     print_summary_table(mcs, all_results)
     print_config_table (mcs, all_results)
     best            = _pick_best(all_results, cfg.select_metric)

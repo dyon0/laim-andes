@@ -19,6 +19,12 @@ class S2Config:
     threshold_metric    : MetricName    = 'youden'
     select_metric       : MetricName    = 'youden'
 
+    # optional experiment-grid overrides; None keeps the values compiled into
+    # ars/configuration/experiments/e2__detector.py (legacy behavior)
+    experiments : None | tuple[str, ...]    = None
+    epochs      : None | int                = None
+    patience    : None | int                = None
+
     n_thresholds                : int   = 10000
     inference_normal_count      : int   = 100000
     inference_anomalous_count   : int   = 100000

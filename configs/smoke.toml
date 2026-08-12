@@ -1,0 +1,21 @@
+# Smoke config: fixture-scale end-to-end on CPU in minutes.
+[paths]
+train_spans = "data/traces_1k_sample.parquet"
+output_root = "runs"
+
+[runtime]
+device = "cpu"
+seed = 12345
+recast = true
+
+[detector]
+epochs = 3
+experiments = ["hub_mse_mse_08_4"]
+
+[classifier]
+enabled = true
+
+[eval]
+target_fpr = 0.10
+assumed_prevalence = 0.01
+latency_reps = 20

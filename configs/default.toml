@@ -1,0 +1,25 @@
+# Default training config (CPU-sized; raise epochs/corpus on GPU hardware).
+[paths]
+train_spans = "data/traces_1k_sample.parquet"
+embedder = "/tmp/models/USER-bge-m3-standin"
+output_root = "runs"
+
+[runtime]
+device = "cpu"       # "gpu" on CUDA hosts
+seed = 12345
+recast = true
+
+[data]
+winsorize_epi = true
+epi_normalization = "robust"
+inject_anomalies = true
+
+[detector]
+threshold_metric = "youden"
+select_metric = "youden"
+epochs = 10
+n_thresholds = 10000
+
+[eval]
+target_fpr = 0.10
+assumed_prevalence = 0.01
