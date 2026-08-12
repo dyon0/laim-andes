@@ -7,3 +7,4 @@ baseline/runs/*/test_spans.parquet
 .pytest_cache/
 .hypothesis/
 artifacts/
+runs/
