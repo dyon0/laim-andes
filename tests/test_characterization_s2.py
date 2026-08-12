@@ -42,12 +42,15 @@ def test_threshold_sweep_pinned(golden):
     assert float(metrics.youden) == pytest.approx(golden['micro_threshold_youden'], abs=1e-6)
 
 
-@pytest.mark.characterization_bug  # F-23: masked loss divides by timesteps, not elements
-def test_masked_loss_is_feature_dim_scaled():
+def test_masked_loss_is_per_element():
+    """F-23 FIXED: unit error gives loss 1.0 regardless of feature dim (was D)."""
     recon = jp.zeros((1, 2, 3))
     target = jp.ones((1, 2, 3))
     mask = jp.ones((1, 2), dtype=bool)
-    assert float(Loss.masked(recon, target, mask, 'mse', 1.0, 1e-8)) == pytest.approx(3.0)
+    assert float(Loss.masked(recon, target, mask, 'mse', 1.0, 1e-8)) == pytest.approx(1.0)
+    # and masking works: padded steps contribute nothing
+    mask2 = jp.asarray([[True, False]])
+    assert float(Loss.masked(recon, target, mask2, 'mse', 1.0, 1e-8)) == pytest.approx(1.0)
 
 
 @pytest.mark.characterization_bug  # F-03/F-04: zero-MAD calibration produces degenerate z-scores

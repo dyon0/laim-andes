@@ -781,10 +781,18 @@ def stratified_split(df: pl.DataFrame, strata_col: str, cfg: S1Config):
     return train, val, test
 
 
-def _apply_norm(df: pl.DataFrame, epi_dim: int, shift_arr: pl.Expr, scale_arr: pl.Expr) -> pl.DataFrame:
-    return df.with_columns(
-        pl.col('epi_sequence').list.eval(
-            pl.element().list.to_array(epi_dim).sub(shift_arr).truediv(scale_arr).arr.to_list())).sort('trace_id')
+def _apply_norm(
+    df: pl.DataFrame, epi_dim: int, shift_arr: pl.Expr, scale_arr: pl.Expr,
+    z_clip: float = 0.0,
+) -> pl.DataFrame:
+    # F-05: normalized values are clipped to [-z_clip, z_clip] (scaling is
+    # monotone, so this equals clipping raw values at shift ± z_clip*scale).
+    # Applied identically at train/val/test/inference; z_clip <= 0 preserves the
+    # legacy unbounded behavior.
+    normed = pl.element().list.to_array(epi_dim).sub(shift_arr).truediv(scale_arr).arr.to_list()
+    if z_clip > 0.0:
+        normed = normed.list.eval(pl.element().clip(-z_clip, z_clip))
+    return df.with_columns(pl.col('epi_sequence').list.eval(normed)).sort('trace_id')
 
 
 @benchmark('нормализация epi-признаков')
@@ -833,18 +841,23 @@ def normalize_epi_features(
         case _:
             raise NotImplementedError(f'неподдерживаемый метод нормализации: {cfg.epi_normalization}')
 
+    # F-05: a scale barely above eps_normalization produced |z| ~ 40+ on
+    # quantile-degenerate features; floor the scale outright. A near-zero
+    # spread means the feature is near-constant on normal data — deviations
+    # are still visible, just not explosively amplified.
+    floor_value = 1.0 if cfg.scale_floor <= 0.0 else cfg.scale_floor
     scale_expr  = (
-        pl.when(scale_expr.abs() < cfg.eps_normalization)
-            .then(scale_expr.mul(0.0).add(1.0))
+        pl.when(scale_expr.abs() < max(cfg.eps_normalization, cfg.scale_floor))
+            .then(scale_expr.mul(0.0).add(floor_value))   # keeps per-column names
             .otherwise(scale_expr))
     shift_row   = flat.select(shift_expr).row(0)
     scale_row   = flat.select(scale_expr).row(0)
     shift_arr   = pl.lit(shift_row, dtype = pl.Array(pl.Float64, epi_dim))
     scale_arr   = pl.lit(scale_row, dtype = pl.Array(pl.Float64, epi_dim))
 
-    train_norm_out  = _apply_norm(train_df, epi_dim, shift_arr, scale_arr)
-    val_norm_out    = _apply_norm(val_df,   epi_dim, shift_arr, scale_arr)
-    test_norm_out   = _apply_norm(test_df,  epi_dim, shift_arr, scale_arr)
+    train_norm_out  = _apply_norm(train_df, epi_dim, shift_arr, scale_arr, cfg.norm_z_clip)
+    val_norm_out    = _apply_norm(val_df,   epi_dim, shift_arr, scale_arr, cfg.norm_z_clip)
+    test_norm_out   = _apply_norm(test_df,  epi_dim, shift_arr, scale_arr, cfg.norm_z_clip)
 
     norm_params = {
         'method'            : cfg.epi_normalization,
@@ -852,6 +865,8 @@ def normalize_epi_features(
         'scale'             : scale_row,
         'winsorize'         : cfg.winsorize_epi,
         'winsorize_limits'  : cfg.winsorize_limits if cfg.winsorize_epi else None,
+        'scale_floor'       : cfg.scale_floor,
+        'z_clip'            : cfg.norm_z_clip,
     }
 
     _viz_dir = cfg.output_dir / 'visualizations'
@@ -1148,8 +1163,9 @@ def prepare_test_data(
     epi_dim             = s1_meta.epi_dim
     shift_arr           = pl.lit(norm_params['shift'], dtype = pl.Array(pl.Float64, epi_dim))
     scale_arr           = pl.lit(norm_params['scale'], dtype = pl.Array(pl.Float64, epi_dim))
+    z_clip              = float(norm_params.get('z_clip') or 0.0)
 
-    traces_normalized   = _apply_norm(traces, epi_dim, shift_arr, scale_arr)
+    traces_normalized   = _apply_norm(traces, epi_dim, shift_arr, scale_arr, z_clip)
 
     return traces_normalized.lazy()
 

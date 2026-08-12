@@ -45,8 +45,9 @@ class Trainer:
             recon, _            = model.apply(FrozenDict({'params': params}), batch_x, seq_lens, training = False)
             mask3d              = batch_mask[..., None].astype(jp.float32)
             pointwise           = LOSS.compute_pointwise_loss(recon, batch_x, model.hp.loss_type, model.hp.huber_delta)
-            
-            return (sum_loss + jp.sum(pointwise * mask3d), sum_count + jp.sum(mask3d)), None
+
+            # F-23: per-element normalization (see Loss.masked)
+            return (sum_loss + jp.sum(pointwise * mask3d), sum_count + jp.sum(mask3d) * recon.shape[-1]), None
 
         zero_acc = (jp.zeros((), dtype = jp.float32), jp.zeros((), dtype = jp.float32))
         (total_loss, total_count), _ = jx.lax.scan(_step, zero_acc, (val_b, mask_b))

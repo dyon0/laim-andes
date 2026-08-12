@@ -479,7 +479,8 @@ class TRAIN:
     def lstm_ae_sse_count(params: Params, model: LSTM_AE, xs: Array, seq_lengths: Array, mask: Array) -> Tuple[Array, Array]:
         recon, _    = model.apply(FrozenDict({'params': params}), xs, seq_lengths, training = False)
         mask_exp    = mask[..., None]
-        return jp.sum((recon - xs) ** 2 * mask_exp), jp.sum(mask_exp)
+        # F-23: element count includes the feature dimension
+        return jp.sum((recon - xs) ** 2 * mask_exp), jp.sum(mask_exp) * xs.shape[-1]
 
     @staticmethod
     @jx.jit(static_argnames = ('model',))

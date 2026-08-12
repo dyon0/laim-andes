@@ -124,7 +124,8 @@ def main(
     s1_int      = frozenset({'embedding_batch_size','embedding_max_length','llm_sem_max_new_tokens','llm_sem_batch_size',
         'output_max_collection_len','seed_random','seed_polars','seed_torch','seed_split','seed_synth','seed_llm'})
     s1_float    = frozenset({'min_fill_rate','max_static_rate','max_correlation','llm_sem_temperature','norm_train_ratio',
-        'norm_val_ratio','anom_val_ratio','anom_test_ratio','eps_normalization','eps_divide','duration_scale_to_sec'})
+        'norm_val_ratio','anom_val_ratio','anom_test_ratio','eps_normalization','eps_divide','duration_scale_to_sec',
+        'scale_floor','norm_z_clip'})
     s1_bool     = frozenset({'use_meta_sem','use_llm_sem','llm_sem_use_stub','llm_sem_do_sample','winsorize_epi','export_features'})
     s2_int      = frozenset({'n_thresholds','inference_normal_count','inference_anomalous_count','seed','encode_chunk','seq_pad_chunk'})
     s2_float    = frozenset({'eps'})

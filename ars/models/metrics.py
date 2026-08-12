@@ -206,10 +206,14 @@ class Loss:
 
     @staticmethod
     def masked(recon: Array, target: Array, mask: Array, kind: LossKind, delta: Numeric, eps: Numeric) -> Array:
+        # F-23: normalize per element (valid timesteps × feature dim), not per
+        # timestep — otherwise branch losses scale with feature dimension and
+        # EPI/SEM/Combined error magnitudes are incomparable.
         mask_e      = mask[..., None] if mask.ndim == 2 else mask
         pointwise   = Loss.pointwise(recon, target, kind, delta)
+        n_elements  = jp.sum(mask_e) * recon.shape[-1]
 
-        return jp.sum(pointwise * mask_e) / (jp.sum(mask_e) + eps)
+        return jp.sum(pointwise * mask_e) / (n_elements + eps)
 
     @staticmethod
     def cross_entropy(logits: Array, labels: Array, classes: int) -> Array:

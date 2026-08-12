@@ -111,7 +111,7 @@ def test_split_membership_and_normalization_pinned(fixture_spans, golden, tmp_pa
         assert got_v == pytest.approx(exp_v, rel=1e-6, abs=1e-9)
 
 
-@pytest.mark.characterization_bug  # F-05: quantile-degenerate feature scale passes the 1e-6 guard
-def test_min_normalization_scale_is_degenerate(golden):
-    assert golden['normalization_min_scale'] < 0.01
-    assert golden['normalization_min_scale'] > 1e-6  # passes the too-small guard
+def test_min_normalization_scale_is_floored(golden):
+    """F-05 FIXED: scales are floored at S1Config.scale_floor (default 1e-2);
+    before the fix the smallest scale on this fixture was 0.0037."""
+    assert golden['normalization_min_scale'] >= 0.01

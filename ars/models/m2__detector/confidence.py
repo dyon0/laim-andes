@@ -25,8 +25,9 @@ class Calibrate:
         pointwise       = LOSS.compute_pointwise_loss(recon, padded, model.hp.loss_type, model.hp.huber_delta)
         mask_3d         = mask[..., None].astype(jp.float32)
         per_sample_sum  = jp.sum(pointwise * mask_3d, axis = (1, 2))
-        per_sample_cnt  = jp.sum(mask_3d, axis = (1, 2))
-        
+        # F-23: per-element normalization — errors comparable across branches
+        per_sample_cnt  = jp.sum(mask_3d, axis = (1, 2)) * padded.shape[-1]
+
         return per_sample_sum / (per_sample_cnt + 1e-8), latent
 
     @staticmethod

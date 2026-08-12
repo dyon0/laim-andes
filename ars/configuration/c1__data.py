@@ -66,6 +66,10 @@ class S1Config:
     epi_normalization           : Literal['zscore', 'robust']           = 'robust'
     winsorize_epi               : bool                                  = True
     winsorize_limits            : tuple[float, float]                   = (0.01, 0.99)
+    # F-05: floor for the robust scale (IQR/std) and symmetric clip for
+    # normalized values; 0.0 disables either (legacy behavior).
+    scale_floor                 : float                                 = 1e-2
+    norm_z_clip                 : float                                 = 20.0
 
     recast                      : bool                                  = False
     eps_normalization           : float                                 = 1e-6
