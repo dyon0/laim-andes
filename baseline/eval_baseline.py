@@ -49,8 +49,8 @@ def ece_brier(labels: np.ndarray, p: np.ndarray, bins: int = 10) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument('--run-dir', type=Path, default=None)
-    ap.add_argument('--run-result', type=Path, required=True,
-                    help='run_result.json from run_baseline.py')
+    ap.add_argument('--run-result', type=Path, default=None,
+                    help='run_result.json from run_baseline.py (absent if the run crashed downstream)')
     ap.add_argument('--out', type=Path, required=True)
     ap.add_argument('--latency-reps', type=int, default=50)
     args = ap.parse_args()
@@ -182,7 +182,9 @@ def main() -> None:
            'p99_ms': float(np.percentile(times, 99)),
            'reps': args.latency_reps, 'batch': 1, 'device': 'cpu'}
 
-    run_result = json.loads(args.run_result.read_text())
+    run_result = (json.loads(args.run_result.read_text())
+                  if args.run_result and args.run_result.exists()
+                  else {'run_result': 'ABSENT — end-to-end run crashed after the detector stage (see AUDIT_00 finding)'})
     payload = {
         **run_result,
         'run_dir': str(run_dir),
