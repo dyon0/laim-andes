@@ -59,13 +59,14 @@ def test_zero_mad_makes_robust_z_explode():
     assert float(z) > 1e7  # a unit error maps to a ~1e8 z-score
 
 
-@pytest.mark.characterization_bug  # F-06: Pad.split crashes on an empty frame
-def test_pad_split_crashes_on_empty_frame():
+def test_pad_split_empty_frame_yields_empty_tensors():
+    """F-06 FIXED: an empty frame produces (0, max_len, dim) tensors (used to
+    raise ValueError from jp.concatenate)."""
     import polars as pl
     empty = pl.DataFrame({'epi_sequence': []},
                          schema={'epi_sequence': pl.List(pl.List(pl.Float64))})
-    with pytest.raises(ValueError, match='at least one array'):
-        Pad.split(empty, 'epi_sequence', dim=3, max_len=4, chunk=8)
+    padded, mask = Pad.split(empty, 'epi_sequence', dim=3, max_len=4, chunk=8)
+    assert padded.shape == (0, 4, 3) and mask.shape == (0, 4)
 
 
 @pytest.mark.characterization

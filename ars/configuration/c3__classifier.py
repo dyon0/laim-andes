@@ -17,6 +17,12 @@ class S3Config:
 
     select_metric   : MetricName    = 'f1'
 
+    # F-06 guards: split fractions were hardcoded at the call site; a class below
+    # min_per_class cannot be stratified 60/20/20 without empty splits.
+    train_frac      : float = 0.6
+    val_frac        : float = 0.2
+    min_per_class   : int   = 5
+
     seed    : int   = 12345
     eps     : float = 1e-8
     device  : str   = 'cpu'

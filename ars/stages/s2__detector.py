@@ -61,6 +61,9 @@ class Pad:
 
     @staticmethod
     def split(df: pl.DataFrame, col: str, dim: int, max_len: int, chunk: int) -> Tuple[Array, Array]:
+        if df.height == 0:  # F-06: empty input must yield empty tensors, not a concat crash
+            return (jp.zeros((0, max_len, dim), dtype = jp.float32),
+                    jp.zeros((0, max_len),      dtype = bool))
         def block(start: int) -> Tuple[Array, Array]:
             rows = min(chunk, df.height - start)
             flat = (df.slice(start, chunk).select(col)

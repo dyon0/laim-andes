@@ -161,7 +161,20 @@ def prepare_features(cfg: S3Config) -> FeatureData:
     meta, models    = load_models_for_inference(cfg.s2_meta)
     max_len         = cfg.s2_meta.max_len
     pooled          = Data.pool(data_dir, prefix, class_names)
-    splits          = Data.stratified(pooled, DataObject.sublabel, cfg.seed, 0.6, 0.2)
+
+    # F-06: a class with too few members produces empty/degenerate splits, which
+    # used to crash Pad.split (and silently break early stopping). Fail early
+    # with an actionable message instead.
+    counts  = dict(pooled.group_by(DataObject.sublabel).len().iter_rows())
+    starved = dict(filter(lambda kv: kv[1] < cfg.min_per_class,
+                          ((c, counts.get(c, 0)) for c in class_names)))
+    if starved:
+        raise ValueError(
+            f'классификатор: недостаточно примеров на класс (минимум {cfg.min_per_class}): '
+            f'{starved}. Увеличьте корпус/долю инъекций или отключите классификатор '
+            f'(classifier.enabled=false).')
+
+    splits          = Data.stratified(pooled, DataObject.sublabel, cfg.seed, cfg.train_frac, cfg.val_frac)
 
     def featurize(df: pl.DataFrame) -> Split:
         z_epi, z_sem, sig = Encode.latents_and_signals(
