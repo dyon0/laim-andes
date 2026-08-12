@@ -43,6 +43,23 @@ def test_span_embeddings_are_text_dependent(standin_embedder, fixture_spans, tmp
                 assert vecs[i] == pytest.approx(vecs[j])
 
 
+@pytest.mark.slow
+def test_duplicate_texts_get_identical_vectors(standin_embedder, tmp_path):
+    """The dedup fast path must map repeated texts to bit-identical vectors
+    and preserve row order."""
+    from ars.configuration.c1__data import S1Config
+    from ars.stages.s1__data import compute_semantic_embeddings
+    cfg = S1Config(input_parquet_files=(), output_dir=tmp_path, output_prefix='t',
+                   embedder_path=standin_embedder)
+    df = pl.DataFrame({'sem_text': ['alpha', 'beta', 'alpha', 'gamma', 'beta', 'alpha']})
+    out = compute_semantic_embeddings(df, cfg, 'sem_text', 'sem_vector')
+    v = out['sem_vector'].to_list()
+    assert v[0] == v[2] == v[5]      # all 'alpha' rows identical
+    assert v[1] == v[4]              # both 'beta' rows identical
+    assert v[0] != v[1] != v[3]      # distinct texts differ
+    assert out.height == 6           # row order and count preserved
+
+
 def test_fingerprint_detects_model_swap(tmp_path):
     """F-10 FIXED: loading artifacts against a different embedder raises."""
     from ars.tools.utilities.fingerprint import model_fingerprint, verify_fingerprint

@@ -178,6 +178,8 @@ Key knobs (all in `configs/*.toml`, full list in `laim/config.py`):
 | `runtime.seed` | 12345 | drives every RNG; same seed + hardware ⇒ bit-identical run |
 | `runtime.device` | `cpu` | `cpu` / `gpu` |
 | `data.validation_gate` | `warn` | `off` / `warn` / `strict` (strict trains only on contract-conformant traces) |
+| `data.embedding_max_length` | 1024 | token truncation — the main CPU-speed lever for the real embedder |
+| `data.embedding_batch_size` | 32 | encoder batch size (memory vs throughput) |
 | `data.inject_anomalies` | `true` | inject the 5 LumiMAS classes for VAL/TEST labeling |
 | `detector.experiments` | both grid entries | architecture grid filter (batch size must be ≤ #train traces) |
 | `detector.epochs` / `patience` | 10 / 50 | raise for real training (10 is a smoke-scale default) |
@@ -338,6 +340,7 @@ don't understand.
 
 | Symptom | Cause / fix |
 |---|---|
+| **"Stuck" at `ЭМБЕДДИНГИ: sem_text -> sem_vector`** | It is (almost certainly) working, not stuck — this stage now logs model-load time and per-chunk progress (`эмбеддинги: N/M (…%, X текст/с, осталось ~Y с)`); if you see no progress lines, update to the current branch. Expected CPU rates: stand-in ≈ 100–300 texts/s; **real `USER-bge-m3` ≈ 1–10 texts/s** — on the 1k-span sample that is minutes, on large corpora use a GPU (`runtime.device=gpu`). Levers: only unique texts are encoded (typically 2–50× fewer than spans); `--set data.embedding_max_length=256` cuts real-model CPU time ~4× (truncates long span texts); `--set data.embedding_batch_size=8` reduces memory pressure on small machines. If throughput is ~0 texts/s on the *stand-in*, check for CPU oversubscription (another training run on the same cores) |
 | `SyntaxError` on import | Python < 3.12 — the code uses PEP 695 `type` aliases |
 | `No module named pip` inside `.venv` | the venv is uv-managed — use `uv pip …` |
 | First test run takes 2× longer | cold JAX compile cache — normal; rerun is fast |

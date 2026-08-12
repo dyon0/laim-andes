@@ -36,6 +36,8 @@ class RuntimeConfig:
 @dataclass(frozen=True)
 class DataConfig:
     """s1 knobs (mapped onto S1Config)."""
+    embedding_batch_size: int = 32        # texts per encoder batch
+    embedding_max_length: int = 1024      # token truncation; the main CPU-speed lever
     min_fill_rate: float = 0.5
     max_static_rate: float = 0.95
     max_correlation: float = 0.999
@@ -108,6 +110,8 @@ class RunConfig:
     def to_s1_overrides(self) -> dict:
         d, r = self.data, self.runtime
         return {
+            'embedding_batch_size': d.embedding_batch_size,
+            'embedding_max_length': d.embedding_max_length,
             'min_fill_rate': d.min_fill_rate,
             'max_static_rate': d.max_static_rate,
             'max_correlation': d.max_correlation,

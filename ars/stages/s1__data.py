@@ -433,23 +433,51 @@ def compute_semantic_embeddings(
     """F-01: РЕАЛЬНЫЕ эмбеддинги для каждого спана (легаси возвращал нулевые
     заглушки, из-за чего семантическая ветвь детектировала факт инъекции, а не
     семантику). embed — общая функция с инъектором (make_embedder), чтобы
-    нормальные и аномальные спаны кодировались одной моделью."""
+    нормальные и аномальные спаны кодировались одной моделью.
+
+    Тексты спанов сильно повторяются (шаблонные выводы chain/tool/http),
+    поэтому кодируются только УНИКАЛЬНЫЕ тексты, с прогрессом по чанкам —
+    на CPU без прогресса этот этап выглядит зависшим."""
+    import numpy as _np
+    from time import monotonic as _clock
+
     MyColorScheme = cfg.output_color_scheme
     MyColorScheme.print_section(f'ЭМБЕДДИНГИ: {text_col} -> {out_col}')
-    sprint(f'Модель: {cfg.embedder_path.name}, устройство: {cfg.device}', style_code = MyColorScheme.info)
+    sprint(f'Модель: {cfg.embedder_path.name}, устройство: {cfg.device}, '
+           f'batch={cfg.embedding_batch_size}, max_length={cfg.embedding_max_length}',
+           style_code = MyColorScheme.info)
 
-    texts = df[text_col].cast(pl.Utf8).fill_null('').to_list()
-    MyColorScheme.print_metric('Всего текстов', len(texts))
+    texts   = df[text_col].cast(pl.Utf8).fill_null('').to_list()
+    unique  = list(dict.fromkeys(texts))          # order-preserving dedup
+    MyColorScheme.print_metric('Всего текстов',      len(texts))
+    MyColorScheme.print_metric('Уникальных текстов', f'{len(unique)} '
+        f'(экономия {(1 - len(unique) / max(1, len(texts))) * 100:.0f}%)')
 
     if embed is None:
-        embed = make_embedder(cfg)
+        sprint('загрузка модели эмбеддера (на CPU с холодным кэшем может занять минуту)...',
+               style_code = MyColorScheme.info)
+        t0      = _clock()
+        embed   = make_embedder(cfg)
+        sprint(f'модель загружена за {_clock() - t0:.1f} c', style_code = MyColorScheme.info)
 
-    chunk       = max(1, cfg.embedding_batch_size) * 32
-    parts       = tuple(map(
-        lambda i: embed(tuple(texts[i:i + chunk])),
-        range(0, len(texts), chunk)))
-    import numpy as _np
-    embeddings  = _np.concatenate(tuple(map(_np.asarray, parts)), axis = 0) if parts else _np.zeros((0, 1024))
+    chunk   = max(1, cfg.embedding_batch_size) * 8
+    parts   = []
+    t0      = _clock()
+    for i in range(0, len(unique), chunk):
+        parts.append(embed(tuple(unique[i:i + chunk])))
+        done    = min(i + chunk, len(unique))
+        rate    = done / max(_clock() - t0, 1e-9)
+        eta     = (len(unique) - done) / max(rate, 1e-9)
+        sprint(f'\tэмбеддинги: {done}/{len(unique)} '
+               f'({done / len(unique) * 100:.0f}%, {rate:.0f} текст/с, осталось ~{eta:.0f} с)',
+               style_code = MyColorScheme.debug)
+
+    if parts:
+        emb_unique  = _np.concatenate(tuple(map(_np.asarray, parts)), axis = 0)
+        index       = dict(map(reversed, enumerate(unique)))
+        embeddings  = emb_unique[_np.fromiter((index[t] for t in texts), dtype = _np.int64)]
+    else:
+        embeddings  = _np.zeros((0, 1024))
 
     if len(embeddings) != df.height:
         raise ValueError('количество эмбеддингов не совпадает с числом спанов')
@@ -460,14 +488,15 @@ def compute_semantic_embeddings(
     return df
 
 
-
-
 def make_embedder(cfg: S1Config) -> Callable[[tuple[str, ...]], jp.ndarray]:
     model = SentenceTransformer(
         cfg.embedder_path.as_posix(),
         device              = cfg.device,
         local_files_only    = True
     )
+    # token truncation is the main CPU-speed lever; without this the model's
+    # own max_seq_length (1024+ for bge-m3) applies regardless of config
+    model.max_seq_length = cfg.embedding_max_length
 
     def embed(texts: tuple[str, ...]) -> jp.ndarray:
         emb = model.encode(
