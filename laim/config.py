@@ -54,6 +54,8 @@ class DataConfig:
     """s1 knobs (mapped onto S1Config)."""
     embedding_batch_size: int = 32        # texts per encoder batch
     embedding_max_length: int = 1024      # token truncation; the main CPU-speed lever
+    embedding_gpus: int = 0               # data-parallel encoding: 0 = all visible GPUs, N = first N (gpu mode only)
+    embedding_pool_chunk: int = 5000      # texts handed to each pool worker per dispatch
     min_fill_rate: float = 0.5
     max_static_rate: float = 0.95
     max_correlation: float = 0.999
@@ -128,6 +130,8 @@ class RunConfig:
         return {
             'embedding_batch_size': d.embedding_batch_size,
             'embedding_max_length': d.embedding_max_length,
+            'embedding_gpus': d.embedding_gpus,
+            'embedding_pool_chunk': d.embedding_pool_chunk,
             'min_fill_rate': d.min_fill_rate,
             'max_static_rate': d.max_static_rate,
             'max_correlation': d.max_correlation,

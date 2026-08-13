@@ -100,6 +100,34 @@ def _dir_fingerprint(label: str, root: Path, files: list[Path]) -> dict:
             'files': len(files)}
 
 
+def gpu_topology() -> dict:
+    """GPU inventory via nvidia-smi — no CUDA context is created, so this is
+    safe to call before torch/jax initialize and costs nothing on CPU hosts."""
+    import os
+    try:
+        r = subprocess.run(
+            ['nvidia-smi', '--query-gpu=index,name,memory.total,memory.used,driver_version',
+             '--format=csv,noheader,nounits'],
+            capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {'available': False, 'reason': f'{type(exc).__name__}: {exc}'}
+    if r.returncode != 0:
+        return {'available': False, 'reason': (r.stderr or r.stdout).strip()[:200]}
+    gpus = []
+    for line in r.stdout.strip().splitlines():
+        try:
+            idx, name, total, used, driver = (x.strip() for x in line.split(',', 4))
+            gpus.append({'index': int(idx), 'name': name,
+                         'memory_total_mib': int(total), 'memory_used_mib': int(used),
+                         'driver': driver})
+        except ValueError:
+            continue
+    return {'available': bool(gpus), 'count': len(gpus), 'gpus': gpus,
+            'cuda_visible_devices': os.environ.get('CUDA_VISIBLE_DEVICES'),
+            'xla_preallocate': os.environ.get('XLA_PYTHON_CLIENT_PREALLOCATE'),
+            'xla_mem_fraction': os.environ.get('XLA_PYTHON_CLIENT_MEM_FRACTION')}
+
+
 def _jsonable(obj: Any) -> Any:
     if is_dataclass(obj) and not isinstance(obj, type):
         return asdict(obj)

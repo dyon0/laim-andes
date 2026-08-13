@@ -33,6 +33,8 @@ class S1Config:
     embedder_path               : PurePath                              = PurePath('/mnt/data/models/embedder/encodechka.zip')
     embedding_batch_size        : int                                   = 32
     embedding_max_length        : int                                   = 1024
+    embedding_gpus              : int                                   = 0     # 0 = все видимые GPU; N = первые N (только при device=cuda)
+    embedding_pool_chunk        : int                                   = 5000  # текстов на воркер за одну раздачу пула
     device                      : str                                   = 'cpu'
 
     fill_values                 : dict[float | str, tuple[str, ...]]    = field(

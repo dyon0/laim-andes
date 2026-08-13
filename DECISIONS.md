@@ -57,3 +57,37 @@ analyzed the same day):
   on the platform (no GPU in this container).
 - `requirements.txt` is now the PLATFORM install manifest; local development
   uses `uv pip install -e '.[dev]'` per README.
+
+## D-4: Multi-GPU = data-parallel embedding; detector stays single-GPU
+
+User requirement: use the resources available at the moment (8×H100 on the
+platform), stably. Profile: on large corpora 80–95 % of GPU wall time is the
+embedder forward pass (~50M spans for a 56 GB corpus ≈ 5–9 h on one H100);
+the two LSTM-AEs and the FMLP-AE are small models for which multi-GPU
+training would add pmap/sharding complexity and determinism risk for
+near-zero wall-clock gain.
+
+Decision:
+- **Embedding is data-parallel** via the sentence-transformers multi-process
+  pool (the library's supported mechanism: spawn context — safe with CUDA
+  initialized in the parent; daemon workers — cannot hang process exit; model
+  shared from CPU memory; chunked dispatch with ordered gather).
+  `embedding_gpus = 0 | N` selects all | first N visible GPUs; CPU mode is
+  always single-process (torch already uses all cores; N workers would
+  multiply model memory). Verified by a real two-worker CPU pool test:
+  pooled vectors match in-process vectors (atol 1e-5; differences are float
+  summation order from batch composition, same as changing batch_size).
+- **Determinism scope**: same config + same hardware stays bit-identical.
+  Changing the device count changes batch composition and is a config change
+  — same status as embedding_batch_size (documented, not hidden).
+- **The detector trains on one GPU.** Parallelizing the experiment grid
+  (one worker process per GPU) is future work (PLAN.md), not smuggled in
+  here: process-per-GPU is the stable design, and doing it properly means
+  reworking how s2 owns its inputs.
+- **Memory policy**: legacy `c0__env_setup` force-set
+  XLA_PYTHON_CLIENT_PREALLOCATE=true / MEM_FRACTION=0.80 at import — with 8
+  visible GPUs JAX would preallocate 80 % of every card and starve the
+  encoding workers. The env block now uses `setdefault` (operator overrides
+  win; standalone behavior unchanged), and the platform node pre-sets
+  PREALLOCATE=false. GPU topology + memory policy are logged at node start
+  and recorded in the manifest.

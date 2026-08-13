@@ -83,6 +83,8 @@ PARAM_MAP: dict[str, str] = {
     'inject_anomalies':     'data.inject_anomalies',
     'embedding_batch_size': 'data.embedding_batch_size',
     'embedding_max_length': 'data.embedding_max_length',
+    'embedding_gpus':       'data.embedding_gpus',
+    'embedding_pool_chunk': 'data.embedding_pool_chunk',
     'norm_train_ratio':     'data.norm_train_ratio',
     'norm_val_ratio':       'data.norm_val_ratio',
     'anom_val_ratio':       'data.anom_val_ratio',
@@ -379,6 +381,8 @@ def run_train(cfg, params: dict[str, Any]) -> dict:
     run_dir = make_run_dir(cfg, 'platform_train')
     setup_logging(run_dir, cfg.runtime.log_level)
     manifest = Manifest(run_dir, cfg)
+    from laim.runlog import gpu_topology
+    manifest.record_metrics('gpu_topology', gpu_topology())
 
     prep = cmd_prepare(cfg, run_dir, manifest)
     trained = cmd_train(cfg, run_dir, manifest, prep['s1_meta'])
@@ -431,6 +435,8 @@ def run_inference(cfg, params: dict[str, Any]) -> dict:
     run_dir = make_run_dir(cfg, 'platform_infer')
     setup_logging(run_dir, cfg.runtime.log_level)
     manifest = Manifest(run_dir, cfg)
+    from laim.runlog import gpu_topology
+    manifest.record_metrics('gpu_topology', gpu_topology())
     manifest.record_input('model_bundle', source)
 
     bundle_root = resolve_bundle(source, run_dir)
@@ -483,6 +489,26 @@ def run_node(**params: Any) -> dict:
     # unwritable there; local model loads can still touch it lazily
     if not os.environ.get('HF_HOME'):
         os.environ['HF_HOME'] = str(Path(tempfile.gettempdir()) / 'laim' / 'hf')
+    # JAX and the torch embedder pool SHARE the GPUs on this node. JAX's
+    # default preallocation (80% of every visible device, legacy
+    # c0__env_setup) would starve the encoding workers — grow on demand
+    # instead. An operator value already in the environment wins.
+    os.environ.setdefault('XLA_PYTHON_CLIENT_PREALLOCATE', 'false')
+
+    from laim.runlog import gpu_topology
+    topo = gpu_topology()
+    if topo.get('available'):
+        for g in topo['gpus']:
+            log.info('gpu %d: %s | %d MiB total, %d MiB in use | driver %s',
+                     g['index'], g['name'], g['memory_total_mib'],
+                     g['memory_used_mib'], g['driver'])
+        log.info('gpu memory policy: XLA_PYTHON_CLIENT_PREALLOCATE=%s '
+                 'MEM_FRACTION=%s CUDA_VISIBLE_DEVICES=%s',
+                 topo['xla_preallocate'], topo['xla_mem_fraction'],
+                 topo['cuda_visible_devices'] or '<all>')
+    else:
+        log.info('no GPUs visible to nvidia-smi (%s)', topo.get('reason', 'n/a'))
+
     mode = str(params.get('mode') or 'train').strip().lower()
     cfg = build_config(params)
     if mode == 'train':

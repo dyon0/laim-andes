@@ -63,6 +63,31 @@ select (`cpu`/`gpu`), applied to the JAX detector and the embedder alike.
 CPU works everywhere (validated); GPU is the production target for the real
 `deepvk/USER-bge-m3` embedder.
 
+### Multi-GPU
+
+Embedding — 80–95 % of the GPU wall time on large corpora — is
+**data-parallel across all visible GPUs** in `device = gpu` mode: one spawned
+worker per GPU (sentence-transformers multi-process pool; spawn context,
+daemon workers, ordered gather — vectors are identical to single-device
+encoding up to float summation order, verified by test). Controls:
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `embedding_gpus` | `0` | `0` = all visible GPUs, `N` = first N, `1` = single GPU |
+| `embedding_pool_chunk` | `5000` | texts handed to each worker per dispatch |
+
+The s2 detector autoencoders are small and train on **one** GPU by design;
+parallelizing the experiment grid across GPUs is recorded as future work in
+PLAN.md. So on an 8×H100 host expect: all 8 busy during embedding, one busy
+during training — that is the intended resource profile, not a bug.
+
+Memory policy: the node sets `XLA_PYTHON_CLIENT_PREALLOCATE=false` (an
+operator value in the environment wins) because JAX's legacy default —
+preallocating 80 % of EVERY visible device — would starve the encoding
+workers. The full GPU inventory, the memory policy, and the chosen worker
+set are logged at node start and recorded in the run manifest
+(`metrics.gpu_topology`).
+
 ### What the platform actually looks like (probe, 2026-08-13)
 
 Measured by `deploy/probe_node/` on the production `py312-gpu` image — these
@@ -72,7 +97,7 @@ facts drive the packaging and the sizing advice below:
 |---|---|---|
 | Preinstalled torch | `2.8.0+cu128`, works | `requirements.txt` must never pin torch (the mirror's `+xpu` builds outrank `+cu128` — that caused the `libsycl.so.9` crash) |
 | Driver / CUDA | 570.86.15 / **12.8 ceiling** | only cu12 wheels can run; JAX uses `jax-cuda12-plugin==0.11.0` |
-| GPUs | 8 × H100 80GB, `CUDA_VISIBLE_DEVICES` unset | code currently uses one GPU (multi-GPU is designed-not-implemented) |
+| GPUs | 8 × H100 80GB, `CUDA_VISIBLE_DEVICES` unset | embedding (the dominant GPU cost) runs data-parallel on all of them (`embedding_gpus`, below); the small s2 autoencoders train on one GPU |
 | CPU quota | cgroup `quota/period` (probe run: 8 cores; host shows 128) | `run_node` sets `POLARS_MAX_THREADS`/`OMP_NUM_THREADS` from the quota — otherwise polars spawns 128 threads into an 8-core cap |
 | Memory limit | 453.5 GB (cgroup) | see sizing below |
 | Disk | 1.5 TB free on `/tmp` and `/opt/module` | port staging of 2×56 GB is fine |

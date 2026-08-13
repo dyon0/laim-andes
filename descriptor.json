@@ -284,6 +284,20 @@
                                     "uiComponent": "input"
                                 },
                                 {
+                                    "parameter": "embedding_gpus",
+                                    "label": "embedding_gpus — параллельное кодирование: 0 = все видимые GPU (по воркеру на карту), N = первые N, 1 = одна карта. Действует только при device=gpu",
+                                    "type": "integer",
+                                    "defaultValue": 0,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "embedding_pool_chunk",
+                                    "label": "embedding_pool_chunk — текстов на GPU-воркер за одну раздачу пула",
+                                    "type": "integer",
+                                    "defaultValue": 5000,
+                                    "uiComponent": "input"
+                                },
+                                {
                                     "parameter": "norm_train_ratio",
                                     "label": "norm_train_ratio — доля train (нормальные трассы)",
                                     "type": "float",

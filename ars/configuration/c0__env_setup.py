@@ -1,15 +1,19 @@
 from    os          import environ
 from    dataclasses import dataclass
 
-environ['XLA_PYTHON_CLIENT_PREALLOCATE']     = 'true'
-environ['XLA_PYTHON_CLIENT_MEM_FRACTION']    = '0.80'
-#environ['XLA_PYTHON_CLIENT_ALLOCATOR']       = 'platform'
-environ['XLA_FLAGS']                         = (
+# defaults only — a value already present in the environment wins, so the
+# platform adapter (laim/platform.py) can pre-set PREALLOCATE=false when the
+# torch embedder pool and JAX must share the GPUs (preallocating 80% of every
+# device would starve the encoding workers)
+environ.setdefault('XLA_PYTHON_CLIENT_PREALLOCATE',  'true')
+environ.setdefault('XLA_PYTHON_CLIENT_MEM_FRACTION', '0.80')
+#environ.setdefault('XLA_PYTHON_CLIENT_ALLOCATOR',    'platform')
+environ.setdefault('XLA_FLAGS',
     '--xla_gpu_autotune_level=3 '
     '--xla_dump_to=/tmp/xla_hlo_dump '
 )
 
-environ['JAX_NUM_COMPILATION_THREADS']       = '20'
+environ.setdefault('JAX_NUM_COMPILATION_THREADS',    '20')
 
 #environ['CUDA_LAUNCH_BLOCKING'] = '1' # включать только для дебага — замедляет всё на 10–30%
 

@@ -123,6 +123,28 @@ All notable changes on branch `claude/lumimas-anomaly-refactor-7stpda`
   untouched, and this node never processes audio. Also sets `HF_HOME` to a
   writable tmp dir (the platform runs with `HOME=/`).
 
+## Added (multi-GPU, D-4)
+
+- Data-parallel embedding across all visible GPUs in `device = gpu` mode:
+  one spawned worker per GPU via the sentence-transformers multi-process
+  pool (spawn context, daemon workers, ordered gather). New config:
+  `data.embedding_gpus` (0 = all visible, N = first N) and
+  `data.embedding_pool_chunk` (texts per worker dispatch) — surfaced in the
+  SberDS descriptor UI. Embedding is 80–95 % of GPU wall time on large
+  corpora; the small s2 autoencoders intentionally stay on one GPU (grid
+  parallelism recorded as future work in PLAN.md). Verified by a real
+  two-worker pool test: pooled vectors match in-process encoding.
+- GPU-mode stability for the shared node: `c0__env_setup`'s env block now
+  uses `setdefault` (operator values win; standalone defaults unchanged) and
+  the platform node pre-sets `XLA_PYTHON_CLIENT_PREALLOCATE=false` — the
+  legacy force-set would preallocate 80 % of every visible GPU for JAX and
+  starve the torch encoding workers.
+- Detailed device logging: GPU inventory (index/name/memory/driver via
+  nvidia-smi, no CUDA context), memory policy and the chosen embedding
+  worker set are logged at node start, per-run in `run.log`, and recorded in
+  the manifest (`metrics.gpu_topology`); embedding progress logs now end
+  with a total-throughput line.
+
 ## Archived to `legacy/` (never deleted without a trace)
 
 - `verification.py` (was `ars/tools/reproducibility/`) — orphan module, zero

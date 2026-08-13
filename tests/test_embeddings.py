@@ -60,6 +60,54 @@ def test_duplicate_texts_get_identical_vectors(standin_embedder, tmp_path):
     assert out.height == 6           # row order and count preserved
 
 
+def test_embedding_device_plan():
+    """Multi-GPU plan: 0 = all visible, N = first min(N, visible); CPU and
+    single-GPU hosts always take the ordinary in-process path."""
+    from ars.configuration.c1__data import S1Config
+    from ars.stages.s1__data import embedding_device_plan
+
+    def cfg(device, gpus=0):
+        return S1Config(input_parquet_files=(), output_dir=Path('.'),
+                        output_prefix='t', device=device, embedding_gpus=gpus)
+
+    assert embedding_device_plan(cfg('cpu'), 8) == ('cpu',)
+    assert embedding_device_plan(cfg('cuda'), 0) == ('cuda',)
+    assert embedding_device_plan(cfg('cuda'), 1) == ('cuda',)
+    assert embedding_device_plan(cfg('cuda', 0), 8) == tuple(f'cuda:{i}' for i in range(8))
+    assert embedding_device_plan(cfg('cuda', 3), 8) == ('cuda:0', 'cuda:1', 'cuda:2')
+    assert embedding_device_plan(cfg('cuda', 1), 8) == ('cuda',)
+    assert embedding_device_plan(cfg('cuda', 5), 2) == ('cuda:0', 'cuda:1')   # capped
+
+
+@pytest.mark.slow
+def test_multiprocess_pool_encoding_matches_single(standin_embedder, tmp_path, monkeypatch):
+    """The pooled encode path (spawned workers, chunked dispatch, ordered
+    gather) must produce the same vectors as in-process encoding. Runs the
+    REAL pool on two CPU workers — device names differ from the GPU case,
+    everything else (spawn, queues, chunking, reassembly, close) is identical."""
+    import numpy as np
+
+    from ars.configuration.c1__data import S1Config
+    from ars.stages import s1__data
+
+    cfg = S1Config(input_parquet_files=(), output_dir=tmp_path, output_prefix='t',
+                   embedder_path=standin_embedder, embedding_pool_chunk=7)
+    texts = tuple(f'span text number {i} with payload {i * i}' for i in range(41))
+
+    direct = np.asarray(s1__data.make_embedder(cfg)(texts))
+
+    monkeypatch.setattr(s1__data, 'embedding_device_plan',
+                        lambda _cfg, _n: ('cpu', 'cpu'))
+    pooled_embed = s1__data.make_embedder(cfg)
+    assert pooled_embed.progress_chunk == 7 * 2   # pool_chunk x workers
+    pooled = np.asarray(pooled_embed(texts))
+    pooled_embed.close()
+    pooled_embed.close()   # idempotent
+
+    assert pooled.shape == direct.shape == (41, 1024)
+    np.testing.assert_allclose(pooled, direct, atol=1e-5)
+
+
 def test_fingerprint_detects_model_swap(tmp_path):
     """F-10 FIXED: loading artifacts against a different embedder raises."""
     from ars.tools.utilities.fingerprint import model_fingerprint, verify_fingerprint

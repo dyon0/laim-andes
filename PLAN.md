@@ -88,3 +88,11 @@ fixed path.
 * Drift metrics / retraining automation (M12) beyond the manifest hooks.
 * Real embedder download + re-validation on GPU hardware (OQ-2/OQ-3).
 * Deploy platform integration testing (E12 beyond payload packaging).
+* Out-of-core s1 (streaming/chunked prepare + scoring) — REQUIRED for the
+  56 GB+ production corpora (the eager pipeline peaks at ~12-25x on-disk
+  size; see deploy/README.md sizing). Until then: sampled training +
+  chunked scoring.
+* Multi-GPU detector training (experiment grid across GPUs). Embedding —
+  the dominant GPU cost — is data-parallel since D-4; the s2 autoencoders
+  are small and train on one GPU, so grid parallelism is a wall-clock
+  optimization, cleanest as one worker process per GPU.

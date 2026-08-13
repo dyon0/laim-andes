@@ -184,6 +184,8 @@ Key knobs (all in `configs/*.toml`, full list in `laim/config.py`):
 | `data.validation_gate` | `warn` | `off` / `warn` / `strict` (strict trains only on contract-conformant traces) |
 | `data.embedding_max_length` | 1024 | token truncation — the main CPU-speed lever for the real embedder |
 | `data.embedding_batch_size` | 32 | encoder batch size (memory vs throughput) |
+| `data.embedding_gpus` | 0 | data-parallel encoding in gpu mode: 0 = all visible GPUs (one worker per card), N = first N, 1 = single GPU |
+| `data.embedding_pool_chunk` | 5000 | texts handed to each GPU worker per dispatch (multi-GPU only) |
 | `data.inject_anomalies` | `true` | inject the 5 LumiMAS classes for VAL/TEST labeling |
 | `detector.experiments` | both grid entries | architecture grid filter (batch size must be ≤ #train traces) |
 | `detector.epochs` / `patience` | 10 / 50 | raise for real training (10 is a smoke-scale default) |

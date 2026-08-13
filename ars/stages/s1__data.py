@@ -453,14 +453,16 @@ def compute_semantic_embeddings(
     MyColorScheme.print_metric('Уникальных текстов', f'{len(unique)} '
         f'(экономия {(1 - len(unique) / max(1, len(texts))) * 100:.0f}%)')
 
-    if embed is None:
+    owns_embedder = embed is None
+    if owns_embedder:
         sprint('загрузка модели эмбеддера (на CPU с холодным кэшем может занять минуту)...',
                style_code = MyColorScheme.info)
         t0      = _clock()
         embed   = make_embedder(cfg)
         sprint(f'модель загружена за {_clock() - t0:.1f} c', style_code = MyColorScheme.info)
 
-    chunk   = max(1, cfg.embedding_batch_size) * 8
+    # pool mode publishes a larger dispatch size (full chunk for every worker)
+    chunk   = getattr(embed, 'progress_chunk', max(1, cfg.embedding_batch_size) * 8)
     parts   = []
     t0      = _clock()
     for i in range(0, len(unique), chunk):
@@ -471,6 +473,12 @@ def compute_semantic_embeddings(
         sprint(f'\tэмбеддинги: {done}/{len(unique)} '
                f'({done / len(unique) * 100:.0f}%, {rate:.0f} текст/с, осталось ~{eta:.0f} с)',
                style_code = MyColorScheme.debug)
+    total = _clock() - t0
+    sprint(f'\tэмбеддинги готовы: {len(unique)} уникальных за {total:.1f} с '
+           f'({len(unique) / max(total, 1e-9):.0f} текст/с)',
+           style_code = MyColorScheme.info)
+    if owns_embedder:
+        getattr(embed, 'close', lambda: None)()
 
     if parts:
         emb_unique  = _np.concatenate(tuple(map(_np.asarray, parts)), axis = 0)
@@ -488,25 +496,83 @@ def compute_semantic_embeddings(
     return df
 
 
+def embedding_device_plan(cfg: S1Config, cuda_count: int) -> tuple[str, ...]:
+    """Data-parallel encoding plan: which torch devices carry the embedder.
+
+    Single entry -> ordinary in-process encoding on that device. Multiple
+    entries -> one spawned worker per device (sentence-transformers pool).
+    cfg.embedding_gpus: 0 = all visible GPUs, N = first min(N, visible).
+    CPU mode is always single-process: torch already parallelizes across
+    cores, and pool workers would multiply model memory for no gain.
+    """
+    if cfg.device != 'cuda' or cuda_count <= 1:
+        return (cfg.device,)
+    want = cfg.embedding_gpus
+    use  = cuda_count if want <= 0 else max(1, min(want, cuda_count))
+    return tuple(f'cuda:{i}' for i in range(use)) if use > 1 else ('cuda',)
+
+
 def make_embedder(cfg: S1Config) -> Callable[[tuple[str, ...]], jp.ndarray]:
+    import torch as _torch
+
+    devices = embedding_device_plan(
+        cfg, _torch.cuda.device_count() if _torch.cuda.is_available() else 0)
+    pooled  = len(devices) > 1
+
     model = SentenceTransformer(
         cfg.embedder_path.as_posix(),
-        device              = cfg.device,
+        # pool mode: the parent copy stays on CPU (start_multi_process_pool
+        # moves it there anyway); each worker owns a copy on its GPU
+        device              = 'cpu' if pooled else cfg.device,
         local_files_only    = True
     )
     # token truncation is the main CPU-speed lever; without this the model's
-    # own max_seq_length (1024+ for bge-m3) applies regardless of config
+    # own max_seq_length (1024+ for bge-m3) applies regardless of config.
+    # Set BEFORE the pool starts so worker copies inherit it.
     model.max_seq_length = cfg.embedding_max_length
+
+    pool = None
+    if pooled:
+        sprint(f'мульти-GPU кодирование: {len(devices)} воркеров '
+               f'({", ".join(devices)}), чанк пула {cfg.embedding_pool_chunk}',
+               style_code = cfg.output_color_scheme.info)
+        import logging as _logging
+        _logging.getLogger('ars.embedding').info(
+            'embedding pool: %d workers on %s, pool_chunk=%d, batch=%d, max_length=%d',
+            len(devices), list(devices), cfg.embedding_pool_chunk,
+            cfg.embedding_batch_size, cfg.embedding_max_length)
+        pool = model.start_multi_process_pool(target_devices = list(devices))
 
     def embed(texts: tuple[str, ...]) -> jp.ndarray:
         emb = model.encode(
             texts,
             batch_size              = cfg.embedding_batch_size,
             normalize_embeddings    = True,
-            convert_to_tensor       = False
+            convert_to_tensor       = False,
+            **({'pool': pool, 'chunk_size': cfg.embedding_pool_chunk} if pool else {})
         )
 
         return jp.asarray(emb)
+
+    # progress-loop sizing for compute_semantic_embeddings: one dispatch must
+    # feed every worker a full pool chunk, or workers idle between dispatches
+    embed.progress_chunk = (cfg.embedding_pool_chunk * len(devices) if pooled
+                            else max(1, cfg.embedding_batch_size) * 8)
+
+    if pool is not None:
+        import atexit
+        stop, closed = model.stop_multi_process_pool, []
+
+        def _close() -> None:
+            if not closed:
+                closed.append(True)
+                stop(pool)
+
+        embed.close = _close
+        # workers are daemons (cannot hang exit); atexit stop is the graceful path
+        atexit.register(_close)
+    else:
+        embed.close = lambda: None
 
     return embed
 
