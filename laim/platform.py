@@ -126,6 +126,74 @@ _BUNDLE_META_PATH_KEYS = {
 }
 
 
+# ports that carry spans data (may arrive as a path OR an in-memory frame)
+_DATA_PORTS = ('path_traces_train', 'path_traces_infer')
+# ports that must arrive as a local file/directory path
+_FILE_PORTS = ('path_embedder', 'model_in')
+
+
+def _stage_dataframe_port(name: str, frame: Any) -> str:
+    """Write an in-memory dataframe port payload back to parquet.
+
+    Observed 2026-08-13 21:52: the platform delivered `path_traces_train` as
+    a parsed pandas DataFrame instead of a local path — and its own
+    parquet->pandas read CASTS Boolean columns to strings (`!!! WARNING !!!
+    Column llm_profanity_check is casted from bool to string(Nominal)` in the
+    platform log). The payload therefore goes through the spec's Recast
+    overlay, which restores every contract column to its contract dtype
+    (tolerant boolean parsing, sentinel handling) before anything trains on
+    it. Unknown columns pass through untouched.
+    """
+    import polars as pl
+    from ars.specification.spec import Recast
+
+    if isinstance(frame, pl.LazyFrame):
+        df = frame.collect()
+    elif isinstance(frame, pl.DataFrame):
+        df = frame
+    else:
+        try:
+            df = pl.from_pandas(frame)
+        except Exception as exc:
+            raise ValueError(
+                f'порт {name}: неподдерживаемый тип полезной нагрузки '
+                f'{type(frame).__module__}.{type(frame).__qualname__} — ожидается '
+                f'путь к parquet или pandas/polars DataFrame') from exc
+
+    before = dict(df.schema)
+    repaired = Recast.overlay(df.lazy(), df.schema).collect()
+    changed = {c: (str(before[c]), str(t)) for c, t in repaired.schema.items()
+               if c in before and before[c] != t}
+    out = Path(tempfile.mkdtemp(prefix=f'{name}_')) / f'{name}.parquet'
+    repaired.write_parquet(out)
+    log.info('port %s arrived as in-memory %s (%d rows, %d cols) — staged to %s; '
+             'dtypes repaired to contract: %s',
+             name, type(frame).__qualname__, repaired.height, repaired.width, out,
+             changed or 'none needed')
+    return str(out)
+
+
+def _normalize_port_params(params: dict[str, Any]) -> dict[str, Any]:
+    """Both port delivery modes must work regardless of descriptor typing:
+    the same declaration produced a local path in one run and an in-memory
+    DataFrame in the next (OQ-7). Data ports are staged back to parquet;
+    model ports have no meaningful in-memory form and fail with a clear
+    message instead of pandas' ambiguous-truthiness error."""
+    out = dict(params)
+    for name in _DATA_PORTS:
+        value = out.get(name)
+        if value is not None and not isinstance(value, (str, os.PathLike)):
+            out[name] = _stage_dataframe_port(name, value)
+    for name in _FILE_PORTS:
+        value = out.get(name)
+        if value is not None and not isinstance(value, (str, os.PathLike)):
+            raise ValueError(
+                f'порт {name} должен приходить локальным путём (getPortAsLocalPath), '
+                f'получен {type(value).__module__}.{type(value).__qualname__} — '
+                f'проверьте тип порта в descriptor.json')
+    return out
+
+
 def _backend_mismatch(torchaudio_version: str, torch_version: str) -> bool:
     """True when exactly one of the two is an Intel XPU build (local version
     tag `+xpu`) — such a torchaudio dlopens libtorch_xpu.so, which a CUDA
@@ -509,6 +577,7 @@ def run_node(**params: Any) -> dict:
     else:
         log.info('no GPUs visible to nvidia-smi (%s)', topo.get('reason', 'n/a'))
 
+    params = _normalize_port_params(params)
     mode = str(params.get('mode') or 'train').strip().lower()
     cfg = build_config(params)
     if mode == 'train':

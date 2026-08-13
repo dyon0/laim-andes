@@ -113,6 +113,14 @@ All notable changes on branch `claude/lumimas-anomaly-refactor-7stpda`
 - Probe node: survives ports delivered as in-memory pandas DataFrames
   (observed in the probe run; reported instead of crashing section 11) and no
   longer spends 6×120 s on the mirror's hanging `pip index versions`.
+- Dataframe ports can ALSO arrive as an in-memory pandas DataFrame (observed
+  2026-08-13 21:52 on the main node — crash at `build_config` on pandas
+  truthiness; OQ-7 now confirmed): `run_node` normalizes port payloads up
+  front — in-memory data ports are repaired via the spec `Recast.overlay`
+  (the platform's parquet→pandas read casts Boolean columns to strings) and
+  staged back to parquet; model ports arriving as non-paths fail with a clear
+  message. Data in-ports are typed `"dataframe"` in the descriptor per the
+  platform team; the probe's data port matches.
 - The image pairs `torchaudio 2.8.0+xpu` (Intel build) with CUDA torch — an
   image bug that made `import transformers` die with `OSError:
   libtorch_xpu.so` (run 2026-08-13 20:04): transformers' availability guard

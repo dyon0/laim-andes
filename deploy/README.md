@@ -102,7 +102,7 @@ facts drive the packaging and the sizing advice below:
 | Memory limit | 453.5 GB (cgroup) | see sizing below |
 | Disk | 1.5 TB free on `/tmp` and `/opt/module` | port staging of 2×56 GB is fine |
 | `/mnt/data` | **permission denied** | bundle store falls back to `/tmp` with a warning; cross-node hand-off needs an admin-provided shared path (OQ-6) |
-| Dataframe ports | directory of ~100 `part-*.snappy.parquet` | handled via `spans_scan_source` (recursive glob) |
+| Dataframe ports | TWO delivery modes observed for the same declaration: a directory of `part-*.snappy.parquet`, or an in-memory pandas DataFrame whose Boolean columns the platform casts to strings | both handled: directories via `spans_scan_source` (recursive glob); in-memory payloads repaired through the spec `Recast.overlay` and staged back to parquet. Data in-ports are typed `"dataframe"` (platform requirement) |
 | Model ports | extension-less blob (`unstructured_data`), ZIP by magic bytes | `_resolve_embedder` sniffs content, never suffixes |
 | pip index | only `sberosc.ca.sbrf.ru` reachable (PyPI mirror + sber-pytorch incl. `+xpu`) | pins must resolve there; they are plain-PyPI packages |
 | Absent from image | jax, flax, optax, polars, sklearn, sentence-transformers, transformers, altair | installed by `requirements.txt` on node build |

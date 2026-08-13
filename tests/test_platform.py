@@ -43,6 +43,12 @@ def test_descriptor_in_ports_are_known_and_correctly_required(descriptor):
         assert in_ports[name]['required'] is False, name   # mode-dependent
     for name, p in in_ports.items():
         assert p.get('getPortAsLocalPath') is True, name
+    # platform requirement (2026-08-13): data ports are typed "dataframe";
+    # model ports stay "default"
+    for name in ('path_traces_train', 'path_traces_infer'):
+        assert in_ports[name]['type'] == 'dataframe', name
+    for name in ('path_embedder', 'model_in'):
+        assert in_ports[name]['type'] == 'default', name
 
 
 def test_descriptor_ui_parameters_are_all_understood(descriptor):
@@ -178,6 +184,62 @@ def test_file_fingerprint_directory_and_glob(tmp_path):
     from laim.config import spans_scan_source
     fp_glob = file_fingerprint(spans_scan_source(port))
     assert fp_glob['exists'] and fp_glob['files'] == 3   # glob excludes _SUCCESS
+
+
+def _platform_mangled_frame(n_rows: int = 40):
+    """Reproduce what the platform hands over when a dataframe port is parsed
+    in-memory: a pandas DataFrame whose Boolean columns were cast to strings
+    ('!!! WARNING !!! Column llm_stream is casted from bool to string' in the
+    platform log), plus an unknown _trash_ column that must pass through."""
+    df = pl.read_parquet(REPO / 'data' / 'traces_1k_sample.parquet').head(n_rows)
+    df = df.with_columns(
+        pl.Series('llm_stream', [i % 2 == 0 for i in range(n_rows)]))  # mixed values
+    pdf = df.to_pandas()
+    for col in ('llm_profanity_check', 'llm_stream',
+                'session_id_derived', 'session_id_generated'):
+        pdf[col] = pdf[col].astype(str)                     # True -> 'True'
+    pdf['_trash_llm_stream'] = pdf['llm_stream']
+    return df, pdf
+
+
+def test_dataframe_port_staged_and_dtypes_repaired(tmp_path):
+    """An in-memory pandas payload is written back to parquet with every
+    contract column restored to its contract dtype via the spec Recast."""
+    original, pdf = _platform_mangled_frame()
+    staged = platform._stage_dataframe_port('path_traces_train', pdf)
+
+    out = pl.read_parquet(staged)
+    assert out.height == original.height
+    for col in ('llm_profanity_check', 'llm_stream',
+                'session_id_derived', 'session_id_generated'):
+        assert out[col].dtype == pl.Boolean, col
+    assert out['llm_stream'].to_list() == original['llm_stream'].to_list()
+    assert out['trace_id'].to_list() == original['trace_id'].to_list()
+    assert out['_trash_llm_stream'].dtype == pl.Utf8   # unknown column untouched
+
+
+def test_normalize_port_params_paths_pass_through():
+    params = {'path_traces_train': '/some/dir', 'path_embedder': '/emb',
+              'model_in': None, 'mode': 'train'}
+    assert platform._normalize_port_params(params) == params
+
+
+def test_normalize_port_params_rejects_dataframe_on_model_ports():
+    import pandas as pd
+    with pytest.raises(ValueError, match='model_in'):
+        platform._normalize_port_params({'model_in': pd.DataFrame({'a': [1]})})
+
+
+def test_build_config_accepts_dataframe_payload(tmp_path):
+    """End to end through the exact crash site of run 2026-08-13 21:52:
+    a pandas DataFrame in path_traces_train must yield a scannable source."""
+    _, pdf = _platform_mangled_frame()
+    params = platform._normalize_port_params(
+        {'path_traces_train': pdf, 'mode': 'train'})
+    cfg = platform.build_config(params)
+    scanned = pl.scan_parquet(cfg.paths.train_spans).collect()
+    assert scanned.height == 40
+    assert scanned['llm_stream'].dtype == pl.Boolean
 
 
 def test_backend_mismatch_rule():

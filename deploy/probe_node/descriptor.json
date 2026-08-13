@@ -10,7 +10,7 @@
             "name": "path_probe_data",
             "label": "path_probe_data",
             "description": "ОПЦИОНАЛЬНО. Тот же parquet-порт, что подаётся в основную ноду (path_traces_train/infer). Проба покажет, что платформа реально отдаёт: файл или директорию, сколько частей и какого объёма.",
-            "type": "default",
+            "type": "dataframe",
             "shape": "shape_dataframe",
             "required": false,
             "order": 1,

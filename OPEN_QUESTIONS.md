@@ -104,14 +104,22 @@ store: it falls back to /tmp with a loud warning (bundle valid within the run,
 lost with the container). (a) is the real fix — ask the platform admin which
 path is writable and shared.
 
-## OQ-7: Port delivery mode is not uniform (SberDS)
+## OQ-7: Port delivery mode is not uniform (SberDS) — CONFIRMED, both handled
 
-**Observation, needs confirmation.** The first training run delivered dataframe
-ports as local DIRECTORIES of 100 `part-*.snappy.parquet` files and the model
-port as an extension-less ZIP blob (`unstructured_data`) — both now handled.
-But the probe run received `path_probe_data` as an IN-MEMORY pandas DataFrame
-(section 11 of the probe log), i.e. the platform chose a different delivery
-mode for the same `getPortAsLocalPath: true` declaration, possibly depending on
-the upstream node type. If the main node ever receives a DataFrame instead of a
-path, `build_config` will fail on it. Re-run the (fixed) probe wired to the
-exact upstream nodes used in production to settle which modes must be supported.
+**Confirmed 2026-08-13 21:52 on the main node.** The same data-port
+declaration produced a local directory of parquet parts in one run and an
+IN-MEMORY pandas DataFrame in the next (crash: pandas ambiguous-truthiness at
+`build_config`). Worse, the platform's own parquet→pandas read casts Boolean
+columns to strings (`!!! WARNING !!! Column llm_stream is casted from bool to
+string(Nominal)` in its log) — silent contract corruption, not just a type
+change.
+
+**Resolution (implemented).** `run_node` normalizes all port payloads up
+front: data ports arriving in memory are repaired through the spec's
+`Recast.overlay` (contract dtypes restored, sentinels honored, unknown
+columns untouched) and staged back to parquet; model ports arriving as
+anything but a path fail with a clear message. Per the platform team, data
+in-ports are now typed `"dataframe"` in the descriptor. Path delivery remains
+preferred (`getPortAsLocalPath: true` stays): the in-memory mode costs the
+platform a full pandas parse (7.4 GB peak for a 342 MB port in the observed
+run) and is unusable at the 56 GB scale.
