@@ -119,7 +119,23 @@ front: data ports arriving in memory are repaired through the spec's
 `Recast.overlay` (contract dtypes restored, sentinels honored, unknown
 columns untouched) and staged back to parquet; model ports arriving as
 anything but a path fail with a clear message. Per the platform team, data
-in-ports are now typed `"dataframe"` in the descriptor. Path delivery remains
-preferred (`getPortAsLocalPath: true` stays): the in-memory mode costs the
-platform a full pandas parse (7.4 GB peak for a 342 MB port in the observed
-run) and is unusable at the 56 GB scale.
+in-ports are now typed `"dataframe"` in the descriptor.
+
+**Third finding (2026-08-13 22:16): raw-file delivery of a dataframe port is
+UNUSABLE.** With `getPortAsLocalPath` restored, the node received the parts
+verbatim — and they carry POSITIONAL column names (`"0".."57"` + `class`/
+`anomaly_type`). The platform stores dataframe ports namelessly and applies
+the real schema from port metadata only when parsing the port itself (its
+log: `Use columns names from read parameters`). Same upstream, byte-identical
+size, two different schemas seen. Consequences:
+- `getPortAsLocalPath` is REMOVED from the data in-ports — in-memory delivery
+  (+ our dtype repair) is the only route that carries correct names.
+- A schema preflight (`ensure_core_spans_columns`) refuses inputs lacking
+  `trace_id`/`agent_id` with an actionable hint — before `recast=true` can
+  sentinel-fill 46 columns and "train" on one fake trace (which is exactly
+  what the gate log showed: "all 1 traces conform" on alien data).
+- OPEN at scale: in-memory delivery cost the platform a 7.4 GB pandas parse
+  for a 342 MB port — 56 GB corpora will need either schema-preserving file
+  delivery from the platform team or reading raw parts + schema from
+  `direct_port_links` (the upgraded probe now dumps parquet footers and
+  `direct_port_links` to settle this).

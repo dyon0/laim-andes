@@ -41,14 +41,17 @@ def test_descriptor_in_ports_are_known_and_correctly_required(descriptor):
     assert in_ports['path_embedder']['required'] is True
     for name in ('path_traces_train', 'path_traces_infer', 'model_in'):
         assert in_ports[name]['required'] is False, name   # mode-dependent
-    for name, p in in_ports.items():
-        assert p.get('getPortAsLocalPath') is True, name
-    # platform requirement (2026-08-13): data ports are typed "dataframe";
-    # model ports stay "default"
+    # Data ports: type "dataframe" and NO getPortAsLocalPath — the platform
+    # stores dataframe ports as parquet parts with POSITIONAL column names
+    # and applies the real schema only when parsing the port itself (run
+    # 2026-08-13 22:16: raw-file delivery had columns "0".."57").
     for name in ('path_traces_train', 'path_traces_infer'):
         assert in_ports[name]['type'] == 'dataframe', name
+        assert 'getPortAsLocalPath' not in in_ports[name], name
+    # Model ports: blobs, delivered as local files
     for name in ('path_embedder', 'model_in'):
         assert in_ports[name]['type'] == 'default', name
+        assert in_ports[name].get('getPortAsLocalPath') is True, name
 
 
 def test_descriptor_ui_parameters_are_all_understood(descriptor):
@@ -240,6 +243,30 @@ def test_build_config_accepts_dataframe_payload(tmp_path):
     scanned = pl.scan_parquet(cfg.paths.train_spans).collect()
     assert scanned.height == 40
     assert scanned['llm_stream'].dtype == pl.Boolean
+
+
+def test_core_schema_preflight_rejects_positional_columns(tmp_path):
+    """Raw SberDS dataframe-port parts carry positional column names — the
+    preflight must fail with the actionable hint BEFORE recast can
+    sentinel-fill 46 columns and 'train' on one fake trace (run 22:16)."""
+    from laim.pipeline import ensure_core_spans_columns
+    alien = pl.DataFrame({str(i): [1.0, 2.0] for i in range(58)}).with_columns(
+        pl.lit('x').alias('class'), pl.lit('y').alias('anomaly_type'))
+    f = tmp_path / 'alien.parquet'
+    alien.write_parquet(f)
+    with pytest.raises(ValueError, match='getPortAsLocalPath'):
+        ensure_core_spans_columns(str(f))
+
+
+def test_core_schema_preflight_accepts_real_spans_and_names_missing(tmp_path):
+    from laim.pipeline import ensure_core_spans_columns
+    ensure_core_spans_columns(str(REPO / 'data' / 'traces_1k_sample.parquet'))
+
+    partial = pl.DataFrame({'trace_id': ['t1'], 'other': [1]})
+    f = tmp_path / 'partial.parquet'
+    partial.write_parquet(f)
+    with pytest.raises(ValueError, match='agent_id'):
+        ensure_core_spans_columns(str(f))
 
 
 def test_backend_mismatch_rule():

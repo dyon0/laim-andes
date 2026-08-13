@@ -608,6 +608,35 @@ def input_port_layout(ports: dict) -> dict:
                     kv(f'    {c.name}', '<stat failed>')
             if len(children) > 5:
                 out(f'    ... and {len(children) - 5} more')
+            # Parquet footer of the first part: are the REAL column names in
+            # the files, or only positional ones ("0".."57")? Decides whether
+            # raw-file delivery of a dataframe port is usable at all.
+            part = next((c for c in children if c.suffix == '.parquet'
+                         or c.name.endswith('.snappy.parquet')), None)
+            if part is not None:
+                try:
+                    import pyarrow.parquet as pq       # in-image; guarded
+                    schema = pq.read_schema(str(part))
+                    names = list(schema.names)
+                    numbered = sum(n.isdigit() for n in names)
+                    entry['parquet_columns_sample'] = names[:20]
+                    entry['parquet_columns_numbered'] = f'{numbered}/{len(names)}'
+                    kv('  parquet physical columns', f'{len(names)} '
+                       f'({numbered} positional): {names[:12]}...')
+                    meta = schema.metadata or {}
+                    pandas_meta = meta.get(b'pandas')
+                    if pandas_meta:
+                        cols = json.loads(pandas_meta).get('columns', [])
+                        logical = [c.get('name') for c in cols][:12]
+                        entry['pandas_metadata_names'] = logical
+                        kv('  b"pandas" metadata names', logical)
+                    else:
+                        entry['pandas_metadata_names'] = None
+                        kv('  b"pandas" metadata', '<absent> — real names are '
+                           'NOT recoverable from the files')
+                except Exception as exc:               # noqa: BLE001
+                    entry['parquet_schema_error'] = f'{type(exc).__name__}: {exc}'
+                    kv('  parquet schema', entry['parquet_schema_error'])
         elif p.is_file():
             size = p.stat().st_size
             entry['size'] = human(size)
@@ -636,6 +665,23 @@ def input_port_layout(ports: dict) -> dict:
             except Exception as exc:               # noqa: BLE001
                 entry['magic_error'] = str(exc)
         info[name] = entry
+    return info
+
+
+@probe('13_platform_port_metadata')
+def platform_port_metadata(params: dict) -> dict:
+    """Pywrapper-injected parameters user code normally ignores.
+    `direct_port_links` may carry the HDFS links and schema that would let a
+    node read raw dataframe-port parts WITH real column names — the missing
+    piece for large corpora where in-memory delivery cannot scale."""
+    info = {}
+    for key in ('direct_port_links', 'cache_pv_port_ids', 'dataframe_save_format'):
+        val = params.get(key)
+        rendered = repr(val)
+        info[key] = rendered[:2000]
+        kv(key, rendered[:300] if val is not None else '<absent>')
+        if val is not None and len(rendered) > 300:
+            out(f'    ... ({len(rendered)} chars total, first 2000 in probe_report)')
     return info
 
 
@@ -683,6 +729,7 @@ def main(**params) -> dict:
         'path_probe_data': params.get('path_probe_data'),
         'path_probe_model': params.get('path_probe_model'),
     })
+    platform_port_metadata(params)
     environment_variables()
 
     # ------------------------------------------------------------ verdict

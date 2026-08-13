@@ -113,6 +113,18 @@ All notable changes on branch `claude/lumimas-anomaly-refactor-7stpda`
 - Probe node: survives ports delivered as in-memory pandas DataFrames
   (observed in the probe run; reported instead of crashing section 11) and no
   longer spends 6×120 s on the mirror's hanging `pip index versions`.
+- Raw-file delivery of a platform dataframe port is unusable — the parts
+  carry POSITIONAL column names ("0".."57"; the real schema lives in port
+  metadata, applied only when the platform parses the port). Run 2026-08-13
+  22:16 also showed the trap behind it: with recast=true the gate
+  sentinel-filled the alien frame into ONE fake conformant trace.
+  `getPortAsLocalPath` is removed from the data in-ports (in-memory delivery
+  + dtype repair is the supported route), and a schema preflight
+  (`ensure_core_spans_columns`, train + infer) refuses inputs lacking
+  trace_id/agent_id with an actionable hint before recast can disguise them.
+  The probe now dumps parquet footers (physical vs pandas-metadata names)
+  and `direct_port_links` — the evidence needed for a scale-friendly raw
+  path later.
 - Dataframe ports can ALSO arrive as an in-memory pandas DataFrame (observed
   2026-08-13 21:52 on the main node — crash at `build_config` on pandas
   truthiness; OQ-7 now confirmed): `run_node` normalizes port payloads up

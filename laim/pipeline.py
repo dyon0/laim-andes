@@ -122,12 +122,42 @@ def cmd_validate(cfg: RunConfig, run_dir: Path, manifest: Manifest,
     return result
 
 
+def ensure_core_spans_columns(source: str) -> None:
+    """Refuse structurally alien inputs BEFORE recast can disguise them.
+
+    SberDS stores dataframe ports as parquet parts with POSITIONAL column
+    names ("0".."57") — the real schema lives in platform port metadata and
+    is applied only when the platform itself parses the port. A raw-file
+    delivery of such a port (getPortAsLocalPath on a dataframe port) is
+    unusable: the names are not in the files (observed 2026-08-13 22:16,
+    ColumnNotFoundError deep in load_spans; with recast=true the overlay
+    would instead sentinel-fill 46 columns and "train" on one fake trace).
+    Identity columns can never be sentinel-invented, so their absence is a
+    hard error in every gate mode.
+    """
+    import polars as pl
+    names = set(pl.scan_parquet(source).collect_schema().names())
+    missing = {'trace_id', 'agent_id'} - names
+    if not missing:
+        return
+    numbered = sum(c.isdigit() for c in names)
+    hint = (' Файлы выглядят как СЫРЫЕ части датафрейм-порта SberDS (колонки '
+            f'пронумерованы: {numbered} из {len(names)}) — реальная схема хранится '
+            'в метаданных порта и в файлах ОТСУТСТВУЕТ. Уберите getPortAsLocalPath '
+            'у портов данных (тип dataframe): платформа сама применит схему, нода '
+            'восстановит типы.') if numbered > len(names) / 2 else ''
+    raise ValueError(
+        f'входные спаны {source}: отсутствуют обязательные колонки '
+        f'{sorted(missing)} (найдено {len(names)} колонок).{hint}')
+
+
 def _validation_gate(cfg: RunConfig, run_dir: Path, manifest: Manifest) -> str:
     """F-34: enforce the data contract before training. Returns the (possibly
     filtered) train-spans path. Modes: off | warn (log rejects, train on all) |
     strict (train only on traces with zero mandatory-field violations)."""
     mode = cfg.data.validation_gate
     train_source = spans_scan_source(cfg.paths.train_spans)
+    ensure_core_spans_columns(train_source)
     if mode == 'off':
         return train_source
     import polars as pl
@@ -320,6 +350,7 @@ def cmd_infer(cfg: RunConfig, run_dir: Path, manifest: Manifest,
     from ars.configuration.c1__data import S1Config
     from ars.tools.tui.tui_data import ColorSchemeDataScienceSakura
     spans_path = spans_scan_source(spans_path)
+    ensure_core_spans_columns(spans_path)
     s1_cfg = S1Config(
         input_parquet_files=(PurePath(spans_path),),
         output_dir=PurePath(run_dir) / 'infer_features',
