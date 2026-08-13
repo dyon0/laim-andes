@@ -253,14 +253,31 @@ def _resolve_embedder(raw: str | None) -> str | None:
             f'порт path_embedder: файл {p} не распознан (первые байты: '
             f'{head.hex()}). Ожидается каталог модели sentence-transformers '
             f'или zip/tar-архив с ним.')
-    # the model root is wherever config.json lives (archive root or one level in)
-    if (target / 'config.json').exists():
-        return str(target)
-    hits = sorted(target.rglob('config.json'))
+    return str(_embedder_root(target))
+
+
+def _embedder_root(target: Path) -> Path:
+    """Locate the SentenceTransformer root inside an extracted archive.
+
+    A real ST directory contains numbered MODULE subdirectories (1_Pooling,
+    2_Normalize, ...) each with its own config.json — a plain
+    `rglob('config.json')` picks `1_Pooling/config.json` first ('1' < 'c')
+    and the loader then dies with \"Unrecognized model ... 1_Pooling\"
+    (run 2026-08-13 23:20). The ST layout marker `modules.json` is
+    authoritative; failing that, the shallowest config.json whose parent is
+    not a numbered module dir.
+    """
+    import re
+    for marker in ('modules.json', 'config_sentence_transformers.json'):
+        hits = sorted(target.rglob(marker), key=lambda p: (len(p.parts), str(p)))
+        if hits:
+            return hits[0].parent
+    hits = [p for p in target.rglob('config.json')
+            if not re.match(r'\d+_', p.parent.name)]
     if hits:
-        return str(hits[0].parent)
+        return min(hits, key=lambda p: (len(p.parts), str(p))).parent
     entries = [e for e in target.iterdir() if e.is_dir()]
-    return str(entries[0] if len(entries) == 1 else target)
+    return entries[0] if len(entries) == 1 else target
 
 
 def build_config(params: dict[str, Any]):

@@ -113,6 +113,14 @@ All notable changes on branch `claude/lumimas-anomaly-refactor-7stpda`
 - Probe node: survives ports delivered as in-memory pandas DataFrames
   (observed in the probe run; reported instead of crashing section 11) and no
   longer spends 6×120 s on the mirror's hanging `pip index versions`.
+- Embedder archive resolution picked the POOLING module as the model root
+  (run 2026-08-13 23:20: `Unrecognized model in .../1_Pooling` — a real
+  SentenceTransformer directory has numbered module subdirs whose
+  config.json sorts lexically before the root's). Resolution now anchors on
+  the ST layout marker `modules.json` and never accepts a `N_*` module dir;
+  regression-tested against the real bge-m3 layout.
+- Descriptor: all port/node descriptions shortened to fit the platform's
+  symbol limit; `device` defaults to `gpu` (the deploy target).
 - Raw-file delivery of a platform dataframe port is unusable — the parts
   carry POSITIONAL column names ("0".."57"; the real schema lives in port
   metadata, applied only when the platform parses the port). Run 2026-08-13

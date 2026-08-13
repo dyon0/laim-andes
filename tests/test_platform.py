@@ -140,6 +140,29 @@ def test_resolve_embedder_tar_blob(tmp_path):
     assert (resolved / 'config.json').exists()
 
 
+def test_resolve_embedder_real_st_layout_skips_module_dirs(tmp_path):
+    """Regression for run 2026-08-13 23:20: a real SentenceTransformer archive
+    contains numbered module dirs (1_Pooling/config.json); resolution must
+    return the MODEL root (modules.json marker), never the pooling module —
+    lexically '1_Pooling/config.json' sorts before 'config.json'."""
+    blob = tmp_path / 'unstructured_data'
+    with zipfile.ZipFile(blob, 'w') as zf:
+        zf.writestr('USER-bge-m3/config.json', '{"model_type": "xlm-roberta"}')
+        zf.writestr('USER-bge-m3/modules.json', '[]')
+        zf.writestr('USER-bge-m3/1_Pooling/config.json', '{"word_embedding_dimension": 1024}')
+    resolved = Path(platform._resolve_embedder(str(blob)))
+    assert resolved.name == 'USER-bge-m3'
+    assert (resolved / 'modules.json').exists()
+
+    # without modules.json the numbered module dir must still be skipped
+    blob2 = tmp_path / 'blob2'
+    with zipfile.ZipFile(blob2, 'w') as zf:
+        zf.writestr('m/1_Pooling/config.json', '{}')
+        zf.writestr('m/config.json', '{"model_type": "xlm-roberta"}')
+    resolved2 = Path(platform._resolve_embedder(str(blob2)))
+    assert resolved2.name == 'm'
+
+
 def test_resolve_embedder_rejects_unknown_blob(tmp_path):
     blob = tmp_path / 'unstructured_data'
     blob.write_bytes(b'\x00\x01\x02\x03 definitely not an archive')

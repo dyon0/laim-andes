@@ -1,15 +1,15 @@
 {
     "id": "30da3739-2287-4551-a932-eb9846b56c7e",
     "name": "laim | anomaly detector (train / inference)",
-    "description": "Детектор аномалий МАС (LumiMAS): режим train — обучение (s1→s2→s3, оценка, модельный бандл на выходной порт); режим inference — скоринг спанов обученным бандлом с полным аудиторским следом и RCA-атрибуцией.",
-    "fullDescription": "Одна нода, два режима (параметр mode). TRAIN: parquet со спанами → признаки → инъекция аномалий → обучение LSTM-AE/FMLP-AE → порог+калибровка → метрики (в т.ч. per-type, recall@FPR, ECE) → самодостаточный zip-бандл модели на общем хранилище, путь — в порт model_out. INFERENCE: бандл (порт model_in или параметр model_path) + parquet со спанами → скоринг каждой трассы (p_anomaly, confidence, флаги, rca_*) → контракт продукта (anomaly_traces / test_anomalies). Отпечаток эмбеддера проверяется при загрузке бандла. В одном проекте ноду можно инстанцировать дважды: train-инстанс → model_out → model_in → inference-инстанс.",
+    "description": "Детектор аномалий МАС (LumiMAS): train — обучение на спанах AEF, inference — скоринг обученным бандлом (p_anomaly, тип аномалии, RCA).",
+    "fullDescription": "Одна нода, два режима (параметр mode). TRAIN: спаны → признаки → инъекция → LSTM-AE/FMLP-AE → порог/калибровка → zip-бандл модели (model_out). INFERENCE: бандл (model_in или model_path) + спаны → anomaly_traces / test_anomalies. Отпечаток эмбеддера проверяется при загрузке бандла.",
     "shortNameToDisplay": "laim-detector",
     "ports": [
         {
             "in": true,
             "name": "path_traces_train",
             "label": "path_traces_train",
-            "description": "Спаны AEF (46 полей) для ОБУЧЕНИЯ (обязателен в режиме train). Тип dataframe БЕЗ getPortAsLocalPath — это принципиально: платформа хранит части parquet с ПОЗИЦИОННЫМИ именами колонок (\"0\"..\"57\"), реальная схема применяется только при её собственном чтении порта. Нода принимает датафрейм в памяти и восстанавливает типы контракта (платформенное чтение приводит Boolean к строкам).",
+            "description": "Спаны AEF для обучения (режим train). Тип dataframe, без getPortAsLocalPath.",
             "type": "dataframe",
             "shape": "shape_dataframe",
             "required": false,
@@ -19,7 +19,7 @@
             "in": true,
             "name": "path_traces_infer",
             "label": "path_traces_infer",
-            "description": "Спаны AEF (46 полей) для СКОРИНГА (обязателен в режиме inference; в train опционален). Тип dataframe БЕЗ getPortAsLocalPath — это принципиально: платформа хранит части parquet с ПОЗИЦИОННЫМИ именами колонок (\"0\"..\"57\"), реальная схема применяется только при её собственном чтении порта. Нода принимает датафрейм в памяти и восстанавливает типы контракта (платформенное чтение приводит Boolean к строкам).",
+            "description": "Спаны AEF для скоринга (режим inference; в train опционален). Тип dataframe, без getPortAsLocalPath.",
             "type": "dataframe",
             "shape": "shape_dataframe",
             "required": false,
@@ -29,7 +29,7 @@
             "in": true,
             "name": "path_embedder",
             "label": "path_embedder",
-            "description": "Каталог или zip модели эмбеддера (deepvk/USER-bge-m3, формат SentenceTransformers). Обязателен в обоих режимах; идентичность модели фиксируется отпечатком в бандле и проверяется при инференсе.",
+            "description": "Модель эмбеддера USER-bge-m3 (каталог или zip/tar). Обязателен в обоих режимах.",
             "type": "default",
             "shape": "shape_model",
             "required": true,
@@ -40,7 +40,7 @@
             "in": true,
             "name": "model_in",
             "label": "model_in",
-            "description": "Модельный бандл из режима train (zip). Обязателен в режиме inference (альтернатива — параметр model_path с путём на общем хранилище). Соединяется с model_out train-инстанса.",
+            "description": "Бандл модели из режима train (zip). Альтернатива — параметр model_path.",
             "type": "default",
             "shape": "shape_model",
             "required": false,
@@ -51,7 +51,7 @@
             "in": false,
             "name": "model_out",
             "label": "model_out",
-            "description": "Путь к самодостаточному zip-бандлу обученной модели на общем хранилище (model_store_dir). Содержит модели s2 (+s3), мета/манифест/отчёт оценки; переносим между машинами. В режиме inference — путь использованного бандла.",
+            "description": "Путь к zip-бандлу обученной модели (model_store_dir).",
             "type": "default",
             "shape": "shape_model",
             "order": 5
@@ -60,7 +60,7 @@
             "in": false,
             "name": "detector_metrics_holdout",
             "label": "detector_metrics_holdout",
-            "description": "Метрики детектора на hold-out (test): precision/recall/FPR/F1/ROC-AUC/PR-AUC, порог, лучший эксперимент. Пусто в режиме inference (нет разметки).",
+            "description": "Метрики детектора на hold-out (train); пусто в inference.",
             "type": "default",
             "shape": "shape_model",
             "order": 6
@@ -69,7 +69,7 @@
             "in": false,
             "name": "classifier_metrics_holdout",
             "label": "classifier_metrics_holdout",
-            "description": "Метрики классификатора типов аномалий (self-reported; см. документированные оговорки AUDIT_01/L1). Пусто, если классификатор отключён или корпус мал.",
+            "description": "Метрики классификатора типов аномалий (если обучен).",
             "type": "default",
             "shape": "shape_model",
             "order": 7
@@ -78,7 +78,7 @@
             "in": false,
             "name": "eval_report",
             "label": "eval_report",
-            "description": "Полный отчёт оценки (train): per-anomaly-type метрики, recall@FPR≤target, prevalence-adjusted PPV, калибровка (ECE/Brier/reliability), латентность p50/p95/p99. В inference — сводка скоринга (scored/detected/truncated).",
+            "description": "Отчёт оценки (train) / сводка скоринга (inference).",
             "type": "default",
             "order": 8
         },
@@ -86,7 +86,7 @@
             "in": false,
             "name": "anomaly_traces",
             "label": "anomaly_traces",
-            "description": "Датафрейм трасс, детектированных как аномальные: trace_id, p_anomaly, confidence, ошибки ветвей, класс аномалии (если s3 в бандле), RCA-атрибуция, границы времени, запрос/ответ пользователя.",
+            "description": "Датафрейм аномальных трасс: p_anomaly, confidence, тип, RCA.",
             "type": "dataframe",
             "shape": "shape_dataframe",
             "order": 9
@@ -95,7 +95,7 @@
             "in": false,
             "name": "test_anomalies",
             "label": "test_anomalies",
-            "description": "JSON-объект {\"anomalies\": [...]} — контракт продукта (совместим с легаси end2end): trace_id, starttime/endtime (ISO-8601 UTC), confidence (0..100), anomaly_type, user_query, agent_response, rca_results.",
+            "description": "JSON {\"anomalies\": [...]} — контракт продукта.",
             "type": "default",
             "order": 10
         },
@@ -103,7 +103,7 @@
             "in": false,
             "name": "html_reports",
             "label": "html_reports",
-            "description": "Словарь HTML-отчётов этапов обучения (data: подготовка s1, detector: сводка s2). Пусто в режиме inference.",
+            "description": "HTML-отчёты этапов обучения.",
             "type": "default",
             "shape": "shape_model",
             "order": 11
@@ -112,7 +112,7 @@
             "in": false,
             "name": "manifest",
             "label": "manifest",
-            "description": "Манифест запуска: хэш конфигурации, SHA-256 входов, сиды, версии пакетов, тайминги этапов, метрики, пути артефактов. Полная воспроизводимость запуска.",
+            "description": "Манифест запуска: хэши входов, сиды, тайминги, метрики.",
             "type": "default",
             "order": 12
         }
@@ -145,7 +145,7 @@
                         "config": {
                             "datasets": [
                                 {
-                                    "value": "Одна нода, два режима. TRAIN: path_traces_train (+опц. path_traces_infer) + path_embedder → модель-бандл в model_out. INFERENCE: model_in (или model_path) + path_traces_infer + path_embedder → anomaly_traces/test_anomalies. Неиспользуемые режимом порты можно не подключать. Тонкая настройка — вкладки data/detector/classifier/eval; всё остальное — параметр config_overrides (строки section.key=value)."
+                                    "value": "TRAIN: path_traces_train (+опц. path_traces_infer) + path_embedder → бандл в model_out. INFERENCE: model_in (или model_path) + path_traces_infer + path_embedder → anomaly_traces / test_anomalies. Тонкая настройка — вкладки и config_overrides."
                                 }
                             ]
                         }
@@ -173,7 +173,7 @@
                                 {
                                     "parameter": "device",
                                     "label": "device — устройство вычислений (jax-детектор + эмбеддер)",
-                                    "defaultValue": "cpu",
+                                    "defaultValue": "gpu",
                                     "uiComponent": "select",
                                     "placeholder": "Select value",
                                     "allowedValues": [
@@ -201,14 +201,14 @@
                                 },
                                 {
                                     "parameter": "model_store_dir",
-                                    "label": "model_store_dir — каталог бандлов моделей (режим train). ВАЖНО: должен быть ДОСТУПЕН НА ЗАПИСЬ и виден из ноды inference; проба 2026-08-13 показала, что /mnt/data закрыт на запись — уточните путь у администратора платформы. При недоступности нода не падает: бандл уходит в /tmp (не переживает контейнер), путь — на порту model_out",
+                                    "label": "model_store_dir — каталог бандлов (train); должен быть доступен на запись, иначе бандл уйдёт в /tmp",
                                     "type": "string",
                                     "defaultValue": "/mnt/data/laim/models",
                                     "uiComponent": "input"
                                 },
                                 {
                                     "parameter": "model_path",
-                                    "label": "model_path — путь к бандлу на общем хранилище (режим inference, если порт model_in не подключён)",
+                                    "label": "model_path — путь к бандлу (inference, если порт model_in не подключён)",
                                     "type": "string",
                                     "defaultValue": "",
                                     "uiComponent": "input"
@@ -276,21 +276,21 @@
                                 },
                                 {
                                     "parameter": "embedding_max_length",
-                                    "label": "embedding_max_length — усечение токенов (главный рычаг скорости на CPU)",
+                                    "label": "embedding_max_length — усечение токенов",
                                     "type": "integer",
                                     "defaultValue": 1024,
                                     "uiComponent": "input"
                                 },
                                 {
                                     "parameter": "embedding_gpus",
-                                    "label": "embedding_gpus — параллельное кодирование: 0 = все видимые GPU (по воркеру на карту), N = первые N, 1 = одна карта. Действует только при device=gpu",
+                                    "label": "embedding_gpus — GPU для кодирования: 0 = все, N = первые N (режим gpu)",
                                     "type": "integer",
                                     "defaultValue": 0,
                                     "uiComponent": "input"
                                 },
                                 {
                                     "parameter": "embedding_pool_chunk",
-                                    "label": "embedding_pool_chunk — текстов на GPU-воркер за одну раздачу пула",
+                                    "label": "embedding_pool_chunk — текстов на GPU-воркер за раздачу",
                                     "type": "integer",
                                     "defaultValue": 5000,
                                     "uiComponent": "input"
