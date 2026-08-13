@@ -21,7 +21,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
-def main() -> None:
+def main(**params) -> dict:
+    """SberDS platform entry point (descriptor.json → run.py::main).
+
+    The platform passes UI form fields and input-port values as keyword
+    arguments and expects a dict whose keys match the descriptor's output
+    ports. Local/terminal usage goes through `cli()` below instead.
+    """
+    from laim.platform import run_node
+    return run_node(**params)
+
+
+def cli() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('command', choices=(
@@ -42,4 +53,4 @@ def main() -> None:
 
 
 if __name__ == '__main__':
-    main()
+    cli()

@@ -65,6 +65,26 @@ All notable changes on branch `claude/lumimas-anomaly-refactor-7stpda`
 - `baseline/` — frozen legacy baseline (metrics, determinism check, stand-in
   embedder builder).
 
+## Added (SberDS deployment)
+
+- Root `descriptor.json` — one dual-mode platform node (`mode = train |
+  inference`): train emits a portable model bundle (zip on shared storage,
+  path on `model_out`); inference consumes it (`model_in` port or
+  `model_path`), scores spans with the full audit trail and emits the
+  legacy-compatible product contract (`anomaly_traces`, `test_anomalies`).
+  GPU/CPU via the `device` select on the `py312-gpu` image; all key config
+  surfaced as UI parameters + a `config_overrides` escape hatch.
+- `laim/platform.py` — the adapter behind `run.py::main(**params)`: UI-param →
+  config mapping, embedder zip resolution, bundle create/resolve (paths stored
+  bundle-relative, absolutized on extraction; embedder fingerprint verified,
+  training embedding params re-applied at inference), product-contract
+  builder reusing the legacy `ars.main` enrichment.
+- `tests/test_platform.py` — descriptor↔adapter contract pins, param mapping,
+  bundle round-trip, and a slow end-to-end train→bundle→inference test through
+  the exact platform entry point.
+- `deploy/README.md` — deployment guide; legacy `deploy/descriptors/` +
+  `deploy/nodes/` (codebase-tarball pattern) documented as obsolete.
+
 ## Archived to `legacy/` (never deleted without a trace)
 
 - `verification.py` (was `ars/tools/reproducibility/`) — orphan module, zero

@@ -54,7 +54,8 @@ injection), MP (memory poisoning)**.
 | `tests/` | 75 tests, 12 layers (see [Testing](#testing--verification)) |
 | `baseline/` | Frozen legacy baseline + validation-run evidence (JSON) |
 | `docs/` | LumiMAS paper + the authoritative data-requirements spec (Russian, v1.9.2) |
-| `deploy/` | SberDS-style platform node descriptors (see `FINAL_REPORT.md` §6 for status) |
+| `descriptor.json` | SberDS node descriptor — this repo deploys as one dual-mode (train/inference) platform node via `run.py::main(**params)`; see `deploy/README.md` |
+| `deploy/` | Deployment guide (`deploy/README.md`) + archived legacy descriptors |
 | `legacy/` | Archived dead code (`CHANGELOG.md` explains each move) |
 | `AUDIT_*.md`, `PLAN.md`, `GAPS.md`, `VALIDATION.md`, `TEST_REPORT.md`, `FINAL_REPORT.md` | The audit/refactor record |
 

@@ -767,7 +767,8 @@ def detect_anomalies(data: pl.LazyFrame, s2_meta: S2Meta, only_anomalies: bool =
                     'detector_z_epi':                   out.z_epi.tolist(),
                     'detector_z_sem':                   out.z_sem.tolist(),
                     'detector_truncated':               truncated,
-                    'detector_is_anomaly':              map(jp.asarray, out.is_anomaly),
+                    # tolist() → настоящий Boolean dtype (jax-скаляры дают Float64)
+                    'detector_is_anomaly':              out.is_anomaly.tolist(),
                     **extra_cols}).lazy()),
         how = 'horizontal')
     return (scored.filter(pl.col('detector_is_anomaly').eq(True)).drop('detector_is_anomaly')

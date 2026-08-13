@@ -1,0 +1,586 @@
+{
+    "id": "30da3739-2287-4551-a932-eb9846b56c7e",
+    "name": "laim | anomaly detector (train / inference)",
+    "description": "Детектор аномалий МАС (LumiMAS): режим train — обучение (s1→s2→s3, оценка, модельный бандл на выходной порт); режим inference — скоринг спанов обученным бандлом с полным аудиторским следом и RCA-атрибуцией.",
+    "fullDescription": "Одна нода, два режима (параметр mode). TRAIN: parquet со спанами → признаки → инъекция аномалий → обучение LSTM-AE/FMLP-AE → порог+калибровка → метрики (в т.ч. per-type, recall@FPR, ECE) → самодостаточный zip-бандл модели на общем хранилище, путь — в порт model_out. INFERENCE: бандл (порт model_in или параметр model_path) + parquet со спанами → скоринг каждой трассы (p_anomaly, confidence, флаги, rca_*) → контракт продукта (anomaly_traces / test_anomalies). Отпечаток эмбеддера проверяется при загрузке бандла. В одном проекте ноду можно инстанцировать дважды: train-инстанс → model_out → model_in → inference-инстанс.",
+    "shortNameToDisplay": "laim-detector",
+    "ports": [
+        {
+            "in": true,
+            "name": "path_traces_train",
+            "label": "path_traces_train",
+            "description": "Parquet со спанами для ОБУЧЕНИЯ (формат AEF, 46 полей). Обязателен в режиме train, не используется в inference.",
+            "type": "default",
+            "shape": "shape_dataframe",
+            "required": false,
+            "order": 1,
+            "getPortAsLocalPath": true
+        },
+        {
+            "in": true,
+            "name": "path_traces_infer",
+            "label": "path_traces_infer",
+            "description": "Parquet со спанами для СКОРИНГА. Обязателен в режиме inference; в режиме train опционален (сразу прогнать инференс свежей моделью).",
+            "type": "default",
+            "shape": "shape_dataframe",
+            "required": false,
+            "order": 2,
+            "getPortAsLocalPath": true
+        },
+        {
+            "in": true,
+            "name": "path_embedder",
+            "label": "path_embedder",
+            "description": "Каталог или zip модели эмбеддера (deepvk/USER-bge-m3, формат SentenceTransformers). Обязателен в обоих режимах; идентичность модели фиксируется отпечатком в бандле и проверяется при инференсе.",
+            "type": "default",
+            "shape": "shape_model",
+            "required": true,
+            "order": 3,
+            "getPortAsLocalPath": true
+        },
+        {
+            "in": true,
+            "name": "model_in",
+            "label": "model_in",
+            "description": "Модельный бандл из режима train (zip). Обязателен в режиме inference (альтернатива — параметр model_path с путём на общем хранилище). Соединяется с model_out train-инстанса.",
+            "type": "default",
+            "shape": "shape_model",
+            "required": false,
+            "order": 4,
+            "getPortAsLocalPath": true
+        },
+        {
+            "in": false,
+            "name": "model_out",
+            "label": "model_out",
+            "description": "Путь к самодостаточному zip-бандлу обученной модели на общем хранилище (model_store_dir). Содержит модели s2 (+s3), мета/манифест/отчёт оценки; переносим между машинами. В режиме inference — путь использованного бандла.",
+            "type": "default",
+            "shape": "shape_model",
+            "order": 5
+        },
+        {
+            "in": false,
+            "name": "detector_metrics_holdout",
+            "label": "detector_metrics_holdout",
+            "description": "Метрики детектора на hold-out (test): precision/recall/FPR/F1/ROC-AUC/PR-AUC, порог, лучший эксперимент. Пусто в режиме inference (нет разметки).",
+            "type": "default",
+            "shape": "shape_model",
+            "order": 6
+        },
+        {
+            "in": false,
+            "name": "classifier_metrics_holdout",
+            "label": "classifier_metrics_holdout",
+            "description": "Метрики классификатора типов аномалий (self-reported; см. документированные оговорки AUDIT_01/L1). Пусто, если классификатор отключён или корпус мал.",
+            "type": "default",
+            "shape": "shape_model",
+            "order": 7
+        },
+        {
+            "in": false,
+            "name": "eval_report",
+            "label": "eval_report",
+            "description": "Полный отчёт оценки (train): per-anomaly-type метрики, recall@FPR≤target, prevalence-adjusted PPV, калибровка (ECE/Brier/reliability), латентность p50/p95/p99. В inference — сводка скоринга (scored/detected/truncated).",
+            "type": "default",
+            "order": 8
+        },
+        {
+            "in": false,
+            "name": "anomaly_traces",
+            "label": "anomaly_traces",
+            "description": "Датафрейм трасс, детектированных как аномальные: trace_id, p_anomaly, confidence, ошибки ветвей, класс аномалии (если s3 в бандле), RCA-атрибуция, границы времени, запрос/ответ пользователя.",
+            "type": "dataframe",
+            "shape": "shape_dataframe",
+            "order": 9
+        },
+        {
+            "in": false,
+            "name": "test_anomalies",
+            "label": "test_anomalies",
+            "description": "JSON-объект {\"anomalies\": [...]} — контракт продукта (совместим с легаси end2end): trace_id, starttime/endtime (ISO-8601 UTC), confidence (0..100), anomaly_type, user_query, agent_response, rca_results.",
+            "type": "default",
+            "order": 10
+        },
+        {
+            "in": false,
+            "name": "html_reports",
+            "label": "html_reports",
+            "description": "Словарь HTML-отчётов этапов обучения (data: подготовка s1, detector: сводка s2). Пусто в режиме inference.",
+            "type": "default",
+            "shape": "shape_model",
+            "order": 11
+        },
+        {
+            "in": false,
+            "name": "manifest",
+            "label": "manifest",
+            "description": "Манифест запуска: хэш конфигурации, SHA-256 входов, сиды, версии пакетов, тайминги этапов, метрики, пути артефактов. Полная воспроизводимость запуска.",
+            "type": "default",
+            "order": 12
+        }
+    ],
+    "script": {
+        "type": "python",
+        "baseImageKey": "py312-gpu",
+        "deployType": "docker",
+        "runConfiguration": {
+            "sourceFiles": [
+                "run.py"
+            ],
+            "functionName": "main",
+            "functionParameters": [],
+            "output": {
+                "type": "json",
+                "output": []
+            }
+        }
+    },
+    "ui": {
+        "settings": [
+            {
+                "page": "General",
+                "title": "Запуск",
+                "components": [
+                    {
+                        "type": "text",
+                        "label": "О ноде",
+                        "config": {
+                            "datasets": [
+                                {
+                                    "value": "Одна нода, два режима. TRAIN: path_traces_train (+опц. path_traces_infer) + path_embedder → модель-бандл в model_out. INFERENCE: model_in (или model_path) + path_traces_infer + path_embedder → anomaly_traces/test_anomalies. Неиспользуемые режимом порты можно не подключать. Тонкая настройка — вкладки data/detector/classifier/eval; всё остальное — параметр config_overrides (строки section.key=value)."
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "type": "form",
+                        "label": "Режим и окружение",
+                        "config": {
+                            "components": [
+                                {
+                                    "parameter": "mode",
+                                    "label": "mode — режим ноды",
+                                    "defaultValue": "train",
+                                    "uiComponent": "select",
+                                    "placeholder": "Select value",
+                                    "allowedValues": [
+                                        {
+                                            "train": "train"
+                                        },
+                                        {
+                                            "inference": "inference"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "parameter": "device",
+                                    "label": "device — устройство вычислений (jax-детектор + эмбеддер)",
+                                    "defaultValue": "cpu",
+                                    "uiComponent": "select",
+                                    "placeholder": "Select value",
+                                    "allowedValues": [
+                                        {
+                                            "cpu": "cpu"
+                                        },
+                                        {
+                                            "gpu": "gpu"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "parameter": "seed",
+                                    "label": "seed — единое зерно ГПСЧ (бит-в-бит воспроизводимость)",
+                                    "type": "integer",
+                                    "defaultValue": 12345,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "recast",
+                                    "label": "recast — выравнивание типов входного parquet к спецификации",
+                                    "type": "boolean",
+                                    "defaultValue": true,
+                                    "uiComponent": "checkbox"
+                                },
+                                {
+                                    "parameter": "model_store_dir",
+                                    "label": "model_store_dir — каталог бандлов моделей на общем хранилище (режим train)",
+                                    "type": "string",
+                                    "defaultValue": "/mnt/data/laim/models",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "model_path",
+                                    "label": "model_path — путь к бандлу на общем хранилище (режим inference, если порт model_in не подключён)",
+                                    "type": "string",
+                                    "defaultValue": "",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "output_root",
+                                    "label": "output_root — рабочий каталог запусков ноды",
+                                    "type": "string",
+                                    "defaultValue": "/tmp/laim_runs",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "config_overrides",
+                                    "label": "config_overrides — доп. параметры, по одному section.key=value на строку (или через ';')",
+                                    "type": "string",
+                                    "defaultValue": "",
+                                    "placeholder": "например: detector.cal_min_pos=10; data.max_correlation=0.995",
+                                    "uiComponent": "input"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+            {
+                "page": "data",
+                "title": "Данные (s1): контракт, эмбеддинги, сплит, нормализация",
+                "components": [
+                    {
+                        "type": "form",
+                        "label": "DataConfig",
+                        "config": {
+                            "components": [
+                                {
+                                    "parameter": "validation_gate",
+                                    "label": "validation_gate — контроль контракта данных перед обучением",
+                                    "defaultValue": "warn",
+                                    "uiComponent": "select",
+                                    "placeholder": "Select value",
+                                    "allowedValues": [
+                                        {
+                                            "off": "off"
+                                        },
+                                        {
+                                            "warn": "warn"
+                                        },
+                                        {
+                                            "strict": "strict"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "parameter": "inject_anomalies",
+                                    "label": "inject_anomalies — инъекция 5 классов аномалий (разметка VAL/TEST)",
+                                    "type": "boolean",
+                                    "defaultValue": true,
+                                    "uiComponent": "checkbox"
+                                },
+                                {
+                                    "parameter": "embedding_batch_size",
+                                    "label": "embedding_batch_size — батч эмбеддера",
+                                    "type": "integer",
+                                    "defaultValue": 32,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "embedding_max_length",
+                                    "label": "embedding_max_length — усечение токенов (главный рычаг скорости на CPU)",
+                                    "type": "integer",
+                                    "defaultValue": 1024,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "norm_train_ratio",
+                                    "label": "norm_train_ratio — доля train (нормальные трассы)",
+                                    "type": "float",
+                                    "defaultValue": 0.7,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "norm_val_ratio",
+                                    "label": "norm_val_ratio — доля val (нормальные трассы)",
+                                    "type": "float",
+                                    "defaultValue": 0.15,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "anom_val_ratio",
+                                    "label": "anom_val_ratio — доля val (аномальные трассы)",
+                                    "type": "float",
+                                    "defaultValue": 0.7,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "anom_test_ratio",
+                                    "label": "anom_test_ratio — доля test (аномальные трассы)",
+                                    "type": "float",
+                                    "defaultValue": 0.3,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "epi_normalization",
+                                    "label": "epi_normalization — метод нормализации EPI",
+                                    "defaultValue": "robust",
+                                    "uiComponent": "select",
+                                    "placeholder": "Select value",
+                                    "allowedValues": [
+                                        {
+                                            "zscore": "zscore"
+                                        },
+                                        {
+                                            "robust": "robust"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "parameter": "winsorize_epi",
+                                    "label": "winsorize_epi — винзоризация при подгонке статистик",
+                                    "type": "boolean",
+                                    "defaultValue": true,
+                                    "uiComponent": "checkbox"
+                                },
+                                {
+                                    "parameter": "scale_floor",
+                                    "label": "scale_floor — пол робастного масштаба (защита от взрыва |z|, F-05)",
+                                    "type": "float",
+                                    "defaultValue": 0.01,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "norm_z_clip",
+                                    "label": "norm_z_clip — симметричный клип нормализованных значений (0 = выкл)",
+                                    "type": "float",
+                                    "defaultValue": 20.0,
+                                    "uiComponent": "input"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+            {
+                "page": "detector",
+                "title": "Детектор (s2): эксперименты, порог, калибровка",
+                "components": [
+                    {
+                        "type": "form",
+                        "label": "DetectorConfig",
+                        "config": {
+                            "components": [
+                                {
+                                    "parameter": "experiments",
+                                    "label": "experiments — фильтр сетки экспериментов (JSON-список; batch_size ≤ числа train-трасс)",
+                                    "type": "string",
+                                    "defaultValue": "[\"hub_mse_mse_08_4\", \"hub_mse_hub_32_4_deep\"]",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "epochs",
+                                    "label": "epochs — эпохи обучения каждой ветви",
+                                    "type": "integer",
+                                    "defaultValue": 100,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "patience",
+                                    "label": "patience — терпение ранней остановки (по val-норме)",
+                                    "type": "integer",
+                                    "defaultValue": 20,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "threshold_metric",
+                                    "label": "threshold_metric — метрика подбора порога на VAL",
+                                    "defaultValue": "youden",
+                                    "uiComponent": "select",
+                                    "placeholder": "Select value",
+                                    "allowedValues": [
+                                        {
+                                            "accuracy": "accuracy"
+                                        },
+                                        {
+                                            "precision": "precision"
+                                        },
+                                        {
+                                            "recall": "recall"
+                                        },
+                                        {
+                                            "specificity": "specificity"
+                                        },
+                                        {
+                                            "f1": "f1"
+                                        },
+                                        {
+                                            "youden": "youden"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "parameter": "select_metric",
+                                    "label": "select_metric — метрика выбора лучшего эксперимента",
+                                    "defaultValue": "youden",
+                                    "uiComponent": "select",
+                                    "placeholder": "Select value",
+                                    "allowedValues": [
+                                        {
+                                            "accuracy": "accuracy"
+                                        },
+                                        {
+                                            "precision": "precision"
+                                        },
+                                        {
+                                            "recall": "recall"
+                                        },
+                                        {
+                                            "specificity": "specificity"
+                                        },
+                                        {
+                                            "f1": "f1"
+                                        },
+                                        {
+                                            "youden": "youden"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "parameter": "select_on",
+                                    "label": "select_on — сплит для выбора эксперимента (test = легаси-смещение, не использовать)",
+                                    "defaultValue": "val",
+                                    "uiComponent": "select",
+                                    "placeholder": "Select value",
+                                    "allowedValues": [
+                                        {
+                                            "val": "val"
+                                        },
+                                        {
+                                            "test": "test"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "parameter": "n_thresholds",
+                                    "label": "n_thresholds — число порогов в свипе",
+                                    "type": "integer",
+                                    "defaultValue": 10000,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "encode_chunk",
+                                    "label": "encode_chunk — чанк энкодинга LSTM-AE (меньше = меньше VRAM)",
+                                    "type": "integer",
+                                    "defaultValue": 1024,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "seq_pad_chunk",
+                                    "label": "seq_pad_chunk — чанк паддинга трасс (пиковая память)",
+                                    "type": "integer",
+                                    "defaultValue": 8192,
+                                    "uiComponent": "input"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+            {
+                "page": "classifier",
+                "title": "Классификатор типов аномалий (s3)",
+                "components": [
+                    {
+                        "type": "form",
+                        "label": "ClassifierConfig",
+                        "config": {
+                            "components": [
+                                {
+                                    "parameter": "classifier_enabled",
+                                    "label": "classifier_enabled — обучать классификатор (требует ≥5 примеров каждого класса)",
+                                    "type": "boolean",
+                                    "defaultValue": true,
+                                    "uiComponent": "checkbox"
+                                },
+                                {
+                                    "parameter": "classifier_seed",
+                                    "label": "classifier_seed — зерно ГПСЧ классификатора",
+                                    "type": "integer",
+                                    "defaultValue": 12345,
+                                    "uiComponent": "input"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+            {
+                "page": "eval",
+                "title": "Оценка и RCA",
+                "components": [
+                    {
+                        "type": "form",
+                        "label": "EvalConfig",
+                        "config": {
+                            "components": [
+                                {
+                                    "parameter": "target_fpr",
+                                    "label": "target_fpr — целевой FPR для recall@FPR",
+                                    "type": "float",
+                                    "defaultValue": 0.1,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "assumed_prevalence",
+                                    "label": "assumed_prevalence — продовая доля аномалий для проекции PPV",
+                                    "type": "float",
+                                    "defaultValue": 0.01,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "attribution_top_k",
+                                    "label": "attribution_top_k — топ-k спанов/признаков RCA-атрибуции (0 = выкл)",
+                                    "type": "integer",
+                                    "defaultValue": 5,
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "latency_reps",
+                                    "label": "latency_reps — повторов замера латентности per-trace",
+                                    "type": "integer",
+                                    "defaultValue": 50,
+                                    "uiComponent": "input"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ],
+        "result": {
+            "title": "Results",
+            "components": [
+                {
+                    "type": "html",
+                    "uiComponent": "html",
+                    "name": "$.html_reports.data",
+                    "parameter": "$.html_reports.data",
+                    "label": "Этап 1 — подготовка данных (s1)",
+                    "config": {
+                        "datasets": [
+                            {
+                                "data": "$.html_reports.data"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "type": "html",
+                    "uiComponent": "html",
+                    "name": "$.html_reports.detector",
+                    "parameter": "$.html_reports.detector",
+                    "label": "Этап 2 — обучение детектора (s2)",
+                    "config": {
+                        "datasets": [
+                            {
+                                "data": "$.html_reports.detector"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    },
+    "shape": "other"
+}

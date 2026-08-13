@@ -183,6 +183,8 @@ def cmd_train(cfg: RunConfig, run_dir: Path, manifest: Manifest, s1_meta) -> dic
             manifest.record_metrics('train_classifier', {
                 'best_experiment': s3_meta.best_experiment,
                 'test_metrics_as_reported': dict(s3_meta.test_metrics)})
+            from dataclasses import asdict as _asdict
+            (run_dir / 's3_meta.json').write_text(json.dumps(_asdict(s3_meta), indent=2))
         except Exception as e:  # F-06: known-crash stage; recorded, not silent
             log.error('classifier stage failed (known finding F-06): %s', e)
             manifest.record_metrics('train_classifier', {'failed': str(e)})
