@@ -85,6 +85,35 @@ All notable changes on branch `claude/lumimas-anomaly-refactor-7stpda`
 - `deploy/README.md` — deployment guide; legacy `deploy/descriptors/` +
   `deploy/nodes/` (codebase-tarball pattern) documented as obsolete.
 
+## Fixed (SberDS deployment, from the environment probe of 2026-08-13)
+
+- `requirements.txt` is now the platform install manifest: torch removed (the
+  `py312-gpu` image preinstalls a working `2.8.0+cu128`; a bare torch pin let
+  the mirror's `+xpu` build shadow it — the `libsycl.so.9` crash), the JAX GPU
+  stack repinned from cu13 to `jax-cuda12-plugin==0.11.0` (driver 570.x cannot
+  run CUDA 13), `numpy/pandas/pyarrow/tqdm` aligned to the image so pip leaves
+  the platform's own interpreter dependencies untouched. Verified: fast suite
+  (87 tests) passes on the exact new stack in a clean venv (D-3).
+- Dataframe ports arrive as a DIRECTORY of `part-*.snappy.parquet` (observed:
+  100 parts / 56 GB): `spans_scan_source()` normalizes file|dir|glob once, in
+  every consumer (validate, gate, prepare, infer, product contract);
+  `file_fingerprint()` handles directories/globs (name+size manifest hash) and
+  samples files > 2 GB instead of reading tens of GB at run start.
+- Model ports arrive as an extension-less blob (`unstructured_data`, ZIP by
+  magic bytes): `_resolve_embedder` now sniffs zip/tar content and locates the
+  model root by `config.json`, instead of trusting a `.zip` suffix.
+- `model_store_dir` unwritable (probe: `/mnt/data` permission-denied) no longer
+  kills a finished training run: writability is checked up front with a /tmp
+  fallback and a loud warning (OQ-6 tracks the real shared-storage fix).
+- `run_node` caps `POLARS_MAX_THREADS`/`OMP_NUM_THREADS` to the cgroup CPU
+  quota (host reports 128 CPUs; the container quota was 8 — polars would
+  oversubscribe 16×).
+- `cmd_prepare` memory preflight: warns when input size × the measured
+  in-memory multiplier exceeds the cgroup memory limit, before the OOM kill.
+- Probe node: survives ports delivered as in-memory pandas DataFrames
+  (observed in the probe run; reported instead of crashing section 11) and no
+  longer spends 6×120 s on the mirror's hanging `pip index versions`.
+
 ## Archived to `legacy/` (never deleted without a trace)
 
 - `verification.py` (was `ars/tools/reproducibility/`) — orphan module, zero

@@ -512,7 +512,9 @@ def pip_environment(probe_packages: str, check_network: bool) -> dict:
     # can pip RESOLVE the packages we may need to add?
     resolutions = {}
     for pkg in [p.strip() for p in str(probe_packages).split(',') if p.strip()]:
-        res = sh([sys.executable, '-m', 'pip', 'index', 'versions', pkg], timeout=120)
+        # 20s is enough for a live index; the sber mirror hangs `pip index
+        # versions` (observed: 6 x 120s = the probe's entire 12-min runtime)
+        res = sh([sys.executable, '-m', 'pip', 'index', 'versions', pkg], timeout=20)
         ok = res.get('rc') == 0
         resolutions[pkg] = res
         kv(f'index has "{pkg}"', 'YES — ' + (res.get('stdout', '').splitlines() or [''])[0]
@@ -554,9 +556,31 @@ def input_port_layout(ports: dict) -> dict:
     """What does a file port ACTUALLY deliver: file or directory, how many parts."""
     info = {}
     for name, raw in ports.items():
-        if not raw:
+        if raw is None or (isinstance(raw, str) and not raw):
             out(f'  {name}: <not connected>')
             info[name] = {'connected': False}
+            continue
+        # observed 2026-08-13: the platform can deliver a dataframe port as an
+        # IN-MEMORY pandas DataFrame instead of a local path — report, don't die
+        if not isinstance(raw, (str, os.PathLike)):
+            entry = {'connected': True, 'delivered_as': type(raw).__module__
+                     + '.' + type(raw).__qualname__}
+            out('')
+            kv(f'{name} delivered as', entry['delivered_as'])
+            for attr in ('shape', 'columns', 'dtypes'):
+                try:
+                    val = getattr(raw, attr)
+                    val = list(val)[:12] if attr != 'shape' else tuple(val)
+                    entry[attr] = str(val)
+                    kv(f'  {attr}', str(val)[:160])
+                except Exception:                  # noqa: BLE001
+                    pass
+            try:
+                entry['memory_usage'] = human(int(raw.memory_usage(deep=True).sum()))
+                kv('  in-memory size', entry['memory_usage'])
+            except Exception:                      # noqa: BLE001
+                pass
+            info[name] = entry
             continue
         p = Path(str(raw))
         entry = {'connected': True, 'raw_value': str(raw), 'exists': p.exists(),

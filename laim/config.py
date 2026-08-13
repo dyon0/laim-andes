@@ -16,6 +16,22 @@ from pathlib import Path
 from typing import Any
 
 
+def spans_scan_source(path: str | Path) -> str:
+    """Normalize a spans source into something `pl.scan_parquet` accepts.
+
+    SberDS delivers dataframe ports as a DIRECTORY of part files
+    (part-*.snappy.parquet, observed: 100 parts / 56 GB per port), not as a
+    single parquet. A directory is rewritten to a recursive glob so every
+    consumer (validate, gate, prepare, infer, product contract) sees one
+    string; plain files and explicit globs pass through unchanged.
+    """
+    s = str(path)
+    p = Path(s)
+    if p.is_dir():
+        return (p / '**' / '*.parquet').as_posix()
+    return s
+
+
 @dataclass(frozen=True)
 class PathsConfig:
     train_spans: str = ''                 # parquet with training spans (required for prepare/all)

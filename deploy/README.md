@@ -63,6 +63,48 @@ select (`cpu`/`gpu`), applied to the JAX detector and the embedder alike.
 CPU works everywhere (validated); GPU is the production target for the real
 `deepvk/USER-bge-m3` embedder.
 
+### What the platform actually looks like (probe, 2026-08-13)
+
+Measured by `deploy/probe_node/` on the production `py312-gpu` image — these
+facts drive the packaging and the sizing advice below:
+
+| Fact | Value | Consequence |
+|---|---|---|
+| Preinstalled torch | `2.8.0+cu128`, works | `requirements.txt` must never pin torch (the mirror's `+xpu` builds outrank `+cu128` — that caused the `libsycl.so.9` crash) |
+| Driver / CUDA | 570.86.15 / **12.8 ceiling** | only cu12 wheels can run; JAX uses `jax-cuda12-plugin==0.11.0` |
+| GPUs | 8 × H100 80GB, `CUDA_VISIBLE_DEVICES` unset | code currently uses one GPU (multi-GPU is designed-not-implemented) |
+| CPU quota | cgroup `quota/period` (probe run: 8 cores; host shows 128) | `run_node` sets `POLARS_MAX_THREADS`/`OMP_NUM_THREADS` from the quota — otherwise polars spawns 128 threads into an 8-core cap |
+| Memory limit | 453.5 GB (cgroup) | see sizing below |
+| Disk | 1.5 TB free on `/tmp` and `/opt/module` | port staging of 2×56 GB is fine |
+| `/mnt/data` | **permission denied** | bundle store falls back to `/tmp` with a warning; cross-node hand-off needs an admin-provided shared path (OQ-6) |
+| Dataframe ports | directory of ~100 `part-*.snappy.parquet` | handled via `spans_scan_source` (recursive glob) |
+| Model ports | extension-less blob (`unstructured_data`), ZIP by magic bytes | `_resolve_embedder` sniffs content, never suffixes |
+| pip index | only `sberosc.ca.sbrf.ru` reachable (PyPI mirror + sber-pytorch incl. `+xpu`) | pins must resolve there; they are plain-PyPI packages |
+| Absent from image | jax, flax, optax, polars, sklearn, sentence-transformers, transformers, altair | installed by `requirements.txt` on node build |
+
+### Sizing (CPU / RAM) for large corpora
+
+Yes — **GPU mode still uses the CPU heavily**: everything in s1 (parquet IO,
+polars feature engineering, injection, validation, embedder *tokenization*) is
+CPU work; the GPU only runs the embedder forward pass and the JAX
+autoencoders. Measured on the reference sample, a snappy spans parquet expands
+**~5.1×** in memory (98 % of it text), and each span adds a 4 KB fp32
+embedding; with padded sequence tensors the eager pipeline peaks at roughly
+**12–25× the on-disk size**.
+
+Practical guidance for the observed limits (453 GB RAM, up to 40 CPUs):
+
+- **CPU: request 32–40 cores.** Below ~8, s1 and tokenization dominate wall
+  time; the first run's 1-core default is why embedding "hung".
+- **RAM: request the maximum (the 453 GB limit).** That safely covers inputs
+  up to ~15–20 GB of snappy parquet with the current in-memory pipeline.
+- **A 56 GB corpus does NOT fit the current eager pipeline** (~286 GB raw
+  frame + ~212 GB span embeddings + ~340 GB padded tensors ≫ 453 GB). Until
+  the out-of-core s1 path lands (PLAN.md "Remaining work"), train on a sampled
+  subset (5–20 GB is statistically ample for the normal-behavior autoencoders)
+  and score large corpora in chunks. `cmd_prepare` now warns before the OOM
+  instead of dying mid-run.
+
 ### Testing the node contract
 
 `tests/test_platform.py` pins the descriptor against the adapter: entry point

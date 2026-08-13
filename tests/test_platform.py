@@ -105,6 +105,93 @@ def test_resolve_embedder_unzips(tmp_path):
     assert platform._resolve_embedder(str(model)) == str(model)
 
 
+def test_resolve_embedder_extensionless_blob(tmp_path):
+    """SberDS delivers model ports as an extension-less file (observed name
+    `unstructured_data`, ZIP by magic bytes) — resolution must sniff content."""
+    model = tmp_path / 'm'
+    model.mkdir()
+    (model / 'config.json').write_text('{}')
+    blob = tmp_path / 'unstructured_data'
+    with zipfile.ZipFile(blob, 'w') as zf:
+        zf.write(model / 'config.json', 'USER-bge-m3/config.json')
+    resolved = Path(platform._resolve_embedder(str(blob)))
+    assert (resolved / 'config.json').exists()
+
+
+def test_resolve_embedder_tar_blob(tmp_path):
+    import tarfile
+    model = tmp_path / 'm'
+    model.mkdir()
+    (model / 'config.json').write_text('{}')
+    blob = tmp_path / 'unstructured_data'
+    with tarfile.open(blob, 'w:gz') as tf:
+        tf.add(model / 'config.json', 'USER-bge-m3/config.json')
+    resolved = Path(platform._resolve_embedder(str(blob)))
+    assert (resolved / 'config.json').exists()
+
+
+def test_resolve_embedder_rejects_unknown_blob(tmp_path):
+    blob = tmp_path / 'unstructured_data'
+    blob.write_bytes(b'\x00\x01\x02\x03 definitely not an archive')
+    with pytest.raises(ValueError, match='path_embedder'):
+        platform._resolve_embedder(str(blob))
+
+
+# ----------------------------------------------- directory-shaped data ports
+
+def _parted_spans(tmp_path: Path, n_parts: int = 3) -> Path:
+    """Emulate a SberDS dataframe port: a directory of part-*.snappy.parquet."""
+    df = pl.read_parquet(REPO / 'data' / 'traces_1k_sample.parquet')
+    port = tmp_path / 'port_dir'
+    port.mkdir()
+    step = df.height // n_parts + 1
+    for i in range(n_parts):
+        df.slice(i * step, step).write_parquet(
+            port / f'part-{i:05d}-c000.snappy.parquet')
+    (port / '_SUCCESS').write_text('')   # spark marker must be ignored
+    return port
+
+
+def test_spans_scan_source_directory_port(tmp_path):
+    from laim.config import spans_scan_source
+    port = _parted_spans(tmp_path)
+    src = spans_scan_source(port)
+    df = pl.scan_parquet(src).collect()
+    ref = pl.read_parquet(REPO / 'data' / 'traces_1k_sample.parquet')
+    assert df.height == ref.height
+    # plain files and globs pass through untouched
+    f = REPO / 'data' / 'traces_1k_sample.parquet'
+    assert spans_scan_source(f) == str(f)
+    assert spans_scan_source(src) == src
+
+
+def test_file_fingerprint_directory_and_glob(tmp_path):
+    from laim.runlog import file_fingerprint
+    port = _parted_spans(tmp_path)
+    fp = file_fingerprint(port)
+    assert fp['exists'] and fp['mode'] == 'name-size-manifest'
+    assert fp['files'] == 4   # 3 parts + _SUCCESS
+    assert fp['bytes'] > 0
+    fp2 = file_fingerprint(port)
+    assert fp2['sha256'] == fp['sha256']   # deterministic
+    from laim.config import spans_scan_source
+    fp_glob = file_fingerprint(spans_scan_source(port))
+    assert fp_glob['exists'] and fp_glob['files'] == 3   # glob excludes _SUCCESS
+
+
+def test_writable_store_falls_back(tmp_path, monkeypatch):
+    import tempfile as _tempfile
+    monkeypatch.setattr(_tempfile, 'gettempdir', lambda: str(tmp_path / 'tmp'))
+    # a file where a directory is expected raises OSError even for root
+    # (chmod-based denial would not: tests may run as root)
+    blocker = tmp_path / 'denied'
+    blocker.write_text('')
+    got = platform._writable_store(blocker / 'models')
+    assert got == tmp_path / 'tmp' / 'laim' / 'models'
+    ok = platform._writable_store(tmp_path / 'ok')
+    assert ok == tmp_path / 'ok' and ok.is_dir()
+
+
 # --------------------------------------------------------- bundle handling
 
 def _fake_run_dir(tmp_path: Path) -> Path:

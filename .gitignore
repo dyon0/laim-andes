@@ -9,3 +9,4 @@ baseline/runs/*/test_spans.parquet
 artifacts/
 runs/
 runs_validation/
+*.egg-info/

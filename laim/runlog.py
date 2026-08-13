@@ -36,16 +36,68 @@ def setup_logging(run_dir: Path, level: str = 'INFO') -> logging.Logger:
     return logging.getLogger('laim')
 
 
+# full-content sha256 only up to this size; larger files get a sampled hash
+# (platform ports carry ~56 GB — a full read would dominate the run)
+_FULL_HASH_MAX_BYTES = 2 << 30
+_SAMPLE_BYTES = 64 << 20
+
+
+def _hash_file(p: Path) -> tuple[str, str]:
+    size = p.stat().st_size
+    h = hashlib.sha256()
+    if size <= _FULL_HASH_MAX_BYTES:
+        with open(p, 'rb') as f:
+            for chunk in iter(lambda: f.read(1 << 20), b''):
+                h.update(chunk)
+        return h.hexdigest(), 'full'
+    with open(p, 'rb') as f:
+        h.update(str(size).encode())
+        h.update(f.read(_SAMPLE_BYTES))
+        f.seek(-_SAMPLE_BYTES, 2)
+        h.update(f.read(_SAMPLE_BYTES))
+    return h.hexdigest(), 'sampled-head-tail'
+
+
 def file_fingerprint(path: str | Path) -> dict:
+    """Fingerprint a file, a directory of parts, or a glob pattern.
+
+    Directories/globs (how SberDS delivers dataframe ports) are fingerprinted
+    by a manifest hash over sorted (relative path, size) pairs — reading tens
+    of GB of parts for a content hash is not affordable at run start.
+    """
     p = Path(path)
+    if '*' in str(path):
+        import glob as _glob
+        files = sorted(Path(f) for f in _glob.glob(str(path), recursive=True)
+                       if Path(f).is_file())
+        if not files:
+            return {'path': str(path), 'exists': False}
+        root = Path(str(path).split('*', 1)[0]).parent
+        return _dir_fingerprint(str(path), root, files)
     if not p.exists():
         return {'path': str(p), 'exists': False}
-    h = hashlib.sha256()
-    with open(p, 'rb') as f:
-        for chunk in iter(lambda: f.read(1 << 20), b''):
-            h.update(chunk)
+    if p.is_dir():
+        files = sorted(f for f in p.rglob('*') if f.is_file())
+        return _dir_fingerprint(str(p), p, files)
+    digest, mode = _hash_file(p)
     return {'path': str(p), 'exists': True, 'bytes': p.stat().st_size,
-            'sha256': h.hexdigest()}
+            'sha256': digest, 'mode': mode}
+
+
+def _dir_fingerprint(label: str, root: Path, files: list[Path]) -> dict:
+    h = hashlib.sha256()
+    total = 0
+    for f in files:
+        size = f.stat().st_size
+        total += size
+        try:
+            rel = f.relative_to(root)
+        except ValueError:
+            rel = f
+        h.update(f'{rel.as_posix()}\t{size}\n'.encode())
+    return {'path': label, 'exists': True, 'bytes': total,
+            'sha256': h.hexdigest(), 'mode': 'name-size-manifest',
+            'files': len(files)}
 
 
 def _jsonable(obj: Any) -> Any:
@@ -75,9 +127,11 @@ class Manifest:
         }
         self.flush()
 
-    def record_input(self, name: str, path: str | Path) -> None:
-        self.data['inputs'][name] = file_fingerprint(path)
+    def record_input(self, name: str, path: str | Path) -> dict:
+        fp = file_fingerprint(path)
+        self.data['inputs'][name] = fp
         self.flush()
+        return fp
 
     def record_stage(self, name: str, seconds: float, **extra: Any) -> None:
         self.data['stages'][name] = {'seconds': round(seconds, 3), **extra}

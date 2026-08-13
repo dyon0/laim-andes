@@ -22,7 +22,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import shutil
+import tarfile
 import tempfile
 import zipfile
 from dataclasses import asdict
@@ -30,6 +32,44 @@ from pathlib import Path, PurePath
 from typing import Any
 
 log = logging.getLogger('laim.platform')
+
+
+def _effective_cores() -> int | None:
+    """CPU budget from the cgroup quota (v2 then v1), None if unlimited.
+    On SberDS `os.cpu_count()` reports the host (128) while the container is
+    capped by quota (probe: 800000/100000 -> 8 cores)."""
+    try:
+        raw = Path('/sys/fs/cgroup/cpu.max').read_text().split()
+        if raw[0] != 'max':
+            return max(1, int(int(raw[0]) / int(raw[1])))
+    except (OSError, ValueError, IndexError):
+        pass
+    try:
+        quota = int(Path('/sys/fs/cgroup/cpu/cpu.cfs_quota_us').read_text())
+        period = int(Path('/sys/fs/cgroup/cpu/cpu.cfs_period_us').read_text())
+        if quota > 0:
+            return max(1, quota // period)
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+def _align_thread_env() -> None:
+    """Cap thread pools to the real CPU budget BEFORE polars/torch load.
+
+    Without this polars sizes its pool from os.cpu_count() (128 on the
+    platform hosts) and oversubscribes an 8-core quota into pure contention.
+    Values already set in the environment are respected.
+    """
+    cores = _effective_cores()
+    if cores is None:
+        return
+    for var in ('POLARS_MAX_THREADS', 'OMP_NUM_THREADS'):
+        if not os.environ.get(var):
+            os.environ[var] = str(cores)
+    log.info('thread alignment: cgroup quota = %d cores; POLARS_MAX_THREADS=%s '
+             'OMP_NUM_THREADS=%s', cores, os.environ['POLARS_MAX_THREADS'],
+             os.environ['OMP_NUM_THREADS'])
 
 # UI form parameter → config path (values reuse laim.config coercion,
 # including JSON lists, e.g. experiments=["hub_mse_mse_08_4"]).
@@ -84,19 +124,39 @@ _BUNDLE_META_PATH_KEYS = {
 
 
 def _resolve_embedder(raw: str | None) -> str | None:
-    """Port may deliver a directory or a zip; zips are extracted once."""
+    """Port may deliver a model directory or an archive blob.
+
+    The platform hands model ports over as an EXTENSION-LESS file (observed
+    name: `unstructured_data`, ZIP by magic bytes), so the format is sniffed
+    by content, never by suffix. Archives are extracted once per run.
+    """
     if not raw:
         return None
     p = Path(raw)
-    if p.suffix.lower() != '.zip':
-        return str(p)
+    if p.is_dir() or not p.exists():
+        return str(p)   # model dir, or let the embedder loader report a miss
     target = Path(tempfile.mkdtemp(prefix='embedder_'))
-    with zipfile.ZipFile(p) as zf:
-        zf.extractall(target)
+    if zipfile.is_zipfile(p):
+        with zipfile.ZipFile(p) as zf:
+            zf.extractall(target)
+    elif tarfile.is_tarfile(p):
+        with tarfile.open(p) as tf:
+            tf.extractall(target, filter='data')
+    else:
+        with open(p, 'rb') as f:
+            head = f.read(8)
+        raise ValueError(
+            f'порт path_embedder: файл {p} не распознан (первые байты: '
+            f'{head.hex()}). Ожидается каталог модели sentence-transformers '
+            f'или zip/tar-архив с ним.')
+    # the model root is wherever config.json lives (archive root or one level in)
+    if (target / 'config.json').exists():
+        return str(target)
+    hits = sorted(target.rglob('config.json'))
+    if hits:
+        return str(hits[0].parent)
     entries = [e for e in target.iterdir() if e.is_dir()]
-    # a zip either contains the model at its root or as a single subdirectory
-    return str(entries[0] if len(entries) == 1 and not (target / 'config.json').exists()
-               else target)
+    return str(entries[0] if len(entries) == 1 else target)
 
 
 def build_config(params: dict[str, Any]):
@@ -108,15 +168,45 @@ def build_config(params: dict[str, Any]):
                   if line.strip() and not line.strip().startswith('#')]
     cfg = load_config(None, overrides)
 
+    # dataframe ports arrive as a DIRECTORY of part files — normalize once here
+    from laim.config import spans_scan_source
     port_overrides = []
     if params.get('path_traces_train'):
-        port_overrides.append(f"paths.train_spans={params['path_traces_train']}")
+        port_overrides.append(
+            f"paths.train_spans={spans_scan_source(params['path_traces_train'])}")
     if params.get('path_traces_infer'):
-        port_overrides.append(f"paths.infer_spans={params['path_traces_infer']}")
+        port_overrides.append(
+            f"paths.infer_spans={spans_scan_source(params['path_traces_infer'])}")
     embedder = _resolve_embedder(params.get('path_embedder'))
     if embedder:
         port_overrides.append(f'paths.embedder={embedder}')
     return load_config(None, overrides + port_overrides)
+
+
+def _writable_store(store: Path) -> Path:
+    """Verify the bundle store is writable BEFORE training results depend on it.
+
+    Probe (2026-08-13): `/mnt/data` is permission-denied for the node's service
+    account. Falling back to /tmp keeps train mode alive (bundle path is still
+    returned on `model_out` and inference-in-the-same-run still works), but the
+    bundle will NOT survive the container — cross-node hand-off needs a shared
+    writable directory (OPEN_QUESTIONS OQ-6).
+    """
+    try:
+        store.mkdir(parents=True, exist_ok=True)
+        probe = store / '.laim_write_probe'
+        probe.write_bytes(b'')
+        probe.unlink()
+        return store
+    except OSError as exc:
+        fallback = Path(tempfile.gettempdir()) / 'laim' / 'models'
+        fallback.mkdir(parents=True, exist_ok=True)
+        log.warning(
+            'model_store_dir %s is not writable (%s) — falling back to %s. '
+            'The bundle will NOT outlive this container: set model_store_dir '
+            'to a shared writable path for train->inference hand-off (OQ-6).',
+            store, exc, fallback)
+        return fallback
 
 
 # ---------------------------------------------------------------- bundling
@@ -261,6 +351,7 @@ def run_train(cfg, params: dict[str, Any]) -> dict:
     report = cmd_eval(cfg, run_dir, manifest, prep['s1_meta'], trained['s2_meta'])
 
     store = Path(params.get('model_store_dir') or '/mnt/data/laim/models')
+    store = _writable_store(store)
     bundle = create_bundle(run_dir, store)
     manifest.record_artifact('model_bundle', bundle)
 
@@ -352,6 +443,7 @@ def run_inference(cfg, params: dict[str, Any]) -> dict:
 
 def run_node(**params: Any) -> dict:
     """Entry point called by the platform via run.py::main(**params)."""
+    _align_thread_env()   # must run before the first polars import
     mode = str(params.get('mode') or 'train').strip().lower()
     cfg = build_config(params)
     if mode == 'train':

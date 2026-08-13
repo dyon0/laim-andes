@@ -203,7 +203,7 @@
                                 },
                                 {
                                     "parameter": "model_store_dir",
-                                    "label": "model_store_dir — каталог бандлов моделей на общем хранилище (режим train)",
+                                    "label": "model_store_dir — каталог бандлов моделей (режим train). ВАЖНО: должен быть ДОСТУПЕН НА ЗАПИСЬ и виден из ноды inference; проба 2026-08-13 показала, что /mnt/data закрыт на запись — уточните путь у администратора платформы. При недоступности нода не падает: бандл уходит в /tmp (не переживает контейнер), путь — на порту model_out",
                                     "type": "string",
                                     "defaultValue": "/mnt/data/laim/models",
                                     "uiComponent": "input"

@@ -81,3 +81,37 @@ trigger). Is the baseline the committed 10-epoch config or the commented-out 500
 **Default taken: (a).** The baseline freezes what is committed. The 500-epoch
 behavior is evaluated later in Phase 7 on the refactored pipeline, where epochs are
 config, not code.
+
+---
+
+## OQ-6: No writable shared storage for the model-bundle hand-off (SberDS)
+
+**Question.** Train mode packs the model into a portable zip and returns its PATH
+on `model_out`; the inference node reads that path. This requires a directory that
+is (a) writable by the train node and (b) readable by the inference node. The
+environment probe (2026-08-13) showed `/mnt/data` is permission-denied for the
+node's service account, and out-ports carry JSON payloads, not files — so today
+there is NO storage the hand-off can use.
+
+**Options.** (a) platform admin grants a writable shared directory (set it as
+`model_store_dir`); (b) run train+inference in one node invocation (already
+supported: connect `path_traces_infer` in train mode — no hand-off needed);
+(c) base64-embed the bundle in the `model_out` JSON payload (works for MB-scale
+bundles, untested against platform payload limits).
+
+**Default taken: (b) + fallback.** The node no longer crashes on an unwritable
+store: it falls back to /tmp with a loud warning (bundle valid within the run,
+lost with the container). (a) is the real fix — ask the platform admin which
+path is writable and shared.
+
+## OQ-7: Port delivery mode is not uniform (SberDS)
+
+**Observation, needs confirmation.** The first training run delivered dataframe
+ports as local DIRECTORIES of 100 `part-*.snappy.parquet` files and the model
+port as an extension-less ZIP blob (`unstructured_data`) — both now handled.
+But the probe run received `path_probe_data` as an IN-MEMORY pandas DataFrame
+(section 11 of the probe log), i.e. the platform chose a different delivery
+mode for the same `getPortAsLocalPath: true` declaration, possibly depending on
+the upstream node type. If the main node ever receives a DataFrame instead of a
+path, `build_config` will fail on it. Re-run the (fixed) probe wired to the
+exact upstream nodes used in production to settle which modes must be supported.

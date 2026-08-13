@@ -77,8 +77,11 @@ uv pip install torch --index-url https://download.pytorch.org/whl/cpu
 uv pip install -e '.[dev]'
 ```
 
-Pinned versions that are known-good live in `requirements.txt`
-(`uv pip install -r requirements.txt` reproduces the validated environment).
+`requirements.txt` is the **SberDS platform install manifest**, not the dev
+environment: it deliberately omits torch (the platform image preinstalls
+`2.8.0+cu128`) and pins the JAX CUDA-12 plugin for the platform's driver
+(570.x → CUDA ≤ 12.8). For local work use the `uv pip install` lines above;
+the full rationale is in `DECISIONS.md` (D-3) and `deploy/README.md`.
 
 ### The embedding model
 

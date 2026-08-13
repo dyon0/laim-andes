@@ -17,10 +17,43 @@ import time
 from pathlib import Path, PurePath
 from typing import Any
 
-from laim.config import RunConfig
+from laim.config import RunConfig, spans_scan_source
 from laim.runlog import Manifest, StageTimer, setup_logging
 
 log = logging.getLogger('laim.pipeline')
+
+
+def _cgroup_memory_limit() -> int | None:
+    """Container memory ceiling in bytes (cgroup v2, then v1), None if unlimited."""
+    for path in ('/sys/fs/cgroup/memory.max',
+                 '/sys/fs/cgroup/memory/memory.limit_in_bytes'):
+        try:
+            raw = Path(path).read_text().strip()
+        except OSError:
+            continue
+        if raw.isdigit() and int(raw) < (1 << 60):
+            return int(raw)
+    return None
+
+
+def _memory_preflight(input_bytes: int | None) -> None:
+    """Advisory only: eager s1 holds the decompressed frame (~5x the snappy
+    parquet, measured on the reference sample) plus a 4 KB/span embedding
+    column and the padded sequence tensors — ~12-25x on-disk size at peak.
+    Warn before the OOM kill instead of after it."""
+    if not input_bytes:
+        return
+    limit = _cgroup_memory_limit()
+    if limit is None:
+        return
+    est = input_bytes * 12  # conservative floor of the observed multiplier range
+    if est > limit:
+        log.warning(
+            'memory preflight: input is %.1f GB on disk; the current in-memory '
+            'pipeline needs roughly 12-25x that (>= %.0f GB) but the container '
+            'limit is %.0f GB. Expect an OOM kill. Train on a sampled subset or '
+            'wait for the out-of-core s1 path (PLAN.md "Remaining work").',
+            input_bytes / 1e9, est / 1e9, limit / 1e9)
 
 
 def make_run_dir(cfg: RunConfig, kind: str) -> Path:
@@ -66,7 +99,7 @@ def cmd_validate(cfg: RunConfig, run_dir: Path, manifest: Manifest,
     import polars as pl
     from ars.data.validation import Quality
     from ars.specification.spec import recast
-    path = spans_path or cfg.paths.train_spans
+    path = spans_scan_source(spans_path or cfg.paths.train_spans)
     manifest.record_input('validate_spans', path)
     with StageTimer(manifest, 'validate', log):
         lf = pl.scan_parquet(path)
@@ -94,12 +127,13 @@ def _validation_gate(cfg: RunConfig, run_dir: Path, manifest: Manifest) -> str:
     filtered) train-spans path. Modes: off | warn (log rejects, train on all) |
     strict (train only on traces with zero mandatory-field violations)."""
     mode = cfg.data.validation_gate
+    train_source = spans_scan_source(cfg.paths.train_spans)
     if mode == 'off':
-        return cfg.paths.train_spans
+        return train_source
     import polars as pl
     from ars.data.validation import Quality
     from ars.specification.spec import recast
-    lf = pl.scan_parquet(cfg.paths.train_spans)
+    lf = pl.scan_parquet(train_source)
     if cfg.runtime.recast:
         lf = recast(lf)
     tagged = Quality(lf).tagged().collect()
@@ -109,11 +143,11 @@ def _validation_gate(cfg: RunConfig, run_dir: Path, manifest: Manifest) -> str:
         'mode': mode, 'traces_total': n_total, 'traces_rejected': n_rejected})
     if n_rejected == 0:
         log.info('validation gate: all %d traces conform', n_total)
-        return cfg.paths.train_spans
+        return train_source
     if mode == 'warn':
         log.warning('validation gate (warn): %d/%d traces violate the contract '
                     'and STILL enter training', n_rejected, n_total)
-        return cfg.paths.train_spans
+        return train_source
     # strict: train only on conformant traces
     keep = by_trace.filter(~pl.col('rejected')).select('trace_id')
     if keep.height == 0:
@@ -132,8 +166,9 @@ def _validation_gate(cfg: RunConfig, run_dir: Path, manifest: Manifest) -> str:
 def cmd_prepare(cfg: RunConfig, run_dir: Path, manifest: Manifest) -> dict:
     """s1: spans parquet → features → injection → traces → split → normalize."""
     from ars.stages.s1__data import process_train_data
-    manifest.record_input('train_spans', cfg.paths.train_spans)
+    fp = manifest.record_input('train_spans', cfg.paths.train_spans)
     manifest.record_input('embedder', Path(cfg.paths.embedder) / 'config.json')
+    _memory_preflight(fp.get('bytes'))
     train_spans = _validation_gate(cfg, run_dir, manifest)
     run_id = f's{cfg.runtime.seed}'
     with StageTimer(manifest, 'prepare', log):
@@ -284,6 +319,7 @@ def cmd_infer(cfg: RunConfig, run_dir: Path, manifest: Manifest,
 
     from ars.configuration.c1__data import S1Config
     from ars.tools.tui.tui_data import ColorSchemeDataScienceSakura
+    spans_path = spans_scan_source(spans_path)
     s1_cfg = S1Config(
         input_parquet_files=(PurePath(spans_path),),
         output_dir=PurePath(run_dir) / 'infer_features',
