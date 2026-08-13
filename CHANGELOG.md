@@ -113,6 +113,15 @@ All notable changes on branch `claude/lumimas-anomaly-refactor-7stpda`
 - Probe node: survives ports delivered as in-memory pandas DataFrames
   (observed in the probe run; reported instead of crashing section 11) and no
   longer spends 6×120 s on the mirror's hanging `pip index versions`.
+- The image pairs `torchaudio 2.8.0+xpu` (Intel build) with CUDA torch — an
+  image bug that made `import transformers` die with `OSError:
+  libtorch_xpu.so` (run 2026-08-13 20:04): transformers' availability guard
+  checks installedness, not importability. `run_node` now quarantines
+  torchaudio (documented `sys.modules[name] = None` block marker → find_spec
+  returns None → transformers takes its normal no-torchaudio path) whenever
+  exactly one of torchaudio/torch is an `+xpu` build; consistent pairings are
+  untouched, and this node never processes audio. Also sets `HF_HOME` to a
+  writable tmp dir (the platform runs with `HOME=/`).
 
 ## Archived to `legacy/` (never deleted without a trace)
 

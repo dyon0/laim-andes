@@ -24,6 +24,7 @@ import json
 import logging
 import os
 import shutil
+import sys
 import tarfile
 import tempfile
 import zipfile
@@ -121,6 +122,39 @@ _BUNDLE_META_PATH_KEYS = {
     's2_meta.json': ('output_dir', 'experiment_dir'),
     's3_meta.json': ('output_dir', 'experiment_dir'),
 }
+
+
+def _backend_mismatch(torchaudio_version: str, torch_version: str) -> bool:
+    """True when exactly one of the two is an Intel XPU build (local version
+    tag `+xpu`) — such a torchaudio dlopens libtorch_xpu.so, which a CUDA
+    torch does not ship."""
+    return ('xpu' in torchaudio_version) != ('xpu' in torch_version)
+
+
+def _quarantine_broken_torchaudio() -> None:
+    """The py312-gpu image pairs torchaudio 2.8.0+xpu with torch 2.8.0+cu128
+    (run log 2026-08-13 20:04: OSError libtorch_xpu.so inside
+    `import transformers`). transformers' availability guard checks only that
+    the package is INSTALLED (find_spec), not that it imports, so the broken
+    build explodes at `import torchaudio` in its audio utils.
+
+    We never process audio. Marking the module as blocked via the documented
+    `sys.modules[name] = None` convention makes find_spec return None, so
+    transformers takes its normal no-torchaudio path instead of crashing.
+    Consistent pairings (both CUDA or both XPU) are left untouched.
+    """
+    import importlib.metadata as md
+    try:
+        ta, th = md.version('torchaudio'), md.version('torch')
+    except md.PackageNotFoundError:
+        return
+    if _backend_mismatch(ta, th) and 'torchaudio' not in sys.modules:
+        sys.modules['torchaudio'] = None
+        log.warning(
+            'torchaudio %s is built for a different backend than torch %s '
+            '(broken pairing in the platform image) — torchaudio quarantined; '
+            'transformers runs without audio support (unused by this node)',
+            ta, th)
 
 
 def _resolve_embedder(raw: str | None) -> str | None:
@@ -443,7 +477,12 @@ def run_inference(cfg, params: dict[str, Any]) -> dict:
 
 def run_node(**params: Any) -> dict:
     """Entry point called by the platform via run.py::main(**params)."""
-    _align_thread_env()   # must run before the first polars import
+    _align_thread_env()               # must run before the first polars import
+    _quarantine_broken_torchaudio()   # must run before the first transformers import
+    # HOME=/ on the platform: the default HF cache (~/.cache/huggingface) is
+    # unwritable there; local model loads can still touch it lazily
+    if not os.environ.get('HF_HOME'):
+        os.environ['HF_HOME'] = str(Path(tempfile.gettempdir()) / 'laim' / 'hf')
     mode = str(params.get('mode') or 'train').strip().lower()
     cfg = build_config(params)
     if mode == 'train':

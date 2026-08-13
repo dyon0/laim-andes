@@ -1,6 +1,7 @@
 """SberDS platform node: descriptor sanity, param mapping, bundle round-trip,
 and (slow) the full train→bundle→inference hand-off through run.py::main."""
 import json
+import sys
 import zipfile
 from pathlib import Path
 
@@ -177,6 +178,49 @@ def test_file_fingerprint_directory_and_glob(tmp_path):
     from laim.config import spans_scan_source
     fp_glob = file_fingerprint(spans_scan_source(port))
     assert fp_glob['exists'] and fp_glob['files'] == 3   # glob excludes _SUCCESS
+
+
+def test_backend_mismatch_rule():
+    """The image pairs torchaudio+xpu with torch+cu128 — only that inconsistent
+    pairing gets quarantined; consistent CUDA/XPU/CPU pairings do not."""
+    assert platform._backend_mismatch('2.8.0+xpu', '2.8.0+cu128') is True
+    assert platform._backend_mismatch('2.8.0+cu128', '2.8.0+cu128') is False
+    assert platform._backend_mismatch('2.8.0+xpu', '2.8.0+xpu') is False
+    assert platform._backend_mismatch('2.8.0', '2.8.0+cu128') is False
+    assert platform._backend_mismatch('2.8.0', '2.13.0') is False
+
+
+def test_quarantine_blocks_transformers_availability_check(monkeypatch):
+    """sys.modules[name] = None is the documented block marker: find_spec —
+    what transformers' is_torchaudio_available() consults — must return None,
+    and a direct import must raise cleanly instead of dlopen-crashing."""
+    import importlib.metadata
+    import importlib.util
+
+    real_version = importlib.metadata.version
+    fake = {'torchaudio': '2.8.0+xpu', 'torch': '2.8.0+cu128'}
+    monkeypatch.setattr(importlib.metadata, 'version',
+                        lambda name: fake.get(name) or real_version(name))
+    monkeypatch.delitem(sys.modules, 'torchaudio', raising=False)
+    try:
+        platform._quarantine_broken_torchaudio()
+        assert sys.modules['torchaudio'] is None
+        assert importlib.util.find_spec('torchaudio') is None
+        with pytest.raises(ImportError):
+            import torchaudio  # noqa: F401
+    finally:
+        sys.modules.pop('torchaudio', None)
+
+
+def test_quarantine_leaves_consistent_pairing_alone(monkeypatch):
+    import importlib.metadata
+    real_version = importlib.metadata.version
+    fake = {'torchaudio': '2.8.0+cu128', 'torch': '2.8.0+cu128'}
+    monkeypatch.setattr(importlib.metadata, 'version',
+                        lambda name: fake.get(name) or real_version(name))
+    monkeypatch.delitem(sys.modules, 'torchaudio', raising=False)
+    platform._quarantine_broken_torchaudio()
+    assert 'torchaudio' not in sys.modules
 
 
 def test_writable_store_falls_back(tmp_path, monkeypatch):

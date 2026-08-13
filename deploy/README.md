@@ -81,6 +81,7 @@ facts drive the packaging and the sizing advice below:
 | Model ports | extension-less blob (`unstructured_data`), ZIP by magic bytes | `_resolve_embedder` sniffs content, never suffixes |
 | pip index | only `sberosc.ca.sbrf.ru` reachable (PyPI mirror + sber-pytorch incl. `+xpu`) | pins must resolve there; they are plain-PyPI packages |
 | Absent from image | jax, flax, optax, polars, sklearn, sentence-transformers, transformers, altair | installed by `requirements.txt` on node build |
+| torchaudio in image | `2.8.0+xpu` — an Intel build paired with CUDA torch, **broken** (`libtorch_xpu.so` missing; crashed run 2026-08-13 20:04 inside `import transformers`) | quarantined at node start (`sys.modules` block marker → transformers runs without audio support, which this node never uses); worth reporting to the platform team — it breaks any tenant that imports torchaudio |
 
 ### Sizing (CPU / RAM) for large corpora
 
