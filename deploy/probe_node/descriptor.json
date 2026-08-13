@@ -1,0 +1,148 @@
+{
+    "id": "9da1ddc3-6cc8-4766-a864-b1cf83721621",
+    "name": "laim | environment probe",
+    "description": "Диагностическая нода: печатает в лог состав образа (torch/jax/polars), причину ImportError (libsycl), версию драйвера и число GPU, реальные лимиты CPU/памяти, доступный pip-индекс и фактический формат данных на входных портах.",
+    "fullDescription": "Ничего не обучает и ничего не меняет. Импортирует только стандартную библиотеку, каждая проверка обёрнута в try/except — нода всегда доходит до конца и всегда отдаёт отчёт. Подключите (опционально) порт с теми же данными и той же моделью, что и в основной ноде, запустите на том же базовом образе (py312-gpu) и пришлите лог: он отвечает на вопросы о пакетировании (какой torch ставить), о железе (сколько GPU видно JAX) и о формате портов (директория из 100 parquet-частей / блоб без расширения).",
+    "shortNameToDisplay": "laim-probe",
+    "ports": [
+        {
+            "in": true,
+            "name": "path_probe_data",
+            "label": "path_probe_data",
+            "description": "ОПЦИОНАЛЬНО. Тот же parquet-порт, что подаётся в основную ноду (path_traces_train/infer). Проба покажет, что платформа реально отдаёт: файл или директорию, сколько частей и какого объёма.",
+            "type": "default",
+            "shape": "shape_dataframe",
+            "required": false,
+            "order": 1,
+            "getPortAsLocalPath": true
+        },
+        {
+            "in": true,
+            "name": "path_probe_model",
+            "label": "path_probe_model",
+            "description": "ОПЦИОНАЛЬНО. Тот же порт модели эмбеддера (path_embedder). Проба определит истинный формат блоба по magic-байтам (zip / tar / gzip / каталог) — платформа отдаёт файл без расширения.",
+            "type": "default",
+            "shape": "shape_model",
+            "required": false,
+            "order": 2,
+            "getPortAsLocalPath": true
+        },
+        {
+            "in": false,
+            "name": "probe_report",
+            "label": "probe_report",
+            "description": "Полный отчёт в JSON: состав образа, метаданные torch, устройства JAX, лимиты cgroup, конфигурация pip, разбор входных портов.",
+            "type": "default",
+            "order": 3
+        },
+        {
+            "in": false,
+            "name": "probe_text",
+            "label": "probe_text",
+            "description": "Тот же отчёт простым текстом — ровно то, что напечатано в лог.",
+            "type": "default",
+            "order": 4
+        },
+        {
+            "in": false,
+            "name": "probe_html",
+            "label": "probe_html",
+            "description": "Отчёт для просмотра во вкладке Results.",
+            "type": "hidden",
+            "order": 5
+        }
+    ],
+    "script": {
+        "type": "python",
+        "baseImageKey": "py312-gpu",
+        "deployType": "docker",
+        "runConfiguration": {
+            "sourceFiles": [
+                "probe.py"
+            ],
+            "functionName": "main",
+            "functionParameters": [],
+            "output": {
+                "type": "json",
+                "output": []
+            }
+        }
+    },
+    "ui": {
+        "settings": [
+            {
+                "page": "General",
+                "title": "Проба окружения",
+                "components": [
+                    {
+                        "type": "text",
+                        "label": "Что делает нода",
+                        "config": {
+                            "datasets": [
+                                {
+                                    "value": "Только чтение и печать. Запустите на том же образе, что и основную ноду; по возможности подключите те же порты данных и модели. Результат — в логе (и на портах probe_text / probe_report). Порты подключать не обязательно: без них проба всё равно ответит про образ, GPU и лимиты."
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "type": "form",
+                        "label": "Параметры пробы",
+                        "config": {
+                            "components": [
+                                {
+                                    "parameter": "model_store_dir",
+                                    "label": "model_store_dir — проверить доступность каталога на запись (туда основная нода кладёт бандл модели)",
+                                    "type": "string",
+                                    "defaultValue": "/mnt/data/laim/models",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "probe_pip_packages",
+                                    "label": "probe_pip_packages — проверить, резолвятся ли эти пакеты из доступного индекса (через запятую)",
+                                    "type": "string",
+                                    "defaultValue": "torch,intel-sycl-rt,intel-cmplr-lib-rt,jax,polars,sentence-transformers",
+                                    "uiComponent": "input"
+                                },
+                                {
+                                    "parameter": "check_network",
+                                    "label": "check_network — проверять сетевую доступность pypi.org / download.pytorch.org / внутреннего индекса",
+                                    "type": "boolean",
+                                    "defaultValue": true,
+                                    "uiComponent": "checkbox"
+                                },
+                                {
+                                    "parameter": "deep_ldd",
+                                    "label": "deep_ldd — запустить ldd по нативному расширению torch (точная причина ImportError)",
+                                    "type": "boolean",
+                                    "defaultValue": true,
+                                    "uiComponent": "checkbox"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ],
+        "result": {
+            "title": "Results",
+            "components": [
+                {
+                    "type": "html",
+                    "uiComponent": "html",
+                    "name": "$.probe_html",
+                    "parameter": "$.probe_html",
+                    "label": "Отчёт пробы окружения",
+                    "config": {
+                        "datasets": [
+                            {
+                                "data": "$.probe_html"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    },
+    "shape": "other"
+}
