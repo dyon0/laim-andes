@@ -350,7 +350,10 @@ def test_writable_store_falls_back(tmp_path, monkeypatch):
 
 # --------------------------------------------------------- bundle handling
 
-def _fake_run_dir(tmp_path: Path) -> Path:
+def _fake_run_dir(tmp_path: Path, with_s3: bool = False) -> Path:
+    """The real artifact layout: s2 models/ and s3 classifier/ are SIBLINGS
+    under the s1 data dir (that sibling-ness is what run 2026-08-14 12:21
+    tripped over — single-root packing lost the s3 stack)."""
     run_dir = tmp_path / 'run'
     models = run_dir / 'traces_train' / 'models'
     exp = models / 'expA'
@@ -362,6 +365,13 @@ def _fake_run_dir(tmp_path: Path) -> Path:
     (run_dir / 's2_meta.json').write_text(json.dumps({
         'output_dir': str(models), 'experiment_dir': str(exp)}))
     (run_dir / 'manifest.json').write_text('{"config": {"data": {}}}')
+    if with_s3:
+        cls = run_dir / 'traces_train' / 'classifier'
+        cls_exp = cls / 'logreg_stack'
+        cls_exp.mkdir(parents=True)
+        (cls_exp / 'stack.pkl').write_bytes(b'\x80\x04N.')
+        (run_dir / 's3_meta.json').write_text(json.dumps({
+            'output_dir': str(cls), 'experiment_dir': str(cls_exp)}))
     return run_dir
 
 
@@ -383,6 +393,69 @@ def test_resolve_bundle_rejects_non_bundle(tmp_path):
         zf.writestr('readme.txt', 'not a model')
     with pytest.raises(ValueError, match='s2_meta'):
         platform.resolve_bundle(junk, tmp_path / 'w')
+
+
+def test_bundle_packs_the_s3_classifier_stack(tmp_path):
+    """Run 2026-08-14 12:21: inference scored 875 traces and died on a
+    missing models/stack.pkl — s3 artifacts live in classifier/, a SIBLING
+    of the s2 models/ root, and were never packed. Both roots must land in
+    the archive under their own prefixes, and the resolved s3 meta must
+    point at a real stack.pkl."""
+    run_dir = _fake_run_dir(tmp_path, with_s3=True)
+    bundle = platform.create_bundle(run_dir, tmp_path / 'store')
+
+    with zipfile.ZipFile(bundle) as zf:
+        names = set(zf.namelist())
+    assert 'models/expA/combined_model.pkl' in names
+    assert 'models_s3/logreg_stack/stack.pkl' in names
+
+    root = platform.resolve_bundle(bundle, tmp_path / 'work')
+    s3 = json.loads((root / 's3_meta.json').read_text())
+    assert Path(s3['experiment_dir']).is_absolute()
+    assert (Path(s3['experiment_dir']) / 'stack.pkl').exists()
+    s2 = json.loads((root / 's2_meta.json').read_text())
+    assert (Path(s2['experiment_dir']) / 'combined_model.pkl').exists()
+
+
+def test_bundle_refuses_to_ship_without_the_stack(tmp_path):
+    """A trained classifier whose stack.pkl is missing must fail at TRAIN
+    time — never after a long scoring run."""
+    run_dir = _fake_run_dir(tmp_path, with_s3=True)
+    (run_dir / 'traces_train' / 'classifier' / 'logreg_stack' / 'stack.pkl').unlink()
+    with pytest.raises(ValueError, match='stack.pkl'):
+        platform.create_bundle(run_dir, tmp_path / 'store')
+
+
+def test_bundle_refuses_meta_path_outside_its_root(tmp_path):
+    """The old code silently rewrote unmappable paths to 'models' — the
+    exact mechanism that hid the missing stack. Now it is a hard error."""
+    run_dir = _fake_run_dir(tmp_path, with_s3=True)
+    s3 = json.loads((run_dir / 's3_meta.json').read_text())
+    s3['experiment_dir'] = str(tmp_path / 'elsewhere')
+    (run_dir / 's3_meta.json').write_text(json.dumps(s3))
+    with pytest.raises(ValueError, match='вне корня'):
+        platform.create_bundle(run_dir, tmp_path / 'store')
+
+
+def test_classification_failure_does_not_void_scoring(tmp_path, caplog):
+    """The production failure path itself: an s3 meta whose experiment_dir
+    does not exist (old bundle). The detected frame must come back unlabeled
+    with the error in notes — not raise."""
+    import logging
+    from types import SimpleNamespace
+    detected = pl.DataFrame({'trace_id': ['t1', 't2']})
+    notes: dict = {}
+    dead_meta = SimpleNamespace(experiment_dir=str(tmp_path / 'gone'))
+    with caplog.at_level(logging.ERROR, logger='laim.platform'):
+        out = platform._classified(detected, dead_meta, notes)
+    assert out.equals(detected)                      # scoring survives
+    assert 'FileNotFoundError' in notes['classifier_error']
+    assert 'WITHOUT classifier labels' in caplog.text
+
+    # no s3 in the bundle: untouched frame, no notes
+    notes2: dict = {}
+    assert platform._classified(detected, None, notes2).equals(detected)
+    assert notes2 == {}
 
 
 # ------------------------------------------- bundle transport via port bytes

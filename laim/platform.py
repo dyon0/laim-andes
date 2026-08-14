@@ -121,11 +121,17 @@ OUT_PORTS = ('model_out', 'detector_metrics_holdout', 'classifier_metrics_holdou
              'eval_report', 'anomaly_traces', 'test_anomalies', 'html_reports',
              'manifest')
 
-# bundle members whose stored paths are bundle-root-relative
+# bundle members whose stored paths are bundle-root-relative.
+# Each meta's paths are rewritten relative to ITS OWN artifact root and
+# packed under its own arc prefix: s2 models live under <s1_data>/models,
+# the s3 classifier under <s1_data>/classifier — SIBLINGS, so a single-root
+# pack loses the s3 stack (run 2026-08-14 12:21: inference scored 875 traces
+# and then died on the missing models/stack.pkl).
 _BUNDLE_META_PATH_KEYS = {
     's2_meta.json': ('output_dir', 'experiment_dir'),
     's3_meta.json': ('output_dir', 'experiment_dir'),
 }
+_BUNDLE_ARC_PREFIX = {'s2_meta.json': 'models', 's3_meta.json': 'models_s3'}
 
 
 # ports that carry spans data (may arrive as a path OR an in-memory frame)
@@ -337,41 +343,76 @@ def _writable_store(store: Path) -> Path:
 def create_bundle(run_dir: Path, store_dir: Path) -> Path:
     """Pack a finished training run into a portable zip.
 
-    Contents: meta/manifest/eval JSONs (paths rewritten bundle-relative) plus
-    the model artifact tree. Returns the zip path on `store_dir`.
+    Every stage's artifact tree is packed under that stage's own arc prefix
+    (s2 -> models/, s3 -> models_s3/) and each meta's paths are rewritten
+    relative to its OWN root — a meta path that escapes its root is a hard
+    error at TRAIN time, never a silently unservable bundle. Serve-critical
+    files (the s2 experiment pickles; the s3 stack.pkl when the classifier
+    trained) are verified to be inside the archive before it is written.
     """
     run_dir = Path(run_dir)
     store_dir = Path(store_dir)
     store_dir.mkdir(parents=True, exist_ok=True)
 
-    s2_raw = json.loads((run_dir / 's2_meta.json').read_text())
-    models_root = Path(s2_raw['output_dir'])
+    metas: dict[str, dict] = {}
+    roots: dict[str, Path] = {}
+    for name in ('s2_meta.json', 's3_meta.json'):
+        if (run_dir / name).exists():
+            metas[name] = json.loads((run_dir / name).read_text())
+            roots[name] = Path(metas[name]['output_dir'])
 
     members: dict[str, Path] = {}
     for name in ('s1_meta.json', 's2_meta.json', 's3_meta.json',
                  'manifest.json', 'eval_report.json'):
         if (run_dir / name).exists():
             members[name] = run_dir / name
-    for src in models_root.rglob('*'):
-        if src.is_file() and src.suffix in ('.pkl', '.json'):
-            members[f'models/{src.relative_to(models_root).as_posix()}'] = src
+    for name, root in roots.items():
+        prefix = _BUNDLE_ARC_PREFIX[name]
+        for src in root.rglob('*'):
+            if src.is_file() and src.suffix in ('.pkl', '.json'):
+                members[f'{prefix}/{src.relative_to(root).as_posix()}'] = src
+
+    # rewrite each meta's paths relative to its own root — no fallback:
+    # an unmappable path means the bundle cannot serve, fail HERE
+    rewritten: dict[str, str] = {}
+    for name, meta in metas.items():
+        prefix, root = _BUNDLE_ARC_PREFIX[name], roots[name]
+        for key in _BUNDLE_META_PATH_KEYS[name]:
+            absolute = Path(meta[key])
+            try:
+                rel = absolute.relative_to(root).as_posix()
+            except ValueError:
+                raise ValueError(
+                    f'бандл не собран: {name}.{key} = {absolute} лежит вне '
+                    f'корня артефактов {root} — такой бандл не сможет служить') from None
+            meta[key] = f'{prefix}/{rel}' if rel != '.' else prefix
+        rewritten[name] = json.dumps(meta, indent=2)
+
+    # serve-critical members must be IN the archive (the missing-stack.pkl
+    # class of failure surfaces at training, not after a long scoring run)
+    if 's2_meta.json' in metas:
+        exp_arc = metas['s2_meta.json']['experiment_dir']
+        if not any(a.startswith(f'{exp_arc}/') and a.endswith('.pkl') for a in members):
+            raise ValueError(
+                f'бандл не собран: под {exp_arc} нет ни одного .pkl — '
+                f'модели детектора не попали в архив')
+    if 's3_meta.json' in metas:
+        stack_arc = f"{metas['s3_meta.json']['experiment_dir']}/stack.pkl"
+        if stack_arc not in members:
+            raise ValueError(
+                f'бандл не собран: {stack_arc} отсутствует — классификатор '
+                f'обучен, но его stack.pkl не попал в архив')
 
     bundle_path = store_dir / f'laim_model_{run_dir.name}.zip'
     with zipfile.ZipFile(bundle_path, 'w', zipfile.ZIP_DEFLATED) as zf:
         for arcname, src in members.items():
-            if arcname in _BUNDLE_META_PATH_KEYS:
-                meta = json.loads(src.read_text())
-                for key in _BUNDLE_META_PATH_KEYS[arcname]:
-                    absolute = Path(meta[key])
-                    try:
-                        meta[key] = f'models/{absolute.relative_to(models_root).as_posix()}'
-                    except ValueError:
-                        meta[key] = 'models'
-                zf.writestr(arcname, json.dumps(meta, indent=2))
+            if arcname in rewritten:
+                zf.writestr(arcname, rewritten[arcname])
             else:
                 zf.write(src, arcname)
-    log.info('model bundle written: %s (%d files, %.1f MB)',
-             bundle_path, len(members), bundle_path.stat().st_size / 1e6)
+    log.info('model bundle written: %s (%d files, %.1f MB%s)',
+             bundle_path, len(members), bundle_path.stat().st_size / 1e6,
+             ', with s3 classifier' if 's3_meta.json' in metas else '')
     return bundle_path
 
 
@@ -494,19 +535,44 @@ def _load_s3_meta(bundle_root: Path):
     return S3Meta(**raw)
 
 
+def _classified(detected, s3_meta, notes: dict):
+    """Classification is an ENRICHMENT — its failure must never void a
+    finished scoring run (2026-08-14 12:21 lost a 15-minute scoring of 875
+    traces to a bundle without stack.pkl). On failure the detected frame is
+    returned unlabeled, the error goes to `notes` and the log."""
+    if s3_meta is None or not detected.height:
+        return detected
+    from ars.stages.s3__classifier import classify_anomalies
+    try:
+        return classify_anomalies(detected.lazy(), s3_meta).collect()
+    except Exception as exc:
+        notes['classifier_error'] = f'{type(exc).__name__}: {exc}'
+        log.error(
+            'anomaly-type classification failed (%s) — emitting detector '
+            'results WITHOUT classifier labels. If the bundle predates the '
+            'multi-root packing fix, retrain once with the current node '
+            'version to restore classification.', notes['classifier_error'])
+        return detected
+
+
 def build_product_contract(scored, spans_path: str, recast_flag: bool,
-                           s3_meta=None) -> tuple[Any, str]:
+                           s3_meta=None) -> tuple[Any, str, dict]:
     """The legacy end2end contract: (anomaly_traces pandas frame,
-    test_anomalies JSON string) — flagged traces only, enriched with trace
-    time bounds, user query/response, classifier label when available."""
+    test_anomalies JSON string, notes) — flagged traces only, enriched with
+    trace time bounds, user query/response, classifier label when available.
+
+    Classification is an ENRICHMENT: if it fails (e.g. a bundle from an old
+    node version without the s3 stack — run 2026-08-14 12:21 lost a
+    15-minute scoring of 875 traces to exactly that), the detector results
+    are emitted without labels and the error is reported in `notes`, loudly
+    logged, never allowed to void the scoring run."""
     import polars as pl
     from ars.main import Anomalies, extract_query_response
     from ars.specification.spec import recast as do_recast
 
+    notes: dict = {}
     detected = scored.filter(pl.col('detector_is_anomaly')).drop('detector_is_anomaly')
-    if s3_meta is not None and detected.height:
-        from ars.stages.s3__classifier import classify_anomalies
-        detected = classify_anomalies(detected.lazy(), s3_meta).collect()
+    detected = _classified(detected, s3_meta, notes)
 
     lf_spans = pl.scan_parquet(spans_path)
     if recast_flag:
@@ -522,7 +588,7 @@ def build_product_contract(scored, spans_path: str, recast_flag: bool,
             pl.lit(0).alias('confidence'))
     payload = json.dumps({'anomalies': Anomalies.records(enriched) if enriched.height else []},
                          ensure_ascii=False)
-    return enriched.to_pandas(), payload
+    return enriched.to_pandas(), payload, notes
 
 
 # ----------------------------------------------------------------- modes
@@ -557,11 +623,12 @@ def run_train(cfg, params: dict[str, Any]) -> dict:
     import pandas as pd
     anomaly_traces = pd.DataFrame()
     test_anomalies = json.dumps({'anomalies': []}, ensure_ascii=False)
+    contract_notes: dict = {}
     if cfg.paths.infer_spans:
         cmd_infer(cfg, run_dir, manifest, run_dir, cfg.paths.infer_spans)
         import polars as pl
         scored = pl.read_parquet(run_dir / 'detections.parquet')
-        anomaly_traces, test_anomalies = build_product_contract(
+        anomaly_traces, test_anomalies, contract_notes = build_product_contract(
             scored, cfg.paths.infer_spans, cfg.runtime.recast,
             s3_meta=_load_s3_meta(run_dir))
 
@@ -573,7 +640,8 @@ def run_train(cfg, params: dict[str, Any]) -> dict:
                                          'threshold': report['threshold'],
                                          'best_experiment': report['best_experiment']},
         'classifier_metrics_holdout':   s3_metrics.get('test_metrics_as_reported', s3_metrics),
-        'eval_report':                  json.loads((run_dir / 'eval_report.json').read_text()),
+        'eval_report':                  {**json.loads((run_dir / 'eval_report.json').read_text()),
+                                         **contract_notes},
         'anomaly_traces':               anomaly_traces,
         'test_anomalies':               test_anomalies,
         'html_reports':                 _read_html_reports(prep['s1_meta'], trained['s2_meta']),
@@ -623,7 +691,7 @@ def run_inference(cfg, params: dict[str, Any]) -> dict:
 
     import polars as pl
     scored = pl.read_parquet(run_dir / 'detections.parquet')
-    anomaly_traces, test_anomalies = build_product_contract(
+    anomaly_traces, test_anomalies, contract_notes = build_product_contract(
         scored, cfg.paths.infer_spans, cfg.runtime.recast,
         s3_meta=_load_s3_meta(bundle_root))
 
@@ -634,7 +702,8 @@ def run_inference(cfg, params: dict[str, Any]) -> dict:
         'classifier_metrics_holdout':   {},
         'eval_report':                  {'n_traces_scored': scored.height,
                                          'n_detected': int(scored['detector_is_anomaly'].sum()),
-                                         'n_truncated': int(scored['detector_truncated'].sum())},
+                                         'n_truncated': int(scored['detector_truncated'].sum()),
+                                         **contract_notes},
         'anomaly_traces':               anomaly_traces,
         'test_anomalies':               test_anomalies,
         'html_reports':                 {},

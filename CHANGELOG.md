@@ -113,6 +113,19 @@ All notable changes on branch `claude/lumimas-anomaly-refactor-7stpda`
 - Probe node: survives ports delivered as in-memory pandas DataFrames
   (observed in the probe run; reported instead of crashing section 11) and no
   longer spends 6×120 s on the mirror's hanging `pip index versions`.
+- Bundles now include the s3 classifier stack (run 2026-08-14 12:21:
+  inference scored 875 traces, then died on a missing `models/stack.pkl`).
+  s3 artifacts live in `classifier/` — a SIBLING of the s2 `models/` root —
+  and single-root packing lost them while the silent
+  `except ValueError: 'models'` path-rewrite fallback hid it at train time.
+  `create_bundle` packs every stage root under its own prefix (`models/`,
+  `models_s3/`), rewrites each meta against its own root (an unmappable
+  path is now a TRAIN-time error), and verifies serve-critical files
+  (s2 experiment pickles, s3 `stack.pkl`) are inside the archive before
+  writing it. At serving, classification is an enrichment: if it fails
+  (e.g. a bundle from the old packing), the detector results are emitted
+  WITHOUT labels, the error goes to `eval_report.classifier_error` and the
+  log — a finished scoring run is never voided again.
 - Model hand-off works with NO shared storage (closes OQ-6): the first real
   train→inference wiring failed with `BadZipFile` because a model_out →
   model_in wire transfers only the JSON payload — inference received 75
