@@ -1,5 +1,11 @@
 # Deploying to SberDS
 
+**Status: WORKING end-to-end** — confirmed by the operator on 2026-08-14:
+train (real corpus, injected anomalies, s3 classifier) → model bundle over
+the `model_out`→`model_in` port wire → inference with the full product
+contract, on the production 8×H100 node. The findings log below records
+every platform quirk that had to be handled to get here.
+
 ## Current model: one dual-mode node (this repo IS the node)
 
 The platform builds a node directly from this git repository:

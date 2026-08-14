@@ -86,8 +86,13 @@ fixed path.
 ## Remaining work (not in this engagement's budget, recorded honestly)
 * s3 nested-CV redesign (M8 long-term); currently guarded, biases documented.
 * Drift metrics / retraining automation (M12) beyond the manifest hooks.
-* Real embedder download + re-validation on GPU hardware (OQ-2/OQ-3).
-* Deploy platform integration testing (E12 beyond payload packaging).
+* Real embedder download + re-validation on GPU hardware (OQ-2/OQ-3) —
+  partially closed: the real `deepvk/USER-bge-m3` served both train and
+  inference on the platform; QUALITY re-validation (metrics with real
+  semantics vs the stand-in numbers) remains open.
+* ~~Deploy platform integration testing (E12)~~ — DONE 2026-08-14: operator
+  confirmed the full train → bundle-over-port → inference pipeline works
+  end-to-end on SberDS (8×H100 node; real corpus; classifier included).
 * Out-of-core s1 (streaming/chunked prepare + scoring) — REQUIRED for the
   56 GB+ production corpora (the eager pipeline peaks at ~12-25x on-disk
   size; see deploy/README.md sizing). Until then: sampled training +
