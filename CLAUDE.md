@@ -73,6 +73,7 @@ authoritative: 46 fields, sentinels instead of NULL (-1 / -1.0 / False / '' /
   `detector.experiments/epochs/patience` in config override it. Metric cycling
   in `build_grid` assigns different threshold metrics per experiment index —
   intentional-looking but historically accidental; set explicitly.
+  Full catalogue with recommendations: `EXPERIMENTS.md`.
 - `ars/main.py` is the deploy-platform adapter (legacy contract). Don't break
   its signature; it is not the way to run things locally.
 - TUI prints are Russian; logs from `laim` are English. Chart rendering is

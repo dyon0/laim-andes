@@ -51,7 +51,7 @@
             "in": false,
             "name": "model_out",
             "label": "model_out",
-            "description": "Путь к zip-бандлу обученной модели (model_store_dir).",
+            "description": "Бандл обученной модели: zip в base64 внутри JSON (+sha256). Соединяется с model_in.",
             "type": "default",
             "shape": "shape_model",
             "order": 5

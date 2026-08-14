@@ -113,6 +113,20 @@ All notable changes on branch `claude/lumimas-anomaly-refactor-7stpda`
 - Probe node: survives ports delivered as in-memory pandas DataFrames
   (observed in the probe run; reported instead of crashing section 11) and no
   longer spends 6×120 s on the mirror's hanging `pip index versions`.
+- Model hand-off works with NO shared storage (closes OQ-6): the first real
+  train→inference wiring failed with `BadZipFile` because a model_out →
+  model_in wire transfers only the JSON payload — inference received 75
+  bytes of path string pointing into the dead train container (run
+  2026-08-14 08:51). `model_out` now embeds the bundle ZIP base64 in its
+  payload (+sha256, verified on receipt; >256 MB falls back to path-only
+  with a warning); `resolve_bundle` accepts every delivery form — directory,
+  zip, payload-with-bytes, payload-with-live-path — and turns legacy
+  dead-path payloads into an actionable error. E2E test now performs the
+  hand-off exactly as the platform does (payload file, original zip
+  deleted).
+- `EXPERIMENTS.md` — full catalogue of detector experiments: code grammar,
+  the three architectures, per-code recommendations, the metric-cycling
+  trap, and platform usage.
 - Embedder archive resolution picked the POOLING module as the model root
   (run 2026-08-13 23:20: `Unrecognized model in .../1_Pooling` — a real
   SentenceTransformer directory has numbered module subdirs whose

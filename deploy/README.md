@@ -22,12 +22,18 @@ One node type, two modes (`mode` UI parameter):
 
 * **train**: `path_traces_train` (+ optional `path_traces_infer` to score
   immediately) → trains s1→s2 (+s3 when the corpus supports it), evaluates,
-  and writes a **self-contained model bundle** (zip) to `model_store_dir`
-  (default `/mnt/data/laim/models`); the path is emitted on `model_out`.
-* **inference**: `model_in` (the bundle, via port or `model_path` param) +
-  `path_traces_infer` → scores every trace (full audit trail + RCA
-  attribution) and emits the product contract (`anomaly_traces` dataframe,
-  `test_anomalies` JSON — field-compatible with the legacy end2end node).
+  and packs a **self-contained model bundle** (zip). `model_out` carries the
+  bundle **bytes** base64-inline in its JSON payload (+sha256) — the only
+  thing a port wire actually transfers is the payload, and the zip on disk
+  dies with the train container (proven 2026-08-14 08:51: model_in received
+  75 bytes of path string). No shared storage is needed for the hand-off;
+  `model_store_dir` matters only for bundles > 256 MB or the `model_path`
+  pattern.
+* **inference**: `model_in` (the payload from `model_out`, or `model_path`
+  to a zip/dir on storage) + `path_traces_infer` → verifies the sha256,
+  scores every trace (full audit trail + RCA attribution) and emits the
+  product contract (`anomaly_traces` dataframe, `test_anomalies` JSON —
+  field-compatible with the legacy end2end node).
 
 Ports unused by the selected mode are declared `required: false` and can stay
 unconnected. Instantiate the same node twice in a project to build the
@@ -141,6 +147,25 @@ Practical guidance for the observed limits (453 GB RAM, up to 40 CPUs):
   subset (5–20 GB is statistically ample for the normal-behavior autoencoders)
   and score large corpora in chunks. `cmd_prepare` now warns before the OOM
   instead of dying mid-run.
+
+### Sizing the INFERENCE instance (much smaller than train)
+
+Inference skips injection, training and the experiment grid — its cost is
+feature engineering + embedding + a forward pass. **CPU-only inference is
+viable** for periodic batch scoring, so the inference instance does not have
+to hold a GPU:
+
+| Input per run | Device | CPU | RAM | Expected wall time |
+|---|---|---|---|---|
+| ≤ ~100 MB parquet (≈ 40k spans) | `cpu` | 16 | 16–32 GB | minutes (embedding dominates: with `embedding_max_length=256` typically 1–3 min; at 1024 up to ~10 min) |
+| ≤ ~1 GB parquet | `cpu` | 32 | 64 GB | tens of minutes — the practical CPU ceiling |
+| larger, or tight schedules | `gpu` (1 GPU is enough — `embedding_gpus=1`) | 8–16 | 25× input size | embedding drops to seconds–minutes |
+
+Notes: the detector forward pass is trivial everywhere (measured 32.7 ms/trace
+p50 on CPU at batch 1; batched scoring is far faster) — the embedder is the
+whole story, and `embedding_max_length` is the big CPU lever (256 ≈ 4× faster
+than 1024 on real text). RAM follows the same ~25× on-disk rule as training
+but inputs are far smaller; the model bundle itself is MB-scale.
 
 ### Testing the node contract
 

@@ -20,6 +20,8 @@ machine serves on any other (embedder identity is fingerprint-checked, F-10).
 """
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import logging
 import os
@@ -373,17 +375,91 @@ def create_bundle(run_dir: Path, store_dir: Path) -> Path:
     return bundle_path
 
 
-def resolve_bundle(source: str | Path, workdir: Path) -> Path:
-    """Extract (if zipped) and absolutize the bundle's internal paths.
-    Returns a directory usable as `model_run_dir` by the inference pipeline."""
-    source = Path(source)
-    if source.is_dir():
-        root = source
+# bundles above this size are not embedded into the port payload (the payload
+# is JSON on HDFS; MB-scale is fine, hundreds of MB is not)
+_BUNDLE_B64_LIMIT = 256 << 20
+
+
+def bundle_payload(bundle: Path) -> dict:
+    """The `model_out` payload. The ONLY thing a SberDS port wire reliably
+    delivers is the JSON payload itself: run 2026-08-14 08:51 showed model_in
+    receiving a 75-byte file — the JSON-encoded PATH string returned by
+    train, pointing into the train container's /tmp, dead with the container.
+    So the bundle BYTES ride inside the payload (base64 + sha256); the path
+    stays as a fallback for shared-storage setups."""
+    data = bundle.read_bytes()
+    payload = {
+        'bundle_format': 'laim-bundle-b64/1',
+        'filename': bundle.name,
+        'size_bytes': len(data),
+        'sha256': hashlib.sha256(data).hexdigest(),
+        'stored_path': str(bundle),
+        'bundle_b64': base64.b64encode(data).decode('ascii')
+                      if len(data) <= _BUNDLE_B64_LIMIT else '',
+    }
+    if not payload['bundle_b64']:
+        log.warning(
+            'model bundle %s is %.0f MB — too large to embed in the model_out '
+            'payload; the hand-off will only work if model_store_dir is on '
+            'shared storage (OQ-6)', bundle.name, len(data) / 1e6)
     else:
+        log.info('model_out payload: %s embedded (%.1f MB, sha256 %s...)',
+                 bundle.name, len(data) / 1e6, payload['sha256'][:12])
+    return payload
+
+
+def _bundle_root(source: Path, workdir: Path) -> Path:
+    """Materialize whatever `model_in`/`model_path` points at into an
+    extracted bundle directory. Accepted forms: a directory, the bundle zip
+    itself, or the JSON payload file that a model_out -> model_in wire
+    actually delivers (bytes inline, or a legacy path-only payload)."""
+    if source.is_dir():
+        return source
+    if zipfile.is_zipfile(source):
         root = Path(workdir) / 'model_bundle'
         root.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(source) as zf:
             zf.extractall(root)
+        return root
+    try:
+        payload = json.loads(source.read_text(encoding='utf-8'))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        with open(source, 'rb') as f:
+            head = f.read(8).hex()
+        raise ValueError(
+            f'model_in: файл {source} не распознан (не zip, не JSON-пейлоад '
+            f'порта; первые байты {head}). Ожидается бандл режима train.') from None
+    if isinstance(payload, dict) and payload.get('bundle_b64'):
+        data = base64.b64decode(payload['bundle_b64'])
+        digest = hashlib.sha256(data).hexdigest()
+        if payload.get('sha256') and digest != payload['sha256']:
+            raise ValueError(
+                'model_in: контрольная сумма бандла не совпала после передачи '
+                f'через порт (ожидалась {payload["sha256"][:12]}..., '
+                f'получена {digest[:12]}...)')
+        workdir = Path(workdir)
+        workdir.mkdir(parents=True, exist_ok=True)
+        zip_path = workdir / str(payload.get('filename') or 'model_bundle.zip')
+        zip_path.write_bytes(data)
+        log.info('model bundle decoded from port payload: %s (%.1f MB, sha256 ok)',
+                 zip_path.name, len(data) / 1e6)
+        return _bundle_root(zip_path, workdir)
+    fallback = (payload.get('stored_path') if isinstance(payload, dict)
+                else payload if isinstance(payload, str) else None)
+    if fallback and Path(fallback).exists():
+        return _bundle_root(Path(fallback), workdir)
+    raise ValueError(
+        f'model_in: пейлоад порта не содержит байтов бандла, а путь {fallback!r} '
+        f'в этом контейнере не существует (бандл жил в контейнере train и умер '
+        f'вместе с ним). Обновите train-инстанс до текущей версии ноды — '
+        f'model_out теперь передаёт бандл прямо через порт — либо задайте '
+        f'model_path на общем хранилище.')
+
+
+def resolve_bundle(source: str | Path, workdir: Path) -> Path:
+    """Extract (whatever the delivery form) and absolutize the bundle's
+    internal paths. Returns a directory usable as `model_run_dir`."""
+    root = _bundle_root(Path(source), Path(workdir))
     for name, keys in _BUNDLE_META_PATH_KEYS.items():
         meta_path = root / name
         if not meta_path.exists():
@@ -492,7 +568,7 @@ def run_train(cfg, params: dict[str, Any]) -> dict:
     manifest_data = json.loads((run_dir / 'manifest.json').read_text())
     s3_metrics = manifest_data['metrics'].get('train_classifier', {})
     return {
-        'model_out':                    str(bundle),
+        'model_out':                    bundle_payload(bundle),
         'detector_metrics_holdout':     {**report['test']['overall'],
                                          'threshold': report['threshold'],
                                          'best_experiment': report['best_experiment']},

@@ -385,6 +385,79 @@ def test_resolve_bundle_rejects_non_bundle(tmp_path):
         platform.resolve_bundle(junk, tmp_path / 'w')
 
 
+# ------------------------------------------- bundle transport via port bytes
+
+def test_bundle_payload_carries_the_zip_bytes(tmp_path):
+    """model_out must carry the bundle BYTES: run 2026-08-14 08:51 proved a
+    model_out->model_in wire delivers only the JSON payload (75 bytes — the
+    path string, dead with the train container)."""
+    bundle = platform.create_bundle(_fake_run_dir(tmp_path), tmp_path / 'store')
+    payload = platform.bundle_payload(bundle)
+    assert payload['bundle_format'] == 'laim-bundle-b64/1'
+    assert payload['filename'] == bundle.name
+    assert payload['size_bytes'] == bundle.stat().st_size
+    assert payload['stored_path'] == str(bundle)
+    import base64
+    assert base64.b64decode(payload['bundle_b64']) == bundle.read_bytes()
+
+
+def test_resolve_bundle_from_port_payload_file(tmp_path):
+    """The exact platform delivery: pywrapper json.dump()s the payload to an
+    extension-less file; model_in hands us that file's path."""
+    bundle = platform.create_bundle(_fake_run_dir(tmp_path), tmp_path / 'store')
+    payload_file = tmp_path / 'tmpabc123.model_out'   # platform naming
+    payload_file.write_text(json.dumps(platform.bundle_payload(bundle)))
+    bundle.unlink()   # the train container is gone — bytes must suffice
+
+    root = platform.resolve_bundle(payload_file, tmp_path / 'work')
+    assert (root / 's2_meta.json').exists()
+    meta = json.loads((root / 's2_meta.json').read_text())
+    assert Path(meta['experiment_dir']).is_absolute()
+
+
+def test_resolve_bundle_detects_corrupted_transfer(tmp_path):
+    bundle = platform.create_bundle(_fake_run_dir(tmp_path), tmp_path / 'store')
+    payload = platform.bundle_payload(bundle)
+    import base64
+    payload['bundle_b64'] = base64.b64encode(b'garbage' * 100).decode()
+    f = tmp_path / 'p.model_out'
+    f.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match='контрольная сумма'):
+        platform.resolve_bundle(f, tmp_path / 'work')
+
+
+def test_resolve_bundle_legacy_dead_path_payload_is_actionable(tmp_path):
+    """A payload from the OLD node version: a JSON string with a path into
+    the dead train container. Must fail with instructions, not BadZipFile."""
+    f = tmp_path / 'tmpxyz.model_out'
+    f.write_text(json.dumps('/tmp/laim/models/laim_model_gone.zip'))
+    with pytest.raises(ValueError, match='model_path|train'):
+        platform.resolve_bundle(f, tmp_path / 'work')
+
+    # dict payload without bytes and with a dead stored_path: same story
+    f2 = tmp_path / 'tmp2.model_out'
+    f2.write_text(json.dumps({'bundle_b64': '', 'stored_path': '/gone/x.zip'}))
+    with pytest.raises(ValueError, match='model_path|train'):
+        platform.resolve_bundle(f2, tmp_path / 'work')
+
+
+def test_resolve_bundle_payload_with_live_stored_path(tmp_path):
+    """Shared-storage setups: payload without bytes but with a reachable
+    stored_path must still resolve (the >256 MB escape hatch)."""
+    bundle = platform.create_bundle(_fake_run_dir(tmp_path), tmp_path / 'store')
+    f = tmp_path / 'p.model_out'
+    f.write_text(json.dumps({'bundle_b64': '', 'stored_path': str(bundle)}))
+    root = platform.resolve_bundle(f, tmp_path / 'work')
+    assert (root / 's2_meta.json').exists()
+
+
+def test_resolve_bundle_rejects_garbage_file(tmp_path):
+    f = tmp_path / 'noise.model_out'
+    f.write_bytes(b'\x00\x01\x02\x03 not json not zip')
+    with pytest.raises(ValueError, match='не распознан'):
+        platform.resolve_bundle(f, tmp_path / 'work')
+
+
 # ------------------------------------------------------ end-to-end (slow)
 
 @pytest.mark.slow
@@ -407,15 +480,25 @@ def test_platform_train_then_inference(standin_embedder, fixture_spans, tmp_path
         classifier_enabled=False, latency_reps=3, seed=12345,
     )
     assert set(result) == set(platform.OUT_PORTS)
-    assert Path(result['model_out']).exists()
+    assert result['model_out']['bundle_format'] == 'laim-bundle-b64/1'
+    assert Path(result['model_out']['stored_path']).exists()
+    assert result['model_out']['bundle_b64']
     assert result['detector_metrics_holdout']['best_experiment'] == 'hub_mse_mse_08_4'
     assert 'per_anomaly_type' in result['eval_report']['test']
     assert result['html_reports']['data']          # s1 HTML present
     assert result['manifest']['config_hash']
 
+    # the hand-off exactly as the platform does it: pywrapper json.dump()s the
+    # model_out payload to a file, and model_in delivers that file's path.
+    # The original zip is DELETED first — in production the train container
+    # is gone by the time inference runs; the port bytes must suffice.
+    handoff = tmp_path / 'tmpplatform.model_out'
+    handoff.write_text(json.dumps(result['model_out']))
+    Path(result['model_out']['stored_path']).unlink()
+
     inference = run_module.main(
         mode='inference',
-        model_in=result['model_out'],
+        model_in=str(handoff),
         path_traces_infer=str(infer_path),
         path_embedder=str(standin_embedder),
         output_root=str(tmp_path / 'runs'),

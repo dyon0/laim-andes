@@ -104,6 +104,17 @@ store: it falls back to /tmp with a loud warning (bundle valid within the run,
 lost with the container). (a) is the real fix — ask the platform admin which
 path is writable and shared.
 
+**RESOLVED 2026-08-14 — option (c) implemented and it closes the question.**
+The first real train→inference wiring proved the failure concretely: model_in
+received 75 bytes — the JSON-encoded path string, pointing into the dead
+train container (log 08:51). `model_out` now carries the bundle ZIP bytes
+base64-inline in its JSON payload (+sha256, verified on receipt); inference
+reconstructs the bundle from the port alone. NO shared storage is needed for
+the hand-off anymore. `model_store_dir` remains as an optional escape hatch
+for bundles over 256 MB (payload embedding is skipped with a warning) and for
+the `model_path` pattern; legacy path-only payloads fail with an actionable
+message instead of `BadZipFile`.
+
 ## OQ-7: Port delivery mode is not uniform (SberDS) — CONFIRMED, both handled
 
 **Confirmed 2026-08-13 21:52 on the main node.** The same data-port
