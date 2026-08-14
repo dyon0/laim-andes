@@ -154,14 +154,21 @@ All notable changes on branch `claude/lumimas-anomaly-refactor-7stpda`
 ## Added (multi-GPU, D-4)
 
 - Data-parallel embedding across all visible GPUs in `device = gpu` mode:
-  one spawned worker per GPU via the sentence-transformers multi-process
-  pool (spawn context, daemon workers, ordered gather). New config:
+  one model REPLICA per GPU driven by a thread pool (contiguous balanced
+  slices, ordered gather). Originally shipped as the sentence-transformers
+  multi-process pool; the first GPU run proved the SberDS pywrapper is NOT
+  spawn-safe — the spawned worker re-executed the entire node (re-downloaded
+  ports, re-ran s1) and died in multiprocessing bootstrap (log 2026-08-13
+  23:49) — and fork is unusable after CUDA init, so the engine was rebuilt
+  on threads (D-4 addendum): tokenization (Rust) and CUDA forwards release
+  the GIL, no __main__ re-import hazard exists by construction. New config:
   `data.embedding_gpus` (0 = all visible, N = first N) and
-  `data.embedding_pool_chunk` (texts per worker dispatch) — surfaced in the
+  `data.embedding_pool_chunk` (texts per replica dispatch) — surfaced in the
   SberDS descriptor UI. Embedding is 80–95 % of GPU wall time on large
   corpora; the small s2 autoencoders intentionally stay on one GPU (grid
-  parallelism recorded as future work in PLAN.md). Verified by a real
-  two-worker pool test: pooled vectors match in-process encoding.
+  parallelism recorded as future work in PLAN.md, now with the
+  no-spawn/no-fork platform constraint). Verified by a real two-replica
+  test: multi-device vectors match single-device encoding.
 - GPU-mode stability for the shared node: `c0__env_setup`'s env block now
   uses `setdefault` (operator values win; standalone defaults unchanged) and
   the platform node pre-sets `XLA_PYTHON_CLIENT_PREALLOCATE=false` — the

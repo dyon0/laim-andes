@@ -91,3 +91,21 @@ Decision:
   win; standalone behavior unchanged), and the platform node pre-sets
   PREALLOCATE=false. GPU topology + memory policy are logged at node start
   and recorded in the manifest.
+
+### D-4 addendum (2026-08-14): threads, not processes — the wrapper is not spawn-safe
+
+The first GPU run of the multi-process pool proved the SberDS pywrapper
+executes the node at module level of its `__main__`: the spawned encoder
+worker RE-RAN THE ENTIRE NODE (re-downloaded ports, re-staged the dataframe,
+re-ran the validation gate and all of s1) and died in multiprocessing
+bootstrap ("start a new process before ... bootstrapping phase", log
+2026-08-13 23:49-23:50). Fork is equally unusable once CUDA is initialized
+in the parent. **Decision: multi-GPU embedding = one model replica per
+device driven by a ThreadPoolExecutor.** Tokenization (tokenizers' Rust
+core) and CUDA forward passes release the GIL, so per-device replicas scale
+in-process with no spawn/fork hazard, no model pickling, and no shared
+memory. Determinism scope unchanged (contiguous balanced slices; fixed
+config -> fixed batching). Consequence for future work: any process-based
+parallelism on this platform (e.g. experiment-grid workers) must avoid
+bare spawn/fork — separate platform nodes or an early-started forkserver
+are the viable shapes (PLAN.md updated).

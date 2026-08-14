@@ -66,15 +66,26 @@ CPU works everywhere (validated); GPU is the production target for the real
 ### Multi-GPU
 
 Embedding — 80–95 % of the GPU wall time on large corpora — is
-**data-parallel across all visible GPUs** in `device = gpu` mode: one spawned
-worker per GPU (sentence-transformers multi-process pool; spawn context,
-daemon workers, ordered gather — vectors are identical to single-device
-encoding up to float summation order, verified by test). Controls:
+**data-parallel across all visible GPUs** in `device = gpu` mode: one model
+**replica per GPU driven by threads** (ordered contiguous slices, gather in
+order — vectors are identical to single-device encoding up to float
+summation order, verified by test). Threads, never processes: the SberDS
+pywrapper is **not spawn-safe** — a spawned worker re-executes the whole
+node (proven in the 2026-08-13 23:49 run), and fork is unusable once CUDA
+is initialized. Controls:
 
 | Parameter | Default | Meaning |
 |---|---|---|
 | `embedding_gpus` | `0` | `0` = all visible GPUs, `N` = first N, `1` = single GPU |
-| `embedding_pool_chunk` | `5000` | texts handed to each worker per dispatch |
+| `embedding_pool_chunk` | `5000` | texts handed to each replica per dispatch |
+
+Throughput tuning (adversarial review, unbenchmarked here — no GPU in the
+dev container): each dispatch is a sync barrier (all replicas wait for the
+slowest slice), slices are split by text COUNT not token length, and the
+default `embedding_batch_size = 32` is small for an H100 at
+`embedding_max_length = 1024`. If 8-GPU embedding throughput matters on a
+real corpus, benchmark `embedding_batch_size` 128–256 first — it is the
+single biggest lever — and expect somewhat sub-linear scaling versus 8×.
 
 The s2 detector autoencoders are small and train on **one** GPU by design;
 parallelizing the experiment grid across GPUs is recorded as future work in

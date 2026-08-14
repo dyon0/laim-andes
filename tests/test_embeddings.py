@@ -79,12 +79,25 @@ def test_embedding_device_plan():
     assert embedding_device_plan(cfg('cuda', 5), 2) == ('cuda:0', 'cuda:1')   # capped
 
 
+def test_balanced_slices_are_deterministic_and_cover():
+    from ars.stages.s1__data import _balanced_slices
+    assert _balanced_slices(10, 3) == ((0, 4), (4, 7), (7, 10))
+    assert _balanced_slices(2, 8) == ((0, 1), (1, 2))     # never empty slices
+    assert _balanced_slices(8, 8) == tuple((i, i + 1) for i in range(8))
+    assert _balanced_slices(0, 4) == ()                   # no empty ranges, ever
+    for n, k in ((41, 2), (100, 8), (7, 7), (1, 4)):
+        b = _balanced_slices(n, k)
+        assert b[0][0] == 0 and b[-1][1] == n
+        assert all(x[1] == y[0] for x, y in zip(b, b[1:]))   # contiguous
+        assert all(hi > lo for lo, hi in b)                  # non-empty
+
+
 @pytest.mark.slow
-def test_multiprocess_pool_encoding_matches_single(standin_embedder, tmp_path, monkeypatch):
-    """The pooled encode path (spawned workers, chunked dispatch, ordered
-    gather) must produce the same vectors as in-process encoding. Runs the
-    REAL pool on two CPU workers — device names differ from the GPU case,
-    everything else (spawn, queues, chunking, reassembly, close) is identical."""
+def test_multi_device_encoding_matches_single(standin_embedder, tmp_path, monkeypatch):
+    """The multi-device engine (per-device model replicas + threads — NEVER
+    multiprocessing: the SberDS wrapper is not spawn-safe, a spawned worker
+    re-executes the whole node) must produce the same vectors as one-replica
+    encoding. Runs the real engine on two CPU replicas."""
     import numpy as np
 
     from ars.configuration.c1__data import S1Config
@@ -98,14 +111,18 @@ def test_multiprocess_pool_encoding_matches_single(standin_embedder, tmp_path, m
 
     monkeypatch.setattr(s1__data, 'embedding_device_plan',
                         lambda _cfg, _n: ('cpu', 'cpu'))
-    pooled_embed = s1__data.make_embedder(cfg)
-    assert pooled_embed.progress_chunk == 7 * 2   # pool_chunk x workers
-    pooled = np.asarray(pooled_embed(texts))
-    pooled_embed.close()
-    pooled_embed.close()   # idempotent
+    multi_embed = s1__data.make_embedder(cfg)
+    assert multi_embed.progress_chunk == 7 * 2   # per-replica chunk x replicas
+    multi = np.asarray(multi_embed(texts))
+    small = np.asarray(multi_embed(texts[:3]))   # small-call path: one replica
+    empty = np.asarray(multi_embed(()))          # empty input: (0, dim), no crash
+    assert empty.shape == (0, 1024)
+    multi_embed.close()
+    multi_embed.close()   # idempotent
 
-    assert pooled.shape == direct.shape == (41, 1024)
-    np.testing.assert_allclose(pooled, direct, atol=1e-5)
+    assert multi.shape == direct.shape == (41, 1024)
+    np.testing.assert_allclose(multi, direct, atol=1e-5)
+    np.testing.assert_allclose(small, direct[:3], atol=1e-5)
 
 
 def test_fingerprint_detects_model_swap(tmp_path):

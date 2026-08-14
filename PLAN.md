@@ -95,4 +95,7 @@ fixed path.
 * Multi-GPU detector training (experiment grid across GPUs). Embedding —
   the dominant GPU cost — is data-parallel since D-4; the s2 autoencoders
   are small and train on one GPU, so grid parallelism is a wall-clock
-  optimization, cleanest as one worker process per GPU.
+  optimization. CONSTRAINT (D-4 addendum): the SberDS wrapper is not
+  spawn-safe and fork is unusable after CUDA init, so "one worker process
+  per GPU" cannot be done naively in-node — viable shapes are separate
+  platform nodes per experiment or a forkserver started before CUDA.

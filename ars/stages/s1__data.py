@@ -500,10 +500,11 @@ def embedding_device_plan(cfg: S1Config, cuda_count: int) -> tuple[str, ...]:
     """Data-parallel encoding plan: which torch devices carry the embedder.
 
     Single entry -> ordinary in-process encoding on that device. Multiple
-    entries -> one spawned worker per device (sentence-transformers pool).
-    cfg.embedding_gpus: 0 = all visible GPUs, N = first min(N, visible).
-    CPU mode is always single-process: torch already parallelizes across
-    cores, and pool workers would multiply model memory for no gain.
+    entries -> one model REPLICA per device, driven by threads (never
+    multiprocessing — see make_embedder). cfg.embedding_gpus: 0 = all
+    visible GPUs, N = first min(N, visible). CPU mode is always a single
+    replica: torch already parallelizes across cores, and replicas would
+    multiply model memory for no gain.
     """
     if cfg.device != 'cuda' or cuda_count <= 1:
         return (cfg.device,)
@@ -512,68 +513,139 @@ def embedding_device_plan(cfg: S1Config, cuda_count: int) -> tuple[str, ...]:
     return tuple(f'cuda:{i}' for i in range(use)) if use > 1 else ('cuda',)
 
 
+def _balanced_slices(n_items: int, n_parts: int) -> tuple[tuple[int, int], ...]:
+    """Contiguous, deterministic split of [0, n_items) into <= n_parts
+    non-empty ranges — fixed inputs always produce the same slicing."""
+    if n_items <= 0:
+        return ()
+    n_parts = max(1, min(n_parts, n_items))
+    base, extra = divmod(n_items, n_parts)
+    bounds, start = [], 0
+    for i in range(n_parts):
+        end = start + base + (1 if i < extra else 0)
+        bounds.append((start, end))
+        start = end
+    return tuple(bounds)
+
+
 def make_embedder(cfg: S1Config) -> Callable[[tuple[str, ...]], jp.ndarray]:
+    """Text encoder over one or several GPUs.
+
+    Multi-GPU is one MODEL REPLICA per device driven by a thread pool — NOT
+    the sentence-transformers multiprocess pool and not any fork/spawn:
+    the SberDS pywrapper executes the node at module level of its __main__,
+    so a spawned worker re-runs the ENTIRE node (observed 2026-08-13 23:49 —
+    the child re-downloaded ports, re-ran s1 and died in multiprocessing
+    bootstrap), and fork is unsafe once CUDA is initialized. Threads have
+    neither hazard: tokenization (tokenizers' Rust core) and CUDA forward
+    passes release the GIL, so per-device replicas scale in-process.
+    """
     import torch as _torch
 
     devices = embedding_device_plan(
         cfg, _torch.cuda.device_count() if _torch.cuda.is_available() else 0)
-    pooled  = len(devices) > 1
 
-    model = SentenceTransformer(
-        cfg.embedder_path.as_posix(),
-        # pool mode: the parent copy stays on CPU (start_multi_process_pool
-        # moves it there anyway); each worker owns a copy on its GPU
-        device              = 'cpu' if pooled else cfg.device,
-        local_files_only    = True
-    )
-    # token truncation is the main CPU-speed lever; without this the model's
-    # own max_seq_length (1024+ for bge-m3) applies regardless of config.
-    # Set BEFORE the pool starts so worker copies inherit it.
-    model.max_seq_length = cfg.embedding_max_length
+    def _load(device: str) -> SentenceTransformer:
+        m = SentenceTransformer(
+            cfg.embedder_path.as_posix(),
+            device              = device,
+            local_files_only    = True
+        )
+        # token truncation is the main CPU-speed lever; without this the
+        # model's own max_seq_length (1024+ for bge-m3) applies regardless
+        m.max_seq_length = cfg.embedding_max_length
+        return m
 
-    pool = None
-    if pooled:
-        sprint(f'мульти-GPU кодирование: {len(devices)} воркеров '
-               f'({", ".join(devices)}), чанк пула {cfg.embedding_pool_chunk}',
-               style_code = cfg.output_color_scheme.info)
-        import logging as _logging
+    def _empty(model: SentenceTransformer) -> jp.ndarray:
+        import numpy as _np
+        return jp.asarray(_np.zeros((0, model.get_sentence_embedding_dimension())))
+
+    if len(devices) == 1:
+        model = _load(devices[0])
+
+        def embed(texts: tuple[str, ...]) -> jp.ndarray:
+            if not texts:
+                return _empty(model)
+            emb = model.encode(
+                list(texts),
+                batch_size              = cfg.embedding_batch_size,
+                normalize_embeddings    = True,
+                convert_to_tensor       = False
+            )
+            return jp.asarray(emb)
+
+        embed.progress_chunk = max(1, cfg.embedding_batch_size) * 8
+        embed.close = lambda: None
+        return embed
+
+    from concurrent.futures import ThreadPoolExecutor
+    sprint(f'мульти-GPU кодирование: {len(devices)} реплик модели '
+           f'({", ".join(devices)}), потоки вместо процессов, '
+           f'чанк на реплику {cfg.embedding_pool_chunk}',
+           style_code = cfg.output_color_scheme.info)
+    import logging as _logging
+    _logging.getLogger('ars.embedding').info(
+        'embedding replicas: %d threads on %s, per-replica chunk=%d, batch=%d, '
+        'max_length=%d (multiprocessing is unusable here: the platform wrapper '
+        'is not spawn-safe)', len(devices), list(devices),
+        cfg.embedding_pool_chunk, cfg.embedding_batch_size,
+        cfg.embedding_max_length)
+
+    from time import monotonic as _now
+    executor = ThreadPoolExecutor(max_workers=len(devices),
+                                  thread_name_prefix='laim-embed')
+    # replicas load SEQUENTIALLY, never concurrently: transformers'
+    # from_pretrained enters a process-GLOBAL init context (no_tie_weights
+    # monkey-patch and friends) — concurrent loads race on it and can corrupt
+    # initialization (confirmed by reproduction on the pinned stack).
+    # 8 sequential loads cost ~seconds each, once per run.
+    replicas = []
+    for device in devices:
+        t0 = _now()
+        replicas.append(_load(device))
         _logging.getLogger('ars.embedding').info(
-            'embedding pool: %d workers on %s, pool_chunk=%d, batch=%d, max_length=%d',
-            len(devices), list(devices), cfg.embedding_pool_chunk,
-            cfg.embedding_batch_size, cfg.embedding_max_length)
-        pool = model.start_multi_process_pool(target_devices = list(devices))
+            'embedding replica on %s loaded in %.1fs', device, _now() - t0)
 
-    def embed(texts: tuple[str, ...]) -> jp.ndarray:
-        emb = model.encode(
-            texts,
+    def encode_slice(replica: SentenceTransformer, chunk: list) -> 'jp.ndarray':
+        return replica.encode(
+            chunk,
             batch_size              = cfg.embedding_batch_size,
             normalize_embeddings    = True,
-            convert_to_tensor       = False,
-            **({'pool': pool, 'chunk_size': cfg.embedding_pool_chunk} if pool else {})
+            convert_to_tensor       = False
         )
 
-        return jp.asarray(emb)
+    def embed(texts: tuple[str, ...]) -> jp.ndarray:
+        import numpy as _np
+        items = list(texts)
+        if not items:
+            return _empty(replicas[0])
+        # small calls (the injector encodes a handful of texts at a time):
+        # one replica, no fan-out overhead
+        if len(items) <= cfg.embedding_batch_size:
+            return jp.asarray(encode_slice(replicas[0], items))
+        bounds = _balanced_slices(len(items), len(replicas))
+        futures = [executor.submit(encode_slice, replicas[i], items[a:b])
+                   for i, (a, b) in enumerate(bounds)]
+        parts = [f.result() for f in futures]   # re-raises worker exceptions
+        return jp.asarray(_np.concatenate(parts, axis=0))
 
     # progress-loop sizing for compute_semantic_embeddings: one dispatch must
-    # feed every worker a full pool chunk, or workers idle between dispatches
-    embed.progress_chunk = (cfg.embedding_pool_chunk * len(devices) if pooled
-                            else max(1, cfg.embedding_batch_size) * 8)
+    # hand every replica a full chunk, or replicas idle between dispatches
+    embed.progress_chunk = cfg.embedding_pool_chunk * len(devices)
 
-    if pool is not None:
-        import atexit
-        stop, closed = model.stop_multi_process_pool, []
+    def _close() -> None:
+        """Release worker threads, the replicas and their GPU memory — the
+        embedder is done long before s2 trains, and 8 idle replicas would
+        otherwise sit in torch's allocator cache for the rest of the run."""
+        executor.shutdown(wait=False)
+        replicas.clear()
+        if devices[0].startswith('cuda'):
+            try:
+                _torch.cuda.empty_cache()
+            except Exception:               # releasing memory must never kill a run
+                pass
 
-        def _close() -> None:
-            if not closed:
-                closed.append(True)
-                stop(pool)
-
-        embed.close = _close
-        # workers are daemons (cannot hang exit); atexit stop is the graceful path
-        atexit.register(_close)
-    else:
-        embed.close = lambda: None
-
+    embed.close = _close
     return embed
 
 
@@ -1090,8 +1162,12 @@ def main(
             #spans_w_anoms = fill_missing_values(spans_w_anoms, cfg)
 
             return spans_w_anoms
-        
+
         spans = _inject(spans)
+
+    # инъекция — последний потребитель эмбеддера: освобождаем реплики и VRAM
+    # до обучения s2 (иначе 8 копий модели живут в кэше torch весь прогон)
+    getattr(shared_embedder, 'close', lambda: None)()
 
     traces                          = build_traces(spans, ('sem_vector',), cfg)
     
