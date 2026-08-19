@@ -9,9 +9,12 @@ FMLP autoencoder → reconstruction error → calibrated `p_anomaly`. A supervis
 anomaly-type classifier (s3) and an RCA seam (s4) sit downstream. Deploy target
 is a SberDS-style node platform (`deploy/`), which calls `ars/main.py::main`.
 
-Read in this order: `AUDIT_00_baseline.md` (what the legacy code did),
+Read in this order: `PLAN.md` **"Active threads"** (current state + agreed
+next steps — start here), `AUDIT_00_baseline.md` (what the legacy code did),
 `AUDIT_01_findings.md` (every defect, with IDs used across commits/tests),
 `PLAN.md` + `GAPS.md`, `AUDIT_04_parity.md`, `VALIDATION.md`, `FINAL_REPORT.md`.
+For the SberDS deployment (works end-to-end since 2026-08-14): `deploy/README.md`
+— every platform quirk with its evidence. Experiments: `EXPERIMENTS.md`.
 
 ## Layout
 
@@ -28,7 +31,7 @@ Read in this order: `AUDIT_00_baseline.md` (what the legacy code did),
   Training and inference are separate: train produces `runs/<id>/` (models,
   `manifest.json`, `eval_report.json`); `infer --model-dir runs/<id> --spans f.parquet`
   scores new data (full audit trail + RCA columns).
-- `tests/` — 94 tests; `make test` (fast, CPU, ~3 min warm), `make test-all`
+- `tests/` — 117 tests; `make test` (fast, CPU, ~3 min warm), `make test-all`
   (adds micro-training/integration/latency). Golden pins live in
   `tests/golden/golden.json`; regenerate ONLY with an intended behavior change
   (`make golden`) and explain the diff in the same commit.
@@ -62,9 +65,10 @@ authoritative: 46 fields, sentinels instead of NULL (-1 / -1.0 / False / '' /
   bit-identical (verified across processes). Never use unseeded RNG.
 - The embedding model is fingerprint-pinned (`S1Meta.embedding_fingerprint`);
   serving with a different model directory raises. The real model is
-  `deepvk/USER-bge-m3` (1024-dim); this container used a random-weight
-  stand-in because huggingface.co is network-blocked (OQ-3) — quality numbers
-  with the stand-in measure pipeline mechanics, not semantic quality.
+  `deepvk/USER-bge-m3` (1024-dim) and serves on SberDS via the
+  `path_embedder` port (confirmed in production). Dev containers use a
+  random-weight stand-in because huggingface.co is network-blocked (OQ-3) —
+  local quality numbers measure pipeline mechanics, not semantic quality.
 - Injection labels are a pure hash of trace_id (`planned_trace_labels`), which
   is how train-only feature selection works pre-injection. If you change the
   injector's label assignment, s1 has a hard runtime consistency check that
@@ -89,8 +93,12 @@ test-set model selection (F-02); std+eps latent normalization overflow (F-03);
 anti-calibrated Platt weights (F-04); robust-scale explosion (F-05); u64 hash
 wraparound crashing the injector at scale (F-36). Full list: AUDIT_01.
 
-## Remaining known work (see PLAN.md "Remaining work")
+## Remaining known work (see PLAN.md "Active threads" + "Remaining work")
 
-s3 stacking CV redesign (F-33 documented biases); drift metrics; real-embedder
-GPU validation; deploy payload regeneration (`deploy/nodes/_codebase/data/` is
-not in the repo; `deploy/deploy.py` is empty).
+CURRENT FRONTIER: detection quality on the operator's real corpus (first
+500-epoch run was near-chance — diagnosis and the agreed next experiment are
+in PLAN.md "Active threads"). Feature work queued: expose
+`data.injection_fractions`, wire the dead `scale_floor`/`norm_z_clip` knobs
+(OQ-8). Longer-term: out-of-core s1 for 56 GB corpora; experiment-grid
+parallelism (no-spawn/no-fork constraint, D-4 addendum); s3 stacking CV
+redesign (F-33); drift metrics.

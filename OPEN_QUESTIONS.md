@@ -115,6 +115,22 @@ for bundles over 256 MB (payload embedding is skipped with a warning) and for
 the `model_path` pattern; legacy path-only payloads fail with an actionable
 message instead of `BadZipFile`.
 
+## OQ-8: Two dead UI knobs; injection fractions not exposed
+
+**Found 2026-08-14 during the detector-quality analysis.** (1) The UI/descriptor
+parameters `scale_floor` and `norm_z_clip` map into `laim` config but are NOT
+forwarded by `to_s1_overrides()` — turning those dials does nothing. No quality
+harm today: `S1Config`'s own defaults are the good F-05 values (1e-2 / 20).
+(2) The injection plan (`Plan.fractions`: dpi 4% / ipi 4% / mp 3% /
+hallucination 5% / bias 4% of traces, severity 0.30–1.00) is hardcoded — there
+is no parameter to restrict injected classes or rates, which is the actual
+lever behind "detect only hallucinations" and behind realistic-prevalence
+experiments. **Planned fix (agreed with operator): wire both knobs through
+`to_s1_overrides` and expose `data.injection_fractions`** — config plumbing,
+not an algorithm change.
+
+---
+
 ## OQ-7: Port delivery mode is not uniform (SberDS) — CONFIRMED, both handled
 
 **Confirmed 2026-08-13 21:52 on the main node.** The same data-port

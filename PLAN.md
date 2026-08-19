@@ -83,6 +83,34 @@ pilot results) is flagged in OPEN_QUESTIONS.md — the conservative default is t
 old artifacts remain readable (loader keeps backward compat) but new runs use the
 fixed path.
 
+## Active threads (as of 2026-08-14 — read this first in a new session)
+
+The platform pipeline WORKS END-TO-END (operator-confirmed). The current
+frontier is DETECTION QUALITY on the operator's real corpus (3216 traces,
+single agent, no real labels — metrics measure injected anomalies):
+
+* First 500-epoch run: ROC AUC 0.54, PR AUC 0.36 at ~33% test prevalence —
+  near-chance ranking; threshold tuning cannot help until the score improves.
+* Diagnosis (see the 2026-08-14 session): (a) 87% of traces violate the data
+  contract and trained anyway (gate=warn); (b) the selected EPI feature set
+  collapsed to ~57 variants of `avg_word_length_sem_*` (single-agent corpus +
+  max_correlation=0.999); (c) metrics average 5 injected classes of which
+  ipi/bias were near-chance even in controlled validation — check
+  `eval_report.test.per_anomaly_type` before concluding anything.
+* Agreed next experiment (parameter-only): validation_gate=strict vs warn,
+  min_fill_rate=0.3, max_static_rate=0.99, max_correlation=0.9,
+  embedding_max_length=1024, epochs=500/patience=50, experiments=
+  ["hub_mse_mse_08_4","hub_mse_hub_16_4","hub_mse_hub_32_4_deep"],
+  threshold_metric=select_metric=youden, classifier_enabled=false while
+  iterating. NEVER threshold_metric=recall (degenerates to flag-everything).
+* Planned feature work (OQ-8): expose `data.injection_fractions` (enables
+  hallucination-focused detection + realistic-prevalence studies) and wire
+  the dead `scale_floor`/`norm_z_clip` knobs.
+* Key semantics to not re-derive: norm_*/anom_* ratios are SPLIT fractions
+  (anomalies never enter training); the classifier (s3) is downstream of
+  detection and cannot affect detector metrics; injected share is 20% of
+  traces via `Plan.fractions`.
+
 ## Remaining work (not in this engagement's budget, recorded honestly)
 * s3 nested-CV redesign (M8 long-term); currently guarded, biases documented.
 * Drift metrics / retraining automation (M12) beyond the manifest hooks.
