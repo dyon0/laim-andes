@@ -531,6 +531,40 @@ def test_resolve_bundle_rejects_garbage_file(tmp_path):
         platform.resolve_bundle(f, tmp_path / 'work')
 
 
+def test_resolve_bundle_raw_path_pointer(tmp_path):
+    """Observed 2026-09-17: model_in delivered `unstructured_data` whose
+    CONTENT was an unquoted /tmp/... path (hex 2f746d702f746d70). A live
+    target must resolve; a dead one must explain the wiring causes."""
+    bundle = platform.create_bundle(_fake_run_dir(tmp_path), tmp_path / 'store')
+    live = tmp_path / 'unstructured_data'
+    live.write_text(f'{bundle}\n')                      # raw path, no JSON quoting
+    root = platform.resolve_bundle(live, tmp_path / 'work_live')
+    assert (root / 's2_meta.json').exists()
+
+    dead = tmp_path / 'unstructured_data2'
+    dead.write_text('/tmp/tmpgone123/tmpabc.model_out')
+    with pytest.raises(ValueError, match='model_path|train'):
+        platform.resolve_bundle(dead, tmp_path / 'work_dead')
+
+
+def test_model_out_echo_is_transportable(tmp_path):
+    """Inference must never re-emit a bare local path for a servable source —
+    that is the raw-pointer producer. Payload files pass through; zips are
+    re-embedded; only directories fall back to a path string."""
+    bundle = platform.create_bundle(_fake_run_dir(tmp_path), tmp_path / 'store')
+
+    payload_file = tmp_path / 'tmpx.model_out'
+    payload_file.write_text(json.dumps(platform.bundle_payload(bundle)))
+    echoed = platform.model_out_echo(payload_file)
+    assert isinstance(echoed, dict) and echoed['bundle_b64']
+
+    echoed_zip = platform.model_out_echo(bundle)         # model_path -> zip
+    assert isinstance(echoed_zip, dict) and echoed_zip['bundle_b64']
+
+    extracted = platform.resolve_bundle(bundle, tmp_path / 'w')
+    assert platform.model_out_echo(extracted) == str(extracted)   # dir: path only
+
+
 # ------------------------------------------------------ end-to-end (slow)
 
 @pytest.mark.slow

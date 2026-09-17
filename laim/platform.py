@@ -449,6 +449,28 @@ def bundle_payload(bundle: Path) -> dict:
     return payload
 
 
+def model_out_echo(source: str | Path):
+    """What inference re-emits on `model_out`. It must be TRANSPORTABLE:
+    the old `str(source)` echo was a local path that died with the container,
+    and anything downstream that re-serialized it (a chained inference
+    instance, a platform model-registry object) produced exactly the raw
+    dead-pointer files _bundle_root now guards against (observed
+    2026-09-17: model_in delivered `unstructured_data` containing an
+    unquoted /tmp/... path)."""
+    p = Path(source)
+    try:
+        if p.is_file():
+            if zipfile.is_zipfile(p):
+                return bundle_payload(p)          # model_path pointed at a zip
+            payload = json.loads(p.read_bytes().decode('utf-8'))
+            if isinstance(payload, dict) and payload.get('bundle_b64'):
+                return payload                    # pass the port payload through
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        pass
+    # a directory or an unusable source: the path is all there is to echo
+    return str(source)
+
+
 def _bundle_root(source: Path, workdir: Path) -> Path:
     """Materialize whatever `model_in`/`model_path` points at into an
     extracted bundle directory. Accepted forms: a directory, the bundle zip
@@ -463,13 +485,29 @@ def _bundle_root(source: Path, workdir: Path) -> Path:
             zf.extractall(root)
         return root
     try:
-        payload = json.loads(source.read_text(encoding='utf-8'))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-        with open(source, 'rb') as f:
-            head = f.read(8).hex()
+        raw = source.read_bytes()
+    except OSError as exc:
+        raise ValueError(f'model_in: файл {source} не читается: {exc}') from None
+    payload = None
+    try:
+        payload = json.loads(raw.decode('utf-8'))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        # not JSON — a RAW path text is a known delivery form (observed
+        # 2026-09-17: model_in arrived as `unstructured_data` whose content
+        # was an unquoted /tmp/... path — a pointer into another container)
+        try:
+            text = raw.decode('utf-8').strip()
+        except UnicodeDecodeError:
+            text = ''
+        if text and len(text) < 4096 and '\n' not in text and text.startswith(('/', './')):
+            payload = text
+    if payload is None:
+        preview = raw[:48]
         raise ValueError(
             f'model_in: файл {source} не распознан (не zip, не JSON-пейлоад '
-            f'порта; первые байты {head}). Ожидается бандл режима train.') from None
+            f'порта, не путь; {len(raw)} байт, начало hex={preview.hex()} '
+            f'текст={preview.decode("utf-8", errors="replace")!r}). '
+            f'Ожидается бандл режима train.')
     if isinstance(payload, dict) and payload.get('bundle_b64'):
         data = base64.b64decode(payload['bundle_b64'])
         digest = hashlib.sha256(data).hexdigest()
@@ -490,11 +528,16 @@ def _bundle_root(source: Path, workdir: Path) -> Path:
     if fallback and Path(fallback).exists():
         return _bundle_root(Path(fallback), workdir)
     raise ValueError(
-        f'model_in: пейлоад порта не содержит байтов бандла, а путь {fallback!r} '
-        f'в этом контейнере не существует (бандл жил в контейнере train и умер '
-        f'вместе с ним). Обновите train-инстанс до текущей версии ноды — '
-        f'model_out теперь передаёт бандл прямо через порт — либо задайте '
-        f'model_path на общем хранилище.')
+        f'model_in: пейлоад порта не содержит байтов бандла — только путь '
+        f'{fallback!r}, которого в этом контейнере не существует (он жил в '
+        f'другом, уже умершем контейнере). Типовые причины: (1) train-инстанс '
+        f'работает на старой версии ноды, чей model_out отдавал путь, а не '
+        f'байты; (2) model_in подключён не напрямую к model_out train-инстанса, '
+        f'а через сохранённый объект/реестр моделей платформы, который '
+        f'сохранил только путь; (3) цепочка через model_out inference-инстанса '
+        f'старой версии. Лечение: перевесить model_in напрямую на model_out '
+        f'СВЕЖЕГО запуска train текущей версии ноды, либо задать model_path '
+        f'на общем хранилище.')
 
 
 def resolve_bundle(source: str | Path, workdir: Path) -> Path:
@@ -697,7 +740,7 @@ def run_inference(cfg, params: dict[str, Any]) -> dict:
 
     manifest_data = json.loads((run_dir / 'manifest.json').read_text())
     return {
-        'model_out':                    str(source),
+        'model_out':                    model_out_echo(source),
         'detector_metrics_holdout':     {},   # no labels at inference
         'classifier_metrics_holdout':   {},
         'eval_report':                  {'n_traces_scored': scored.height,

@@ -113,6 +113,18 @@ All notable changes on branch `claude/lumimas-anomaly-refactor-7stpda`
 - Probe node: survives ports delivered as in-memory pandas DataFrames
   (observed in the probe run; reported instead of crashing section 11) and no
   longer spends 6×120 s on the mirror's hanging `pip index versions`.
+- Raw path-pointer delivery on `model_in` handled (observed 2026-09-17:
+  after a month of working runs, `model_in` arrived as `unstructured_data`
+  containing an UNQUOTED `/tmp/...` path — hex `2f746d70...` — a pointer
+  into a dead container; registry-style naming suggests a platform-side
+  change or re-wiring). `_bundle_root` now accepts raw path texts (resolves
+  a live target, and a dead one fails with the three likely wiring causes
+  and both remedies); the unrecognized-file error prints a decoded preview,
+  not just hex. The PRODUCER is fixed too: inference's `model_out` was a
+  bare local path (dead outside its container) — it now re-emits a
+  transportable payload (pass-through of the incoming payload, or
+  re-embedding of a `model_path` zip), so chaining and re-serialization
+  can no longer manufacture dead pointers.
 - Bundles now include the s3 classifier stack (run 2026-08-14 12:21:
   inference scored 875 traces, then died on a missing `models/stack.pkl`).
   s3 artifacts live in `classifier/` — a SIBLING of the s2 `models/` root —
