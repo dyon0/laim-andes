@@ -36,7 +36,7 @@ by laim-andes `ars/stages/s4__rca.py::export_detector_rca`). The main parts:
 | field | meaning |
 |---|---|
 | `agent_id` | which agent's step sequence this record scores (one record per trace × agent) |
-| `scores.p_anomaly` | calibrated probability of an anomaly. The legacy `confidence` is `max(p, 1−p)`, i.e. confidence in the detector's own decision, not in the anomaly |
+| `scores.p_anomaly` | calibrated probability of an anomaly (the record's `confidence` is now `p_anomaly × 100`; detector builds before this fix wrote `max(p, 1−p)` there) |
 | `scores.branch_z` | robust z of each branch's error compared with normal training traces: `behavior` (EPI: timings, lengths, counts, step structure) vs `semantic` (SEM: embedding of step texts) |
 | `scores.flag_share` | split of the flagging (combined) error between the two branches |
 | `scores.logit` | additive decomposition: `p_anomaly = sigmoid(sum(logit))` |
@@ -75,6 +75,61 @@ switched off with `attribution_top_k = 0`) are processed as before.
    detector's signal strength. The disagreements are the most useful labeled
    cases for tuning the detector.
 
+## Optional input: `agent_report` (the agent's development report)
+
+When the port is connected, the agent's development report becomes context for
+the analysis. It is placed once in the system prompt, shared by every batch. The
+LLM is told to check each record against it: violated correctness criteria,
+stop-list phrases, answers outside the agent's competence, and wrong tool
+choices count as anomalies, and `rca` names the violated requirement.
+Fallbacks and scenarios the report describes are not anomalies by themselves.
+With the port empty, the node behaves exactly as without it. If data is
+connected but cannot be read, the run continues without the report and
+`rca_audit.agent_report.error` says why.
+
+**Decision: feed the document itself, not the g-aiva-doc-browser output.**
+doc-browser distills a report for *model validation*: metric and threshold, task
+type, dataset/sample description, a summary, generation hyperparameters, and a
+summarized ML architecture. What RCA needs is what that distillation drops,
+checked against the three example reports:
+- the correctness criteria and "за что штрафуем" lists, with stop-list phrases
+  quoted verbatim («займите у родственников», «возьмите микрозайм»);
+- the competence boundaries («у нашего агента нет компетенций в других темах»);
+- the tool table (`extract_credit_products`, `get_product_conditions`, …),
+  whose names match span names in traces;
+- the class → chain mapping, the fallback stub text («По техническим причинам
+  сейчас я не могу ответить…»), the data-source APIs (ФССК, Исп.П, …), and the
+  expected response time.
+
+The raw document is also cheaper: no extra LLM pipeline (doc-browser makes
+5+ calls and starts a gpt2giga proxy process). Reading it is deterministic, and
+wording is kept exactly as written, which matters when the question is "did
+the agent say a forbidden phrase". doc-browser output is still accepted as a
+fallback, rendered as text, for pipelines that only have that.
+
+Accepted inputs (the format is detected by content, not by file name):
+
+| input | examples |
+|---|---|
+| **.docx** | a local path (including the platform's extension-less `unstructured_data` blob), raw bytes, or doc-browser's own input dict `{"bin": …, "ext": "docx"}` |
+| **HTML** | a Confluence page or export, Word "save as web page" (utf-8 or windows-1251), `.html`/`.htm`, or an HTML string |
+| **MHTML** | Confluence "export to Word" `.doc`, Word "single-file web page" `.mht` |
+| **plain text / Markdown** | a string |
+| **g-aiva-doc-browser output** | `{"all_results": {"bp_card": …}, "extracted_fields": {…}}` or either part alone |
+
+PDF is rejected with a clear message: convert the report to .docx or HTML.
+
+Parsing uses only the standard library (zipfile + XML, `html.parser`, `email`
+for MHTML), so no new requirements. Paragraphs and tables are kept in document
+order; table rows become `| key | value`. The template's unanswered questions
+(«- описание формул…» with no answer), «Заполняется на этапе…» lines, empty
+sections and contact rows (names and emails) are dropped. When the text exceeds
+`report_max_chars` (default 20 000), sections are dropped in an order that keeps
+what describes the agent's behavior: artifacts list, SOTA, pilot, training and
+control datasets, labeling, and so on first; the appendix of prompts last. The
+tail is cut only after that. The largest example report (35K chars) fits into
+17K with its criteria, tools table and fallback stubs intact.
+
 ## Parameters
 
 | parameter | default | meaning |
@@ -86,6 +141,7 @@ switched off with `attribution_top_k = 0`) are processed as before.
 | `mode` | `llm` | `llm`: an LLM failure fails the node (as before). `llm_fallback`: if the LLM is unavailable, records get detector-based RCA. `detector_only`: no LLM calls |
 | `use_detector_evidence` | `true` | send the detector's explanation to the LLM |
 | `keep_uncertain` | `true` | keep records with verdict `uncertain` and records the LLM could not analyze (`unverified`) |
+| `report_max_chars` | `20000` | character budget for the development report in the prompt (used only when `agent_report` is connected) |
 
 ## Outputs
 
@@ -109,7 +165,8 @@ is an object:
 }
 ```
 
-**`rca_audit`** (schema `laim.rca_audit/1`): mode, model, counts per verdict,
+**`rca_audit`** (schema `laim.rca_audit/1`): mode, model, the development report
+used (`agent_report`: source format, size, truncation, or a read error), counts per verdict,
 detector agreement totals, LLM statistics (requests, failures, 429 waits,
 elapsed time, fallback reason), and one decision per **input** record,
 including the ones filtered out. Each decision carries the verdict, confidence,
@@ -152,9 +209,6 @@ model's own analysis sits under `rca_results.rca`.
 
 ## Further upgrade proposals (not implemented)
 
-- **Detector `confidence` semantics** (laim-andes): for flagged records report
-  `p_anomaly × 100`, not `max(p, 1−p) × 100`. A flagged trace with
-  `p_anomaly = 0.3` is currently shown with confidence 70.
 - **Trace-level verdict**: records of one trace are already analyzed together.
   The next step is an explicit per-trace conclusion: which agent is the origin,
   and which agents only propagate the anomaly.

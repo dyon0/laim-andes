@@ -534,13 +534,16 @@ def test_descriptor_matches_entry_point():
 
     params = [c['parameter'] for c in descriptor['ui']['settings'][0]['components'][0]['config']['components']]
     assert params == ['add_info', 'model_id', 'llm_temp', 'max_tokens', 'mode',
-                      'use_detector_evidence', 'keep_uncertain']
+                      'use_detector_evidence', 'keep_uncertain', 'report_max_chars']
     import inspect
     assert set(params) <= set(inspect.signature(rca.main).parameters)
 
     in_ports = [p['name'] for p in descriptor['ports'] if p['in']]
     out_ports = [p['name'] for p in descriptor['ports'] if not p['in']]
-    assert in_ports == ['anom_data']
+    assert in_ports == ['anom_data', 'agent_report']
+    assert set(in_ports) <= set(inspect.signature(rca.main).parameters)
+    report_port = next(p for p in descriptor['ports'] if p['name'] == 'agent_report')
+    assert report_port['required'] is False                       # опциональный вход
     assert set(out_ports) == set(rca.main('[]'))                 # выходы = ключи результата main
     modes = [list(v)[0] for c in descriptor['ui']['settings'][0]['components'][0]['config']['components']
              if c['parameter'] == 'mode' for v in c['allowedValues']]

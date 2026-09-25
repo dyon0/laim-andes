@@ -32,7 +32,7 @@ For the SberDS deployment (works end-to-end since 2026-08-14): `deploy/README.md
   `manifest.json`, `eval_report.json`); `infer --model-dir runs/<id> --spans f.parquet`
   scores new data (full audit trail + RCA columns: `rca_top_*`, index-space
   `rca_attribution` JSON for every trace, and `detector_rca` for flagged traces).
-- `tests/` — 139 tests; `make test` (fast, CPU, ~3 min warm), `make test-all`
+- `tests/` — 140 tests; `make test` (fast, CPU, ~3 min warm), `make test-all`
   (adds micro-training/integration/latency). Golden pins live in
   `tests/golden/golden.json`; regenerate ONLY with an intended behavior change
   (`make golden`) and explain the diff in the same commit.

@@ -25,15 +25,19 @@ import json
 import logging
 import math
 import time
+import zipfile
 from collections import deque
 from typing import Any
+from xml.etree import ElementTree
 
 import httpx
 import requests
 from gigachat.exceptions import GigaChatException
 from langchain_gigachat import GigaChat
 
+from laim_rca import agent_report
 from laim_rca import evidence as detector_evidence
+from laim_rca.agent_report import AgentReport
 from laim_rca.answers import Analysis, extract_items, match
 from laim_rca.prompt import record_view, system_prompt, user_message
 from laim_rca.report import assemble, audit
@@ -142,6 +146,17 @@ def _build_model(model_id: str, llm_temp: float, max_tokens: int) -> SdsChatMode
         timeout=config.llm_params["timeout"],
         verify_ssl_certs=config.verify_ssl_certs,
     )
+
+
+def _load_agent_report(source: Any, max_chars: Any) -> tuple[AgentReport | None, dict | None]:
+    """Опциональный контекст: нет данных — нет контекста; нечитаемые данные не
+    роняют ноду (отчёт — обогащение), причина уходит в аудит и лог."""
+    try:
+        report = agent_report.load(source, max_chars=max(1000, int(float(max_chars or 20_000))))
+    except (ValueError, OSError, KeyError, zipfile.BadZipFile, ElementTree.ParseError) as error:
+        logger.warning("RCA: отчёт о разработке не прочитан, анализ без него: %s", error)
+        return None, {'error': f'{type(error).__name__}: {error}'}
+    return report, (report.audit() if report is not None else None)
 
 
 def _trace_grouped(records: list[dict]) -> list[int]:
@@ -268,17 +283,23 @@ def main(
     mode: str = 'llm',
     use_detector_evidence: bool = True,
     keep_uncertain: bool = True,
+    agent_report: Any = None,
+    report_max_chars: int = 20_000,
 ) -> dict[str, str]:
     """mode: llm — анализ LLM, сбой LLM роняет ноду; llm_fallback — при
     недоступности LLM RCA по сигналу детектора; detector_only — без LLM.
     use_detector_evidence — передавать ли LLM объяснение детектора.
     keep_uncertain — оставлять ли в выходе записи с вердиктом uncertain и
-    непроверенные моделью (с RCA по сигналу детектора)."""
+    непроверенные моделью (с RCA по сигналу детектора).
+    agent_report — ОПЦИОНАЛЬНЫЙ порт: отчёт о разработке агента (.docx,
+    текст или выход g-aiva-doc-browser); если подан — становится контекстом
+    анализа (не более report_max_chars символов)."""
     records = _parse_input(anom_data)
     mode, model_id = _mode(mode), str(model_id).strip()
     with_evidence = _flag(use_detector_evidence, True)
     keep = _flag(keep_uncertain, True)
     evidences = [detector_evidence.parse(record) for record in records]
+    context, context_audit = _load_agent_report(agent_report, report_max_chars)
 
     stats: dict[str, Any] = {"requests": 0, "failed_requests": 0, "throttled": 0,
                              "elapsed_s": 0.0, "fallback": None}
@@ -294,7 +315,8 @@ def main(
             failure = LlmUnavailable(f"RCA: модель {model_id} недоступна: {error}", error)
         if failure is None:
             views = [record_view(i, r, e, with_evidence) for i, (r, e) in enumerate(zip(records, evidences))]
-            analyses, failure = _analyze(records, views, model, model_id, system_prompt(add_info, with_evidence), stats)
+            system = system_prompt(add_info, with_evidence, context.text if context else None)
+            analyses, failure = _analyze(records, views, model, model_id, system, stats)
         stats["elapsed_s"] = round(time.monotonic() - started, 1)
         if failure is not None:
             if mode == 'llm':
@@ -308,5 +330,6 @@ def main(
         analyzed_by=f"llm:{model_id}", keep_uncertain=keep, llm_used=llm_used)
     report = audit(decisions, mode=mode, model_id=model_id, use_detector_evidence=with_evidence,
                    keep_uncertain=keep, llm=stats)
+    report['agent_report'] = context_audit
     logger.info("RCA: записей на входе %d, в выходе %d (%s)", len(records), len(output), report["counts"])
     return {'res': _dump({'anomalies': output}), 'rca_audit': _dump(report)}

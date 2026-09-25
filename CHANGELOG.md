@@ -258,6 +258,27 @@ All notable changes on branch `claude/lumimas-anomaly-refactor-7stpda`
   from `ars`/`laim`). It consumes `test_anomalies` including `detector_rca`.
   See `rca/README.md`.
 
+## Fixed (product contract)
+
+- **`confidence` in `test_anomalies` / `anomaly_traces` is now
+  `p_anomaly × 100`.** It was `detector_confidence × 100` =
+  `max(p, 1−p) × 100`, which measures confidence in the detector's own
+  decision, not in the anomaly. A flagged trace with `p_anomaly = 0.3`
+  (flagged by the reconstruction-error threshold while the calibrated
+  probability disagrees) was reported with confidence 70. It is now 30. The
+  `detector_confidence` column is unchanged, because the s3 classifier is
+  trained on it as a feature.
+
+## Added (LAIM RCA node: development report as context)
+
+- `rca/` gets an optional `agent_report` in-port. The agent's development report
+  (.docx, HTML, MHTML, text, or g-aiva-doc-browser output as a fallback) is
+  parsed with the standard library, cleaned of template boilerplate and PII
+  contacts, fitted to `report_max_chars` by dropping validation-only sections
+  first, and given to the LLM as the reference for how the agent should
+  behave. See `rca/README.md` for the reasoning behind choosing the document
+  over doc-browser output.
+
 ## Archived to `legacy/` (never deleted without a trace)
 
 - `verification.py` (was `ars/tools/reproducibility/`) — orphan module, zero
