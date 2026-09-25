@@ -50,7 +50,9 @@ class Anomalies:
                      .with_columns(
                          pl.col('_t0').cast(pl.Datetime(time_unit = 'ns')).dt.strftime(Anomalies.clock).alias('starttime'),
                          pl.col('_t1').cast(pl.Datetime(time_unit = 'ns')).dt.strftime(Anomalies.clock).alias('endtime'),
-                         (pl.col('detector_confidence') * 100).round().cast(pl.Int64).alias('confidence'))
+                         # confidence OF THE ANOMALY: p_anomaly, not detector_confidence =
+                         # max(p, 1-p) — that read 70 for a flagged trace with p = 0.3
+                         (pl.col('detector_p_anomaly') * 100).round().cast(pl.Int64).alias('confidence'))
                      .drop('_t0', '_t1'))
         absent  = filter(lambda n: n not in timed.columns, Anomalies.blanks)
 

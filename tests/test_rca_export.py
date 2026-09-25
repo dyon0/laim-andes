@@ -184,3 +184,13 @@ def test_rca_node_glossary_covers_every_detector_feature():
     numeric = {fd.name for fd in vars(FeaturesSpan()).values() if isinstance(fd, FeatureDefinition)} \
         - {'sem_text', 'agent_prompt'}                                      # text carriers, never EPI features
     assert numeric - set(glossary.FEATURES) == set()
+
+
+def test_product_confidence_is_the_anomaly_probability():
+    """detector_confidence is max(p, 1-p): a flagged trace with p_anomaly 0.3
+    used to be reported with confidence 70. The product field is p_anomaly."""
+    from ars.main import Anomalies
+    detected = pl.DataFrame({'trace_id': ['t1', 't2'], 'detector_p_anomaly': [0.3, 0.914],
+                             'detector_confidence': [0.7, 0.914]})
+    bounds = pl.DataFrame({'trace_id': ['t1', 't2'], '_t0': [0, 0], '_t1': [1, 1]})
+    assert Anomalies.enrich(detected, bounds)['confidence'].to_list() == [30, 91]
