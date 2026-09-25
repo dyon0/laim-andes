@@ -24,3 +24,23 @@ jobs:
         run: python -m pytest -q -m "not slow and not gpu" --timeout 240
       - name: Full suite
         run: python -m pytest -q -m "not gpu"
+
+  # The LAIM RCA node is a separate SberDS node: its own requirements only,
+  # which also proves it does not depend on ars/laim.
+  rca-node:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: rca
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install node requirements
+        run: |
+          python -m pip install -U pip
+          pip install -r requirements.txt pytest
+      - name: Tests (LLM faked, offline)
+        run: python -m pytest -q

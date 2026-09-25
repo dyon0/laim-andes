@@ -30,13 +30,21 @@ For the SberDS deployment (works end-to-end since 2026-08-14): `deploy/README.md
   `run.py {synth|validate|prepare|train|eval|infer|all} --config configs/default.toml --set …`
   Training and inference are separate: train produces `runs/<id>/` (models,
   `manifest.json`, `eval_report.json`); `infer --model-dir runs/<id> --spans f.parquet`
-  scores new data (full audit trail + RCA columns).
-- `tests/` — 117 tests; `make test` (fast, CPU, ~3 min warm), `make test-all`
+  scores new data (full audit trail + RCA columns: `rca_top_*`, index-space
+  `rca_attribution` JSON for every trace, and `detector_rca` for flagged traces).
+- `tests/` — 139 tests; `make test` (fast, CPU, ~3 min warm), `make test-all`
   (adds micro-training/integration/latency). Golden pins live in
   `tests/golden/golden.json`; regenerate ONLY with an intended behavior change
   (`make golden`) and explain the diff in the same commit.
 - `baseline/` — the frozen legacy baseline and its tooling.
 - `legacy/` — archived dead code (see CHANGELOG.md).
+- `rca/` — the LAIM RCA node: a SEPARATE SberDS node (own descriptor.json,
+  main.py, requirements, tests; imports nothing from ars/laim). It consumes
+  `test_anomalies`, including the `detector_rca` block (schema
+  `laim.detector_rca/1`, built by `s4__rca.export_detector_rca`), filters
+  false positives with an LLM, and writes the RCA. Tests run in their own env:
+  `cd rca && pytest` (see rca/README.md). laim's `tests/test_rca_export.py`
+  guards the contract, including that the node's glossary covers every feature.
 
 ## How to run
 

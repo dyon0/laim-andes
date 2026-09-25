@@ -219,6 +219,45 @@ All notable changes on branch `claude/lumimas-anomaly-refactor-7stpda`
   the manifest (`metrics.gpu_topology`); embedding progress logs now end
   with a total-throughput line.
 
+## Added (RCA export for the downstream LAIM RCA node)
+
+- **`detector_rca` in the product contract.** Every flagged record of
+  `test_anomalies` (and the `anomaly_traces` / `detections.parquet` column of
+  the same name) carries a self-describing JSON block, schema
+  `laim.detector_rca/1` (`ars/stages/s4__rca.py::export_detector_rca`). It
+  holds `agent_id`; `p_anomaly` (the legacy `confidence` is max(p, 1−p));
+  the branch z-scores; the behavior/semantic split of the flagging error;
+  the logit decomposition of `p_anomaly`; the worst behavioral (EPI) spans
+  with their step-level driver features; the worst EPI features, each with
+  its observed vs expected value in feature scale and natural units (ns,
+  chars, counts; log1p inverted where meaningful), a clip flag and the peak
+  span; the worst semantic (SEM) spans; a catalog of the referenced spans
+  resolved from the scored spans file (name, kind, status, timing, attributes,
+  200-char input/output excerpts, sentinels dropped); and per-feature
+  provenance. Legacy record fields are unchanged; `attribution_top_k = 0`
+  switches the whole surface off.
+- `attribution.explain` does one jitted pass per branch, chunked over traces.
+  Span errors use the branch's own training loss, so they decompose the
+  detector's `e_epi` / `e_sem` exactly (Huber branches included). Padding can
+  no longer win a top-k slot: the legacy `rca_top_span_*` lists padded short
+  sequences with meaningless index/0.0 pairs. The legacy lists now come from
+  the same pass and hold model-loss errors (identical for MSE branches).
+  `combined_epi_share` attributes the flagging error to the branch latents.
+- `detect_anomalies(..., feature_names=)` adds `rca_attribution`, the
+  index-space JSON behind `detector_rca`, for every scored trace. Its logit
+  terms reproduce `p_anomaly`. Span drivers are chosen among step-level
+  features: static aggregates are constant across a sequence and cannot
+  localize a step. `feature_provenance()` decodes feature names (base,
+  aggregation, window, log1p, scope).
+- s1 carries `span_ids` through the inference sequences (`build_traces(...,
+  carry_span_ids=True)`), so span indices map to span ids exactly instead of
+  by re-sorting the spans file. `detect_anomalies` drops the column from its
+  output.
+- `rca/`: the upgraded LAIM RCA node (a separate SberDS node: its own
+  `descriptor.json`, `main.py`, requirements and tests; it imports nothing
+  from `ars`/`laim`). It consumes `test_anomalies` including `detector_rca`.
+  See `rca/README.md`.
+
 ## Archived to `legacy/` (never deleted without a trace)
 
 - `verification.py` (was `ars/tools/reproducibility/`) — orphan module, zero

@@ -39,7 +39,12 @@ One node type, two modes (`mode` UI parameter):
   to a zip/dir on storage) + `path_traces_infer` → verifies the sha256,
   scores every trace (full audit trail + RCA attribution) and emits the
   product contract (`anomaly_traces` dataframe, `test_anomalies` JSON —
-  field-compatible with the legacy end2end node).
+  field-compatible with the legacy end2end node). Flagged records add a
+  `detector_rca` object (schema `laim.detector_rca/1`): agent, p_anomaly,
+  branch split, the deviating spans and features. Wire `test_anomalies` into
+  the **LAIM RCA** node (`rca/`, a separate node built from its own repo) to
+  get LLM-verified anomalies with root causes; `attribution_top_k = 0` turns
+  the block off.
 
 Ports unused by the selected mode are declared `required: false` and can stay
 unconnected. Instantiate the same node twice in a project to build the
