@@ -1,6 +1,8 @@
+import  re
+
 from    typing                      import ClassVar, Callable
 from    dataclasses                 import dataclass, field
-from    functools                   import partial, reduce
+from    functools                   import cache, partial, reduce
 from    itertools                   import product, chain, starmap, groupby
 from    inspect                     import signature
 
@@ -402,3 +404,40 @@ class FeaturesSpan:
         keys, directions    = zip(*feature_cfg.objects_order)
 
         return reduce(partial(self._apply_stage, feature_cfg), stages, df.sort(keys, descending = directions))
+
+
+# имена агрегатов: _static (`{name}_{agg}`, `{name}_q{Q}`) и _dynamic
+# (`{name}_rolling_{agg}_w{W}`, `{name}_rolling_q{Q}_w{W}`)
+_AGG_SUFFIX = re.compile(
+    r'_(?:(?P<static>max|min|mean|std|sum|q\d+)|rolling_(?P<rolling>max|min|mean|std|sum|q\d+)_w(?P<window>\d+))')
+
+
+@cache
+def _feature_definitions() -> dict[str, FeatureDefinition]:
+    return {fd.name: fd for fd in vars(FeaturesSpan()).values() if isinstance(fd, FeatureDefinition)}
+
+
+def feature_provenance(name: str) -> dict:
+    '''происхождение EPI-признака по имени колонки (для RCA-экспорта):
+    base (исходный признак), aggregation (None | max | q75 | rolling_mean ...),
+    window (окно rolling-агрегата), log1p (значения в log1p-шкале),
+    scope: 'step' — значение своё у каждого шага (сам признак, rolling-агрегат),
+    'sequence' — статический агрегат по всей последовательности агента,
+    одинаковый на всех её шагах (локализует трассу, но не шаг).
+    'duration_diff_rolling_q75_w5' -> base 'duration_diff', aggregation
+    'rolling_q75', window 5 (самое длинное совпадение базы побеждает)'''
+    definitions = _feature_definitions()
+    for base in sorted(definitions, key = len, reverse = True):
+        if name == base:
+            # include_in_sequence=False признаки считаются over('trace_id')
+            return {'base': base, 'aggregation': None, 'window': None,
+                    'log1p': definitions[base].log_transform,
+                    'scope': 'step' if definitions[base].include_in_sequence else 'sequence'}
+        if name.startswith(base + '_') and (m := _AGG_SUFFIX.fullmatch(name[len(base):])):
+            rolling = m.group('rolling')
+            return {'base': base,
+                    'aggregation': f'rolling_{rolling}' if rolling else m.group('static'),
+                    'window': int(m.group('window')) if rolling else None,
+                    'log1p': definitions[base].log_transform,
+                    'scope': 'step' if rolling else 'sequence'}
+    return {'base': name, 'aggregation': None, 'window': None, 'log1p': False, 'scope': 'step'}

@@ -367,7 +367,16 @@ def cmd_infer(cfg: RunConfig, run_dir: Path, manifest: Manifest,
         # F-27: full audit trail — every trace scored, detections flagged;
         # M11: attribution surface for RCA
         scored = detect_anomalies(lf, s2_meta, only_anomalies=False,
-                                  attribution_top_k=cfg.eval.attribution_top_k).collect()
+                                  attribution_top_k=cfg.eval.attribution_top_k,
+                                  feature_names=s1_meta.epi_features).collect()
+        if 'rca_attribution' in scored.columns:
+            # flagged traces get the product-facing detector_rca block: span
+            # indices resolved against the scored spans, features named
+            from ars.specification.spec import recast
+            from ars.stages.s4__rca import export_detector_rca
+            spans_lf = pl.scan_parquet(spans_path)
+            scored = export_detector_rca(
+                scored, recast(spans_lf) if cfg.runtime.recast else spans_lf, s1_meta)
     out_path = run_dir / 'detections.parquet'
     scored.write_parquet(out_path)
     manifest.record_artifact('detections', out_path)

@@ -59,3 +59,20 @@ def test_full_pipeline_on_fixture(standin_embedder, fixture_spans, tmp_path):  #
     assert 'rca_top_span_indices' in detections.columns  # RCA seam present
     p = detections['detector_p_anomaly']
     assert bool(((p > 0) & (p < 1)).all())
+
+    # M11 export: index-space attribution for every trace, detector_rca for flagged ones
+    import math
+    for row in detections.iter_rows(named=True):
+        attribution = json.loads(row['rca_attribution'])
+        scores = attribution['scores']
+        logit = sum(scores['logit'].values())       # the decomposition reproduces p_anomaly
+        assert abs(1 / (1 + math.exp(-logit)) - row['detector_p_anomaly']) < 1e-3
+        assert scores['e_epi'] == pytest.approx(row['detector_e_epi'], rel=1e-4)
+        assert all(0 <= s['i'] < attribution['n_scored'] and s['id'] for s in attribution['epi_spans'])
+        assert row['rca_top_span_indices'] == [s['i'] for s in attribution['epi_spans']]
+        assert (row['detector_rca'] is not None) == row['detector_is_anomaly']
+        if row['detector_rca'] is not None:
+            rca = json.loads(row['detector_rca'])
+            assert rca['schema'] == 'laim.detector_rca/1' and rca['agent_id'] == row['agent_id']
+            assert set(rca['spans']) <= {s['id'] for s in attribution['epi_spans'] + attribution['sem_spans']} \
+                | {f['peak_id'] for f in attribution['epi_features']}

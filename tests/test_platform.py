@@ -618,6 +618,8 @@ def test_platform_train_then_inference(standin_embedder, fixture_spans, tmp_path
     for rec in payload['anomalies']:      # legacy product contract fields
         assert {'trace_id', 'starttime', 'endtime', 'confidence',
                 'anomaly_type'} <= set(rec)
+        # attribution is on by default: the RCA node gets the detector's explanation
+        assert rec['detector_rca']['schema'] == 'laim.detector_rca/1'
     df = inference['anomaly_traces']
     assert hasattr(df, 'to_dict')          # pandas frame for the dataframe port
 
