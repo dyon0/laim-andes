@@ -45,6 +45,10 @@ For the SberDS deployment (works end-to-end since 2026-08-14): `deploy/README.md
   false positives with an LLM, and writes the RCA. Tests run in their own env:
   `cd rca && pytest` (see rca/README.md). laim's `tests/test_rca_export.py`
   guards the contract, including that the node's glossary covers every feature.
+- `anomaly_report/` — the LAIM anomaly report node: a SEPARATE SberDS node
+  (stdlib only) that renders the RCA node's `res` (or `test_anomalies`) into
+  the HTML report. It hides anomaly types when s3 did not run (empty
+  `anomaly_type`). Tests: `cd anomaly_report && pytest`.
 
 ## How to run
 

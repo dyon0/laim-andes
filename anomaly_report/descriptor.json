@@ -1,0 +1,135 @@
+{
+  "id": "7b078140-ba7a-4a97-8408-31b0f821f207",
+  "name": "LAIM anomaly report",
+  "description": "Отчёт по аномалиям детектора (порт test_anomalies) в стиле шаблона обратной связи Владельца",
+  "fullDescription": "Принимает выход детектора аномалий (или ноды LAIM RCA) — JSON со списком аномалий — и формирует самодостаточный html: описание показателей (типы аномалий, шкала confidence), сводка, карточки срабатываний с confidence ≥ порога (trace_id, время, тип, confidence, запрос/ответ, RCA, тех. детали). Если классификатор типов детектора (s3) отключён, блоки о типах аномалий не показываются. Записи тестов дрифта/КМ не показываются. Без JS.",
+  "ui": {
+    "settings": [
+      {
+        "page": "General",
+        "title": "General",
+        "components": [
+          {
+            "type": "form",
+            "label": "Настройки отчёта",
+            "config": {
+              "components": [
+                {
+                  "parameter": "min_confidence",
+                  "label": "Минимальный confidence аномалии для включения в отчёт (0–100)",
+                  "uiComponent": "input",
+                  "type": "integer",
+                  "defaultValue": 75
+                },
+                {
+                  "parameter": "anomaly_types",
+                  "label": "anomaly_types — типы аномалий: auto (показывать, только если классификатор детектора s3 включён), show, hide",
+                  "uiComponent": "select",
+                  "placeholder": "Select value",
+                  "defaultValue": "auto",
+                  "allowedValues": [
+                    {
+                      "auto": "auto"
+                    },
+                    {
+                      "show": "show"
+                    },
+                    {
+                      "hide": "hide"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Results",
+      "components": [
+        {
+          "label": "Результат",
+          "type": "semaphore",
+          "config": {
+            "datasets": [
+              {
+                "value": "$.all_results.calculated_traffic_lights.test_light",
+                "title": "$.all_results.calculated_traffic_lights.semaphore_title"
+              }
+            ]
+          },
+          "order": 1,
+          "showOnWorkflow": true
+        },
+        {
+          "type": "html",
+          "label": "Отчёт по аномалиям",
+          "uiComponent": "html",
+          "parameter": "$.anomaly_report",
+          "config": {
+            "datasets": [
+              {
+                "data": "$.anomaly_report"
+              }
+            ]
+          },
+          "order": 2
+        }
+      ]
+    },
+    "uiResults": {
+      "semaphore": {
+        "port": "all_results",
+        "dataKey": "color"
+      }
+    }
+  },
+  "ports": [
+    {
+      "name": "test_anomalies",
+      "label": "test_anomalies",
+      "in": true,
+      "type": "default",
+      "shape": "shape_model",
+      "description": "Выход детектора аномалий: JSON {\"anomalies\": [...]}",
+      "required": true,
+      "order": 1
+    },
+    {
+      "name": "anomaly_report",
+      "label": "anomaly_report",
+      "in": false,
+      "type": "hidden",
+      "shape": "shape_model",
+      "description": "HTML-отчёт по найденным аномалиям",
+      "order": 2
+    },
+    {
+      "name": "all_results",
+      "label": "all_results",
+      "in": false,
+      "type": "default",
+      "shape": "shape_model",
+      "description": "JSON-сводка: total, shown, min_confidence, unique_traces, types, by_type, shown_by_type",
+      "order": 3
+    }
+  ],
+  "script": {
+    "type": "python",
+    "baseImageKey": "py312-simple",
+    "deployType": "docker",
+    "runConfiguration": {
+      "sourceFiles": [
+        "main.py"
+      ],
+      "functionName": "main",
+      "functionParameters": [],
+      "output": {
+        "type": "json",
+        "output": []
+      }
+    }
+  },
+  "shape": "other"
+}

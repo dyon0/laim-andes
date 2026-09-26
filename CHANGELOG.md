@@ -279,6 +279,15 @@ All notable changes on branch `claude/lumimas-anomaly-refactor-7stpda`
   behave. See `rca/README.md` for the reasoning behind choosing the document
   over doc-browser output.
 
+## Added (LAIM anomaly report node)
+
+- `anomaly_report/`: the final HTML report node, as a separate SberDS node.
+  When s3 (the anomaly-type classifier) did not run, type descriptions, type
+  stats/distribution and type badges are hidden (`anomaly_types = auto |
+  show | hide`). The «Автономный мониторинг ИИ-агентов · Детектор аномалий»
+  header and the "requires owner markup" messages are removed. The RCA node's
+  structured `rca_results` renders as readable text.
+
 ## Archived to `legacy/` (never deleted without a trace)
 
 - `verification.py` (was `ars/tools/reproducibility/`) — orphan module, zero
