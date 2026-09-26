@@ -370,6 +370,7 @@ padding:28px 32px 40px;-webkit-font-smoothing:antialiased}
 .laim-ar .detail-label .source-tag{font-family:var(--font-mono);font-size:9px;background:var(--blue-light);color:var(--blue);padding:2px 6px;border-radius:3px;letter-spacing:.04em;font-weight:500;text-transform:none}
 .laim-ar .detail-content{font-family:var(--font-mono);font-size:12px;background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;line-height:1.6;word-break:break-word;white-space:pre-wrap}
 .laim-ar .detail-content.blank{min-height:34px}
+.laim-ar .detail-content a.trace-ref{color:var(--blue);text-decoration:underline dotted}
 .laim-ar .hist{border:1px dashed var(--border);border-radius:var(--radius-sm);padding:10px 12px;background:var(--surface)}
 .laim-ar .hist-list{display:flex;flex-direction:column;gap:6px}
 .laim-ar .hist-turn{display:grid;grid-template-columns:52px 1fr;gap:10px;font-size:12.5px;line-height:1.45}
@@ -514,7 +515,7 @@ def _summary_section(shown: list[dict], with_types: bool = True) -> str:
     return "".join(parts)
 
 
-def _card(n: int, row: dict, with_types: bool = True) -> str:
+def _card(n: int, row: dict, with_types: bool = True, cards: dict[str, int] | None = None) -> str:
     code = normalize_type(row.get("anomaly_type"))
     conf = _conf(row)
     trace = str(row.get("trace_id") or "—")
@@ -530,7 +531,7 @@ def _card(n: int, row: dict, with_types: bool = True) -> str:
     body.append('<div class="dialogue-grid">'
                 + _dialogue("Запрос пользователя", "user", row.get("user_query"))
                 + _dialogue("Ответ агента", "agent", row.get("agent_response")) + "</div>")
-    body.append(_rca_block(row.get("rca_results")))
+    body.append(_rca_block(row.get("rca_results"), cards, trace))
     tech = human_text(row.get("tech_details"))
     comment = human_text(row.get("_comment"))
     text = (tech + ("\n" + comment if comment else "")).strip()
@@ -539,7 +540,7 @@ def _card(n: int, row: dict, with_types: bool = True) -> str:
                     '<span class="source-tag">детектор</span></div>'
                     f'<div class="detail-content">{_e(text)}</div></div>')
     return (
-        f'<article class="anomaly-card" style="border-left-color:{color}">'
+        f'<article class="anomaly-card" id="{_card_anchor(trace)}" style="border-left-color:{color}">'
         f'<div class="anomaly-head"><span class="anomaly-num">#{n:03d}</span>'
         f'<div class="anomaly-id-block"><span class="anomaly-trace-id" title="{_e(trace)}">{_e(trace)}</span>'
         f'<span class="anomaly-timestamp">{_e(_timestamp(row.get("starttime"), row.get("endtime")))}</span></div>'
@@ -700,18 +701,34 @@ def rca_text(value: Any) -> tuple[str, list[str]]:
         if location.get("agent_id"):
             where += f", агент {location['agent_id']}"
         text += f"\nГде: {where}"
-    evidence = value.get("detector_evidence") if isinstance(value.get("detector_evidence"), dict) else {}
-    hypothesis = evidence.get("hypothesis")
-    if hypothesis and hypothesis not in text:
-        text += f"\nСигнал детектора: {hypothesis}"
     return text.strip(), tags
 
 
-def _rca_block(value: Any) -> str:
+_HEX_ID = re.compile(r"\b[0-9a-fA-F]{8,64}\b")
+
+
+def _card_anchor(trace: str) -> str:
+    return "trace-" + re.sub(r"[^0-9A-Za-z_-]", "", trace)
+
+
+def _link_traces(escaped: str, cards: dict[str, int], own: str) -> str:
+    """trace_id других аномалий в тексте RCA (целиком или префиксом от 8 символов)
+    → ссылка на их карточку в отчёте: «6fdbccc1… (#009)»."""
+    def link(match: re.Match) -> str:
+        token = match.group(0)
+        target = next((t for t in cards if t.lower().startswith(token.lower())), None)
+        if target is None or target == own:
+            return token
+        return f'<a class="trace-ref" href="#{_card_anchor(target)}">{token} (#{cards[target]:03d})</a>'
+    return _HEX_ID.sub(link, escaped)
+
+
+def _rca_block(value: Any, cards: dict[str, int] | None = None, own: str = "") -> str:
     text, tags = rca_text(value)
     tag_html = "".join(f'<span class="source-tag">{_e(t)}</span>' for t in tags)
+    body = _link_traces(_e(text), cards or {}, own)
     return ('<div><div class="detail-label">RCA — потенциальная причина <span class="source-tag">RCA</span>'
-            f'{tag_html}</div><div class="detail-content{"" if text else " blank"}">{_e(text)}</div></div>')
+            f'{tag_html}</div><div class="detail-content{"" if text else " blank"}">{body}</div></div>')
 
 
 def _cards_section(shown: list[dict], with_types: bool = True) -> str:
@@ -725,7 +742,8 @@ def _cards_section(shown: list[dict], with_types: bool = True) -> str:
                      '<p>Детектор не отметил ни одного трейса как аномальный.</p></div>')
     else:
         parts.append('<div class="anomaly-list">')
-        parts.extend(_card(i + 1, row, with_types) for i, row in enumerate(shown))
+        cards = {str(row.get("trace_id")): i + 1 for i, row in enumerate(shown) if row.get("trace_id")}
+        parts.extend(_card(i + 1, row, with_types, cards) for i, row in enumerate(shown))
         parts.append("</div>")
     parts.append("</section>")
     return "".join(parts)

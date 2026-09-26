@@ -80,6 +80,21 @@
                   "uiComponent": "input",
                   "type": "integer",
                   "defaultValue": 20000
+                },
+                {
+                  "parameter": "evidence_detail",
+                  "label": "evidence_detail — сигнал детектора для LLM: brief (вероятность и подозрительные шаги с фрагментами) или full (ещё признаки, отклонения, гипотеза)",
+                  "uiComponent": "select",
+                  "placeholder": "Select value",
+                  "defaultValue": "brief",
+                  "allowedValues": [
+                    {
+                      "brief": "brief"
+                    },
+                    {
+                      "full": "full"
+                    }
+                  ]
                 }
               ]
             }

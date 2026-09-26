@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from laim_rca.answers import Analysis
@@ -44,6 +45,21 @@ def _location(analysis: Analysis | None, evidence: Evidence | None) -> dict | No
     return evidence.location() if evidence is not None else None
 
 
+_HEX_ID = re.compile(r'\b[0-9a-fA-F]{8,64}\b')
+
+
+def _mentioned_traces(rca: Any, known: list[str], own: Any) -> list[str]:
+    """trace_id других записей, на которые ссылается причина (целиком или по
+    префиксу от 8 символов: «6fdbccc1…») — для перекрёстных ссылок в отчёте."""
+    text = rca if isinstance(rca, str) else json.dumps(rca, ensure_ascii=False)
+    found = []
+    for token in _HEX_ID.findall(text):
+        match = next((t for t in known if t.lower().startswith(token.lower())), None)
+        if match and match != str(own) and match not in found:
+            found.append(match)
+    return found
+
+
 def _agreement(verdict: str, evidence: Evidence | None) -> str | None:
     """Согласие LLM с силой сигнала детектора — обратная связь для детектора."""
     if evidence is None or evidence.strength is None or verdict not in ('anomaly', 'normal'):
@@ -66,6 +82,7 @@ def assemble(records: list[dict], evidences: list[Evidence | None], analyses: di
              analyzed_by: str, keep_uncertain: bool, llm_used: bool) -> tuple[list[dict], list[dict]]:
     """(выходные записи в исходном порядке, решения по всем записям для аудита)."""
     output, decisions = [], []
+    known_traces = [str(r.get('trace_id')) for r in records if r.get('trace_id')]
     for index, (record, evidence) in enumerate(zip(records, evidences)):
         analysis = analyses.get(index)
         verdict = analysis.verdict if analysis is not None else 'unverified'
@@ -84,6 +101,8 @@ def assemble(records: list[dict], evidences: list[Evidence | None], analyses: di
         }
         if (location := _location(analysis, evidence)) is not None:
             results['location'] = location
+        if (mentioned := _mentioned_traces(rca, known_traces, record.get('trace_id'))):
+            results['related_traces'] = mentioned
         if evidence is not None:
             results['detector_evidence'] = evidence.output_view()
         results['analyzed_by'] = analyzed_by if analysis is not None else 'detector'

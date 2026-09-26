@@ -130,6 +130,38 @@ control datasets, labeling, and so on first; the appendix of prompts last. The
 tail is cut only after that. The largest example report (35K chars) fits into
 17K with its criteria, tools table and fallback stubs intact.
 
+## Cross-trace analysis and concise RCA
+
+Feedback on the first upgrade: explanations got long and hard to read, and the
+model stopped relating traces to each other. The previous simple version had
+done that well (e.g. «агент не нашёл ГБК, хотя в трейсе 6fdbccc1… дал
+расшифровку»). What changed since:
+
+- **Related records** (`laim_rca/related.py`, deterministic, over the whole
+  input). Each record's query terms are matched against the queries and
+  answers of all other records. Terms are codes (`DFA_OPER_FEE_SC_WD`,
+  `47109.99`, `П3399`), abbreviations (`ГБК`, matched case-insensitively,
+  so «крюл» finds «КРЮЛ») and significant words. A link requires a shared code
+  or at least two shared words, weighted by IDF, so words common to the whole
+  agent never link. Each record gets up to 3 `related` traces (trace_id, query,
+  answer) in the prompt, including ones processed in another batch. Batches are
+  ordered so linked records travel together.
+- **Prompt:** a dedicated step to compare records ("found here, «not found»
+  there", different expansions of one term, the same failure repeated) and to
+  cite trace_ids.
+- **`rca` format** is back to the proven short form, one string of at most
+  600 characters: «КАТЕГОРИЯ: суть с фактами и trace_id. Возможные причины:
+  1) …; 2) …; 3) …», with a fixed category list (ГАЛЛЮЦИНАЦИЯ, ПРОТИВОРЕЧИЕ
+  МЕЖДУ ТРЕЙСАМИ, НЕПОЛНЫЙ ОТВЕТ, ВЫХОД ЗА ТЕМАТИКУ, …). `add_info` can still
+  define another format.
+- **Detector signal in the prompt is brief by default**
+  (`evidence_detail = brief`): probability, signal, and the suspicious steps
+  with excerpts. It no longer includes feature numbers or a generated
+  hypothesis, which the model used to paraphrase instead of explaining.
+  `full` restores them.
+- `rca_results.related_traces` lists the other traces the RCA cites. The
+  report node links those trace_ids to their cards.
+
 ## Parameters
 
 | parameter | default | meaning |
@@ -141,6 +173,7 @@ tail is cut only after that. The largest example report (35K chars) fits into
 | `mode` | `llm` | `llm`: an LLM failure fails the node (as before). `llm_fallback`: if the LLM is unavailable, records get detector-based RCA. `detector_only`: no LLM calls |
 | `use_detector_evidence` | `true` | send the detector's explanation to the LLM |
 | `keep_uncertain` | `true` | keep records with verdict `uncertain` and records the LLM could not analyze (`unverified`) |
+| `evidence_detail` | `brief` | detector signal shown to the LLM: `brief` (probability, suspicious steps with excerpts) or `full` (plus feature deviations and the detector hypothesis) |
 | `report_max_chars` | `20000` | character budget for the development report in the prompt (used only when `agent_report` is connected) |
 
 ## Outputs

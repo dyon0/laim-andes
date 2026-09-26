@@ -44,15 +44,27 @@ def test_prompt_separates_instructions_from_data(fake_llm):
     assert 'rca_results' not in view                                  # пустой слот не шлётся
 
 
-def test_detector_evidence_replaces_raw_detector_rca_in_prompt(fake_llm):
+def test_detector_evidence_is_brief_by_default(fake_llm):
     run([anomaly(0, detector_rca=detector_rca())])
 
-    system = fake_llm.calls[0][0][1]
     view = sent_views(fake_llm.calls[0])[0]
     assert 'detector_rca' not in view
     evidence = view['detector_evidence']
     assert evidence['p_anomaly'] == 0.93 and evidence['agent_id'] == 'agent-1'
-    assert evidence['suspicious_spans'][0]['span_id'] == 's-tool'
+    assert evidence['suspicious_spans'][0]['name'] == 'get_rate'
+    assert evidence['suspicious_spans'][0]['output'] == '{"rate": 22.5}'
+    # никаких чисел признаков и гипотез — модель их пересказывает вместо причины
+    for key in ('hypothesis', 'deviating_features'):
+        assert key not in evidence
+    assert 'why' not in evidence['suspicious_spans'][0] and 'deviation' not in evidence['suspicious_spans'][0]
+    assert 'Не пересказывай в rca числа' in fake_llm.calls[0][0][1]
+
+
+def test_detector_evidence_full_detail(fake_llm):
+    run([anomaly(0, detector_rca=detector_rca())], evidence_detail='full')
+
+    system = fake_llm.calls[0][0][1]
+    evidence = sent_views(fake_llm.calls[0])[0]['detector_evidence']
     assert 'длительность вызова инструмента' in evidence['suspicious_spans'][0]['why'][0]
     assert '12.3 с при ожидаемых ~400 мс' in evidence['suspicious_spans'][0]['why'][0]
     assert 'suspicious_spans' in system and 'p_anomaly' in system
@@ -534,7 +546,7 @@ def test_descriptor_matches_entry_point():
 
     params = [c['parameter'] for c in descriptor['ui']['settings'][0]['components'][0]['config']['components']]
     assert params == ['add_info', 'model_id', 'llm_temp', 'max_tokens', 'mode',
-                      'use_detector_evidence', 'keep_uncertain', 'report_max_chars']
+                      'use_detector_evidence', 'keep_uncertain', 'report_max_chars', 'evidence_detail']
     import inspect
     assert set(params) <= set(inspect.signature(rca.main).parameters)
 
@@ -548,3 +560,49 @@ def test_descriptor_matches_entry_point():
     modes = [list(v)[0] for c in descriptor['ui']['settings'][0]['components'][0]['config']['components']
              if c['parameter'] == 'mode' for v in c['allowedValues']]
     assert tuple(modes) == rca.MODES
+
+
+# --- связи между трейсами -----------------------------------------------------
+
+def linked_records() -> list[dict]:
+    return [
+        anomaly(0, trace_id='aaaa1111bbbb2222', user_query='Что такое ГБК?',
+                agent_response='В базе знаний не найдена расшифровка аббревиатуры ГБК.'),
+        anomaly(1, trace_id='cccc3333dddd4444', user_query='Посчитай от 0 до 100', agent_response='Не могу.'),
+        anomaly(2, trace_id='eeee5555ffff6666', user_query='Что такое ГБК?',
+                agent_response='ГБК — это Главный бухгалтерский комплекс.'),
+        anomaly(3, trace_id='9999888877776666', user_query='Как исправить ошибку с кодом NOT_FOUND?',
+                agent_response='Проверьте запрос.'),
+    ]
+
+
+def test_related_traces_are_in_the_prompt_and_in_one_batch(fake_llm):
+    run(linked_records())
+
+    views = {v['trace_id']: v for m in fake_llm.calls for v in sent_views(m)}
+    related = views['aaaa1111bbbb2222']['related']
+    assert related == [{'trace_id': 'eeee5555ffff6666', 'user_query': 'Что такое ГБК?',
+                        'agent_response': 'ГБК — это Главный бухгалтерский комплекс.'}]
+    assert 'related' not in views['cccc3333dddd4444']           # не с чем связать
+    assert 'related' not in views['9999888877776666']           # общее слово «кодом»/«ошибку» — не связь
+    first = [v['trace_id'] for v in sent_views(fake_llm.calls[0])]
+    assert first[:2] == ['aaaa1111bbbb2222', 'eeee5555ffff6666']  # связанные — рядом, в одном пакете
+    system = fake_llm.calls[0][0][1]
+    assert 'Сравни запись с related' in system and 'ПРОТИВОРЕЧИЕ МЕЖДУ ТРЕЙСАМИ' in system
+
+
+def test_referenced_traces_are_recorded(fake_llm):
+    def cross(messages):
+        return results([{'id': v['id'], 'verdict': 'anomaly',
+                         'rca': ('ПРОТИВОРЕЧИЕ МЕЖДУ ТРЕЙСАМИ: «не найдено», хотя в трейсе eeee5555… '
+                                 'дана расшифровка. Возможные причины: 1) поиск; 2) формулировка.')
+                         if v['trace_id'] == 'aaaa1111bbbb2222' else 'ГАЛЛЮЦИНАЦИЯ: см. aaaa1111bbbb2222'}
+                        for v in sent_views(messages)])
+    fake_llm.behavior = staticmethod(cross)
+
+    out = {a['trace_id']: a['rca_results'] for a in run(linked_records())}
+
+    assert out['aaaa1111bbbb2222']['related_traces'] == ['eeee5555ffff6666']   # по префиксу
+    assert out['eeee5555ffff6666']['related_traces'] == ['aaaa1111bbbb2222']
+    assert 'related_traces' not in out['cccc3333dddd4444'] or out['cccc3333dddd4444']['related_traces'] == [
+        'aaaa1111bbbb2222']

@@ -40,6 +40,7 @@ from laim_rca import evidence as detector_evidence
 from laim_rca.agent_report import AgentReport
 from laim_rca.answers import Analysis, extract_items, match
 from laim_rca.prompt import record_view, system_prompt, user_message
+from laim_rca.related import find_related, processing_order, related_view
 from laim_rca.report import assemble, audit
 from llm.config import ModelsConfig
 from llm.sds_chat_model import DEFAULT_TIMEOUT_SECONDS, SdsChatModel
@@ -203,11 +204,11 @@ def _ask(model: SdsChatModel | GigaChat, system: str, views: list[dict]) -> list
 
 
 def _analyze(records: list[dict], views: list[dict], model: SdsChatModel | GigaChat, model_id: str,
-             system: str, stats: dict) -> tuple[dict[int, Analysis], LlmUnavailable | None]:
+             system: str, stats: dict, order: list[int] | None = None) -> tuple[dict[int, Analysis], LlmUnavailable | None]:
     """Адаптивные пакеты: сбой — пакет делится пополам, успехи — размер растёт
     обратно; пропущенные моделью записи возвращаются в очередь."""
     sizes = [len(_dump(view).encode("utf-8")) + 1 for view in views]
-    pending = deque(_trace_grouped(records))
+    pending = deque(order if order is not None else _trace_grouped(records))
     analyses: dict[int, Analysis] = {}
     attempts: dict[int, int] = {}
     misses: dict[int, int] = {}
@@ -285,6 +286,7 @@ def main(
     keep_uncertain: bool = True,
     agent_report: Any = None,
     report_max_chars: int = 20_000,
+    evidence_detail: str = 'brief',
 ) -> dict[str, str]:
     """mode: llm — анализ LLM, сбой LLM роняет ноду; llm_fallback — при
     недоступности LLM RCA по сигналу детектора; detector_only — без LLM.
@@ -293,7 +295,9 @@ def main(
     непроверенные моделью (с RCA по сигналу детектора).
     agent_report — ОПЦИОНАЛЬНЫЙ порт: отчёт о разработке агента (.docx,
     текст или выход g-aiva-doc-browser); если подан — становится контекстом
-    анализа (не более report_max_chars символов)."""
+    анализа (не более report_max_chars символов).
+    evidence_detail — brief: LLM видит из сигнала детектора только вероятность и
+    подозрительные шаги с фрагментами; full — ещё признаки, отклонения и гипотезу."""
     records = _parse_input(anom_data)
     mode, model_id = _mode(mode), str(model_id).strip()
     with_evidence = _flag(use_detector_evidence, True)
@@ -314,9 +318,14 @@ def main(
                 raise
             failure = LlmUnavailable(f"RCA: модель {model_id} недоступна: {error}", error)
         if failure is None:
-            views = [record_view(i, r, e, with_evidence) for i, (r, e) in enumerate(zip(records, evidences))]
+            # связи между записями — по всему входу: доказательства часто в соседних трейсах
+            links = find_related(records)
+            detail = 'full' if str(evidence_detail).strip().lower() == 'full' else 'brief'
+            views = [record_view(i, r, e, with_evidence, related_view(records, links[i]), detail)
+                     for i, (r, e) in enumerate(zip(records, evidences))]
             system = system_prompt(add_info, with_evidence, context.text if context else None)
-            analyses, failure = _analyze(records, views, model, model_id, system, stats)
+            analyses, failure = _analyze(records, views, model, model_id, system, stats,
+                                         processing_order(records, links))
         stats["elapsed_s"] = round(time.monotonic() - started, 1)
         if failure is not None:
             if mode == 'llm':

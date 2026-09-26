@@ -88,7 +88,7 @@ def test_rca_object_from_laim_rca_node_is_readable():
     text, tags = report.rca_text(RCA_OBJECT)
     assert text.startswith('Категория: Галлюцинация\nПричина: Неверная ставка\nДоказательства:\n  • 22,5%/12')
     assert 'Где: шаг «get_rate» (tool), агент agent-1' in text
-    assert 'Сигнал детектора: Аномальные задержки' in text
+    assert 'Сигнал детектора' not in text                         # числа детектора — не для отчёта
     assert tags == ['LLM не уверена в аномалии', 'критичность: высокая']
     assert 'Неверная ставка' in html and '"verdict"' not in html            # не сырой JSON
 
@@ -114,3 +114,14 @@ def test_descriptor_matches_entry_point():
     assert set(params) <= signature
     assert {p['name'] for p in descriptor['ports'] if p['in']} <= signature
     assert {p['name'] for p in descriptor['ports'] if not p['in']} == set(report.main('[]'))
+
+
+def test_trace_ids_in_rca_link_to_their_cards():
+    records = [record(0, trace_id='aaaa1111bbbb2222cccc', rca_results='ПРОТИВОРЕЧИЕ МЕЖДУ ТРЕЙСАМИ: в трейсе '
+                      'eeee5555ffff… агент нашёл ответ, а в 0123456789abcdef (не в отчёте) — нет.'),
+               record(1, trace_id='eeee5555ffff6666aaaa', rca_results='ГАЛЛЮЦИНАЦИЯ: см. aaaa1111bbbb2222cccc')]
+    html, _ = render(records)
+    assert 'id="trace-aaaa1111bbbb2222cccc"' in html and 'id="trace-eeee5555ffff6666aaaa"' in html
+    assert '<a class="trace-ref" href="#trace-eeee5555ffff6666aaaa">eeee5555ffff (#002)</a>' in html
+    assert '<a class="trace-ref" href="#trace-aaaa1111bbbb2222cccc">aaaa1111bbbb2222cccc (#001)</a>' in html
+    assert '0123456789abcdef (не в отчёте)' in html                  # чужой id без карточки — просто текст

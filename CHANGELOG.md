@@ -288,6 +288,18 @@ All notable changes on branch `claude/lumimas-anomaly-refactor-7stpda`
   header and the "requires owner markup" messages are removed. The RCA node's
   structured `rca_results` renders as readable text.
 
+## Changed (LAIM RCA: cross-trace analysis, concise RCA)
+
+- `rca/`: related records are found deterministically across the whole input
+  (shared codes and abbreviations, IDF-weighted) and passed to the LLM as
+  `related`. Batches keep linked records together. The prompt asks for
+  cross-trace comparison. `rca` is back to the short «КАТЕГОРИЯ: суть.
+  Возможные причины: 1) 2) 3)» string. The detector signal is brief by
+  default (`evidence_detail`). `rca_results.related_traces` lists the traces
+  the RCA cites.
+- `anomaly_report/`: no «Сигнал детектора» line. trace_ids in the RCA text
+  link to their cards («… (#009)»).
+
 ## Archived to `legacy/` (never deleted without a trace)
 
 - `verification.py` (was `ars/tools/reproducibility/`) — orphan module, zero

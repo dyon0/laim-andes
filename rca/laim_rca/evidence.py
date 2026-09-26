@@ -110,8 +110,13 @@ class Evidence:
 
     # --- представления -------------------------------------------------
 
-    def prompt_view(self, max_spans: int = 3, max_features: int = 4, excerpt_chars: int = 200) -> dict:
-        """Компактное объяснение детектора для промпта LLM."""
+    def prompt_view(self, max_spans: int = 3, max_features: int = 4, excerpt_chars: int = 200,
+                    brief: bool = False) -> dict:
+        """Объяснение детектора для промпта LLM. brief — только где искать: вероятность,
+        сигнал, подозрительные шаги с фрагментами; без чисел признаков и гипотезы
+        (модель иначе пересказывает их вместо причины)."""
+        if brief:
+            max_spans, max_features = 2, 0
         view: dict[str, Any] = {}
         if self.agent_id is not None:
             view['agent_id'] = self.agent_id
@@ -121,7 +126,7 @@ class Evidence:
             view['strength'] = _STRENGTH_RU[self.strength]
         if self.dominant:
             view['signal'] = _SIGNAL_RU[self.dominant]
-        if self.hypothesis:
+        if self.hypothesis and not brief:
             view['hypothesis'] = self.hypothesis
         spans = []
         for span in self.spans[:max_spans]:
@@ -131,21 +136,23 @@ class Evidence:
                     item[key] = span.details[key]
             if (duration := _number(span.details.get('duration_s'))) is not None:
                 item['duration'] = glossary.format_value(duration * 1e9, 'ns')
-            item['role'] = ', '.join('поведение' if r == 'behavior' else 'смысл' for r in span.roles)
-            if span.vs_typical is not None:
-                item['deviation'] = f'×{span.vs_typical:.1f} от типичной ошибки нормальных трасс'
-            if span.drivers:
-                item['why'] = span.drivers
+            if not brief:
+                item['role'] = ', '.join('поведение' if r == 'behavior' else 'смысл' for r in span.roles)
+                if span.vs_typical is not None:
+                    item['deviation'] = f'×{span.vs_typical:.1f} от типичной ошибки нормальных трасс'
+                if span.drivers:
+                    item['why'] = span.drivers
             for key, short in (('input_excerpt', 'input'), ('output_excerpt', 'output')):
                 if key in span.details:
                     item[short] = _cut(span.details[key], excerpt_chars)
             spans.append(item)
         if spans:
             view['suspicious_spans'] = spans
-        if self.features:
+        if self.features and max_features:
             view['deviating_features'] = self.features[:max_features]
-        if self.caveats:
-            view['caveats'] = self.caveats
+        caveats = [c for c in self.caveats if not brief or 'нормализации' not in c]
+        if caveats:
+            view['caveats'] = caveats
         return view
 
     def output_view(self) -> dict:
