@@ -181,8 +181,8 @@ done that well (e.g. «агент не нашёл ГБК, хотя в трейс
 **`res`**: `{"anomalies": [...]}` for the report builder. Records are kept for
 verdict `anomaly`, plus `uncertain`/`unverified` when `keep_uncertain` is on (all
 records in `detector_only`), in input order. Detector fields are never changed.
-The model fills `business_description`/`tech_details` only when the detector
-left them blank. The raw `detector_rca` is removed from the output. `rca_results`
+The model fills `business_description` only when the detector
+left it blank; `tech_details` is not filled (technical details are part of the RCA). The raw `detector_rca` is removed from the output. `rca_results`
 is an object:
 
 ```json

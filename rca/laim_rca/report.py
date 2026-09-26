@@ -18,7 +18,7 @@ from laim_rca.answers import Analysis
 from laim_rca.evidence import CATEGORIES, RECOMMENDATIONS, Evidence
 
 AUDIT_SCHEMA = 'laim.rca_audit/1'
-_NARRATIVE = ('business_description', 'tech_details')
+_NARRATIVE = ('business_description',)
 
 
 def detector_rca(evidence: Evidence | None) -> dict:
@@ -110,9 +110,8 @@ def assemble(records: list[dict], evidences: list[Evidence | None], analyses: di
         if kept:
             out = {key: value for key, value in record.items() if key != 'detector_rca'}
             # детектор оставляет описания пустыми — их заполняет анализ, заданные не трогаем
-            fills = {'business_description': analysis.business_description if analysis else None,
-                     'tech_details': (analysis.tech_details if analysis else None)
-                     or (evidence.summary() if evidence is not None and analysis is None else None)}
+            # tech_details не заполняется: технические детали — часть RCA, отдельное поле их дублировало
+            fills = {'business_description': analysis.business_description if analysis else None}
             for key in _NARRATIVE:
                 if fills[key] and not str(out.get(key) or '').strip():
                     out[key] = fills[key]

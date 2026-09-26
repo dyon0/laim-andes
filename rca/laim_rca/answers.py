@@ -35,7 +35,6 @@ class Analysis:
     severity: str | None = None
     span_id: str | None = None
     business_description: str | None = None
-    tech_details: str | None = None
 
 
 def extract_items(text: str) -> list[dict]:
@@ -90,8 +89,7 @@ def parse_analysis(item: dict) -> Analysis | None:
         if not _present(rca):
             return None
         return Analysis(verdict='anomaly', rca=rca,
-                        business_description=_text(item.get('business_description')),
-                        tech_details=_text(item.get('tech_details')))
+                        business_description=_text(item.get('business_description')))
     verdict = _VERDICT_ALIASES.get(str(raw_verdict).strip().lower())
     if verdict is None or (verdict != 'normal' and not _present(rca)):
         return None
@@ -103,7 +101,6 @@ def parse_analysis(item: dict) -> Analysis | None:
         severity=_SEVERITY_ALIASES.get(str(item.get('severity', '')).strip().lower()),
         span_id=str(span_id).strip() if _present(span_id) and str(span_id).strip().lower() != 'null' else None,
         business_description=_text(item.get('business_description')),
-        tech_details=_text(item.get('tech_details')),
     )
 
 

@@ -143,7 +143,7 @@ def test_output_keeps_detector_fields_and_fills_only_blank_narratives(fake_llm):
     assert {k: out[k] for k in ('trace_id', 'confidence', 'user_query', 'agent_response', 'anomaly_type')} == {
         k: record[k] for k in ('trace_id', 'confidence', 'user_query', 'agent_response', 'anomaly_type')}
     assert out['business_description'] == 'клиенту назван неверный платёж'    # был пуст — заполнен
-    assert out['tech_details'] == 'задано оператором'                        # задан — не тронут
+    assert out['tech_details'] == 'задано оператором'                        # поле детектора не трогаем
     assert 'detector_rca' not in out                                         # сырой сигнал не уходит в отчёт
     assert out['rca_results']['rca'] == 'причина'
     assert out['rca_results']['verdict_confidence'] == 5
@@ -279,7 +279,7 @@ def test_record_the_model_never_analyzes_stays_unverified_with_detector_rca(fake
     unverified = out[2]
     assert unverified['rca_results']['analyzed_by'] == 'detector'
     assert unverified['rca_results']['rca']['category'] == 'Аномальные задержки'
-    assert 'Аномальные задержки' in unverified['tech_details']
+    assert unverified.get('tech_details', '') == ''                                  # не дублируем RCA
     assert audit['counts']['unverified'] == 1
     assert [a['trace_id'] for a in run(records, keep_uncertain=False)] == ['t0', 't1']
 
@@ -606,3 +606,13 @@ def test_referenced_traces_are_recorded(fake_llm):
     assert out['eeee5555ffff6666']['related_traces'] == ['aaaa1111bbbb2222']
     assert 'related_traces' not in out['cccc3333dddd4444'] or out['cccc3333dddd4444']['related_traces'] == [
         'aaaa1111bbbb2222']
+
+
+def test_tech_details_are_neither_requested_nor_filled(fake_llm):
+    """«Технические детали» дублировали RCA: поле у модели не запрашивается и не заполняется."""
+    fake_llm.behavior = staticmethod(lambda m: results([{'id': '0', 'verdict': 'anomaly', 'rca': 'причина',
+                                                          'tech_details': 'повтор причины'}]))
+    out = run([anomaly(0, detector_rca=detector_rca())])[0]
+    assert out.get('tech_details', '') == ''
+    assert 'tech_details' not in fake_llm.calls[0][0][1]
+    assert run([anomaly(0, detector_rca=detector_rca())], mode='detector_only')[0].get('tech_details', '') == ''

@@ -174,15 +174,6 @@ class Evidence:
             view['caveats'] = self.caveats
         return view
 
-    def summary(self) -> str:
-        """Одна строка для tech_details, когда LLM не участвовал."""
-        parts = [self.hypothesis] if self.hypothesis else []
-        if self.p_anomaly is not None:
-            parts.append(f'Вероятность аномалии по детектору: {self.p_anomaly:.2f}.')
-        if self.features:
-            parts.append('Отклонения: ' + '; '.join(self.features[:3]) + '.')
-        return ' '.join(parts)
-
     def location(self) -> dict | None:
         span = self.spans[0] if self.spans else None
         if span is None and self.agent_id is None:
