@@ -22,7 +22,6 @@ rca_results; сырой detector_rca из выхода убирается), `rca
 from __future__ import annotations
 
 import json
-import logging
 import math
 import time
 import zipfile
@@ -39,13 +38,13 @@ from laim_rca import agent_report
 from laim_rca import evidence as detector_evidence
 from laim_rca.agent_report import AgentReport
 from laim_rca.answers import Analysis, extract_items, match
+from laim_rca.log import log, preview, start as log_start
 from laim_rca.prompt import record_view, system_prompt, user_message
 from laim_rca.related import find_related, processing_order, related_view
 from laim_rca.report import assemble, audit
 from llm.config import ModelsConfig
 from llm.sds_chat_model import DEFAULT_TIMEOUT_SECONDS, SdsChatModel
 
-logger = logging.getLogger(__name__)
 
 MODES = ('llm', 'llm_fallback', 'detector_only')
 
@@ -155,8 +154,15 @@ def _load_agent_report(source: Any, max_chars: Any) -> tuple[AgentReport | None,
     try:
         report = agent_report.load(source, max_chars=max(1000, int(float(max_chars or 20_000))))
     except (ValueError, OSError, KeyError, zipfile.BadZipFile, ElementTree.ParseError) as error:
-        logger.warning("RCA: отчёт о разработке не прочитан, анализ без него: %s", error)
+        log('отчёт', f'НЕ ПРОЧИТАН, анализ пойдёт без него: {type(error).__name__}: {error}')
         return None, {'error': f'{type(error).__name__}: {error}'}
+    if report is not None:
+        log('отчёт', f'загружен: источник={report.source}, {len(report.text)} симв. в промпт '
+                     f'(исходно {report.chars_total}{", сокращён" if report.truncated else ""})')
+        log('отчёт', f'разделы: {", ".join(report.sections) or "не распознаны (текст без структуры шаблона)"}')
+        if report.dropped:
+            log('отчёт', f'опущены по лимиту report_max_chars: {", ".join(report.dropped)}')
+        log('отчёт', f'начало: {preview(report.text)}')
     return report, (report.audit() if report is not None else None)
 
 
@@ -220,6 +226,9 @@ def _analyze(records: list[dict], views: list[dict], model: SdsChatModel | GigaC
         batch = _take_batch(pending, sizes, limit)
         started = time.monotonic()
         stats["requests"] += 1
+        log('LLM', f'пакет №{stats["requests"]}: {len(batch)} зап. ({sum(sizes[i] for i in batch)} байт), '
+                   f'осталось в очереди {len(pending)}; trace_id: '
+                   + ', '.join(str(records[i].get("trace_id", "?"))[:8] for i in batch))
         try:
             found = match(_ask(model, system, [views[i] for i in batch]), batch, records)
             if not found:
@@ -228,31 +237,37 @@ def _analyze(records: list[dict], views: list[dict], model: SdsChatModel | GigaC
         except MODEL_ERRORS as error:
             stats["failed_requests"] += 1
             last_error, successes = error, 0
-            logger.warning("RCA: пакет из %d записей не прошёл: %s", len(batch), error)
+            log('LLM', f'пакет №{stats["requests"]} НЕ ПРОШЁЛ за {time.monotonic() - started:.1f} с: '
+                       f'{type(error).__name__}: {str(error)[:300]}')
             delay = _throttle_delay(error, throttled)
             if delay is not None and throttled < RATE_LIMIT_RETRIES:
                 throttled += 1
                 stats["throttled"] += 1
-                logger.warning("RCA: шлюз просит подождать (%s), пауза %.0f с", type(error).__name__, delay)
+                log('LLM', f'шлюз просит подождать ({type(error).__name__}), пауза {delay:.0f} с, пакет повторяется')
                 _sleep(delay)
                 pending.extendleft(reversed(batch))
                 continue
             throttled = 0
             if len(batch) > 1:
                 limit = len(batch) // 2
+                log('LLM', f'пакет делится: новый размер пакета {limit}')
                 pending.extendleft(reversed(batch))
                 continue
             index = batch[0]
             attempts[index] = attempts.get(index, 0) + 1
             transport_failures = transport_failures + 1 if isinstance(error, TRANSPORT_ERRORS) else 0
             if transport_failures >= MAX_TRANSPORT_FAILURES:
+                log('LLM', f'модель не отвечает: {transport_failures} ошибок соединения подряд — анализ прерван')
                 return analyses, LlmUnavailable(
                     f"Модель {model_id} не отвечает: {transport_failures} одиночных запросов "
                     f"подряд завершились ошибкой соединения: {error}", error)
             if attempts[index] < SINGLE_RECORD_ATTEMPTS:
+                log('LLM', f'повтор записи trace_id={records[index].get("trace_id")} '
+                           f'(попытка {attempts[index] + 1} из {SINGLE_RECORD_ATTEMPTS})')
                 pending.appendleft(index)
             else:
-                logger.warning("RCA: запись trace_id=%r не проанализирована моделью", records[index].get("trace_id"))
+                log('LLM', f'запись trace_id={records[index].get("trace_id")} не проанализирована моделью '
+                           f'после {attempts[index]} попыток — RCA по сигналу детектора')
             continue
 
         any_success, transport_failures, throttled = True, 0, 0
@@ -263,9 +278,13 @@ def _analyze(records: list[dict], views: list[dict], model: SdsChatModel | GigaC
             if misses[index] < MAX_RECORD_MISSES:
                 pending.appendleft(index)
             else:
-                logger.warning("RCA: модель %d раз пропустила запись trace_id=%r", misses[index],
-                               records[index].get("trace_id"))
-        logger.info("RCA: пакет %d записей за %.1f с, разобрано %d", len(batch), time.monotonic() - started, len(found))
+                log('LLM', f'модель {misses[index]} раз пропустила запись trace_id={records[index].get("trace_id")} '
+                           f'— RCA по сигналу детектора')
+        verdicts = ', '.join(f'{v}: {n}' for v, n in sorted(
+            {v: sum(a.verdict == v for a in found.values()) for v in ('anomaly', 'normal', 'uncertain')}.items()) if n)
+        log('LLM', f'пакет №{stats["requests"]} за {time.monotonic() - started:.1f} с: разобрано {len(found)} '
+                   f'из {len(batch)} ({verdicts})' + (f'; пропущены моделью и возвращены в очередь: {len(missing)}'
+                                                     if missing else ''))
         successes += 1
         if successes >= GROW_AFTER_SUCCESSES and limit < BATCH_ITEMS:
             limit, successes = min(limit * 2, BATCH_ITEMS), 0
@@ -298,11 +317,22 @@ def main(
     анализа (не более report_max_chars символов).
     evidence_detail — brief: LLM видит из сигнала детектора только вероятность и
     подозрительные шаги с фрагментами; full — ещё признаки, отклонения и гипотезу."""
+    log_start()
+    log('старт', f'mode={mode!r}, model_id={model_id!r}, llm_temp={llm_temp}, max_tokens={max_tokens}, '
+                 f'use_detector_evidence={use_detector_evidence}, evidence_detail={evidence_detail!r}, '
+                 f'keep_uncertain={keep_uncertain}, report_max_chars={report_max_chars}, '
+                 f'add_info={"задан (" + str(len(str(add_info).strip())) + " симв.)" if str(add_info or "").strip() else "пуст"}')
     records = _parse_input(anom_data)
     mode, model_id = _mode(mode), str(model_id).strip()
     with_evidence = _flag(use_detector_evidence, True)
     keep = _flag(keep_uncertain, True)
+    log('вход', f'записей: {len(records)}, уникальных trace_id: {len({str(r.get("trace_id")) for r in records})}')
     evidences = [detector_evidence.parse(record) for record in records]
+    with_signal = [e for e in evidences if e is not None]
+    log('детектор', f'объяснение детектора (detector_rca) есть у {len(with_signal)} из {len(records)} записей'
+        + (': сигнал — ' + ', '.join(f'{k}: {n}' for k, n in sorted(
+            {k: sum(e.dominant == k for e in with_signal) for k in ('behavior', 'semantic', 'mixed')}.items()) if n)
+           if with_signal else ''))
     context, context_audit = _load_agent_report(agent_report, report_max_chars)
 
     stats: dict[str, Any] = {"requests": 0, "failed_requests": 0, "throttled": 0,
@@ -313,17 +343,28 @@ def main(
         failure: LlmUnavailable | None = None
         try:
             model = _build_model(model_id, float(llm_temp), int(float(max_tokens)))
+            log('модель', f'{model_id}: клиент {type(model).__name__} создан')
         except (ValueError, RuntimeError, GigaChatException) as error:
+            log('модель', f'{model_id}: клиент НЕ создан: {type(error).__name__}: {error}')
             if mode == 'llm':
                 raise
             failure = LlmUnavailable(f"RCA: модель {model_id} недоступна: {error}", error)
         if failure is None:
             # связи между записями — по всему входу: доказательства часто в соседних трейсах
             links = find_related(records)
+            examples = [f'{str(records[i].get("trace_id"))[:8]} → '
+                        + ', '.join(str(records[j].get("trace_id"))[:8] for j in x)
+                        for i, x in enumerate(links) if x]
+            log('связи', f'записей со связанными трейсами: {len(examples)} из {len(records)}'
+                + (f'; примеры: {"; ".join(examples[:5])}' if examples else ''))
             detail = 'full' if str(evidence_detail).strip().lower() == 'full' else 'brief'
             views = [record_view(i, r, e, with_evidence, related_view(records, links[i]), detail)
                      for i, (r, e) in enumerate(zip(records, evidences))]
             system = system_prompt(add_info, with_evidence, context.text if context else None)
+            log('промпт', f'системный промпт {len(system)} симв.: отчёт о разработке '
+                          f'{"ВКЛЮЧЁН (" + str(len(context.text)) + " симв.)" if context else "не подан"}, '
+                          f'сигнал детектора {("в промпте, режим " + detail) if with_evidence else "выключен"}, '
+                          f'add_info {"включён" if str(add_info or "").strip() else "пуст"}')
             analyses, failure = _analyze(records, views, model, model_id, system, stats,
                                          processing_order(records, links))
         stats["elapsed_s"] = round(time.monotonic() - started, 1)
@@ -331,7 +372,9 @@ def main(
             if mode == 'llm':
                 raise failure
             stats["fallback"] = str(failure)
-            logger.warning("RCA: %s — записи без анализа получают RCA по сигналу детектора", failure)
+            log('LLM', f'{failure} — записи без анализа получают RCA по сигналу детектора (llm_fallback)')
+    elif records:
+        log('LLM', 'режим detector_only: LLM не вызывается, RCA по сигналу детектора')
 
     llm_used = bool(analyses) or (mode != 'detector_only' and stats["requests"] > stats["failed_requests"])
     output, decisions = assemble(
@@ -341,5 +384,12 @@ def main(
     report = audit(decisions, mode=mode, model_id=model_id, use_detector_evidence=with_evidence,
                    keep_uncertain=keep, llm=stats)
     report['agent_report'] = context_audit
-    logger.info("RCA: записей на входе %d, в выходе %d (%s)", len(records), len(output), report["counts"])
+    counts = report['counts']
+    log('итог', f'на входе {counts["input"]}, в выходе {counts["output"]}; вердикты: anomaly {counts["anomaly"]}, '
+                f'normal {counts["normal"]} (отфильтрованы), uncertain {counts["uncertain"]}, '
+                f'unverified {counts["unverified"]}; запросов к LLM {stats["requests"]}, '
+                f'неудачных {stats["failed_requests"]}, пауз по 429/503 {stats["throttled"]}')
+    log('итог', f'отчёт о разработке учтён в {sum(bool(o["rca_results"].get("agent_report_used")) for o in output)} '
+                f'из {len(output)} записей выхода; ссылки на другие трейсы в '
+                f'{sum(bool(o["rca_results"].get("related_traces")) for o in output)} записях')
     return {'res': _dump({'anomalies': output}), 'rca_audit': _dump(report)}

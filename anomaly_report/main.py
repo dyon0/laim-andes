@@ -795,22 +795,38 @@ def render_report(records: list[dict], min_confidence: int = 75, anomaly_types: 
 # Точка входа ноды
 # ---------------------------------------------------------------------------
 
+def _log(stage: str, message: str) -> None:
+    """Явный журнал запуска: print с flush — строки сразу видны в логе SberDS."""
+    print(f"[REPORT {datetime.now().strftime('%H:%M:%S')}] {stage}: {message}", flush=True)
+
+
 def main(test_anomalies: Any = None, min_confidence: int = 75, anomaly_types: str = "auto") -> dict:
+    _log("старт", f"min_confidence={min_confidence!r}, anomaly_types={anomaly_types!r}")
     records = parse_anomalies(test_anomalies)
     try:
         threshold = int(min_confidence)
     except (TypeError, ValueError):
         threshold = 75
+        _log("старт", f"min_confidence={min_confidence!r} не число — используется {threshold}")
     shown = _filter(records, threshold)
     n = len(shown)
+    with_types = types_available(records, anomaly_types)
+    typed = sum(1 for r in records if str(r.get("anomaly_type") or "").strip())
+    structured = sum(1 for r in shown if isinstance(r.get("rca_results"), dict))
+    _log("вход", f"записей: {len(records)}, из них с confidence ≥ {threshold} (без тестов дрифта/КМ): {n}")
+    _log("типы", f"{'показываются' if with_types else 'скрыты'}: тип заполнен у {typed} из {len(records)} записей "
+                 f"(режим {anomaly_types})")
+    _log("RCA", f"у {structured} из {n} показанных записей RCA от ноды LAIM RCA (объект), у остальных — строка/пусто")
     # Светофор: пока у детектора нет порога «сколько аномалий — плохо», любая
     # показанная аномалия даёт жёлтый (платформенное имя цвета — amber).
     color = "amber" if n else "green"
     title = (f"Детектор выявил {n} {_plural(n, 'аномалию', 'аномалии', 'аномалий')} "
              f"с confidence ≥ {threshold}" if n
              else f"Аномалий с confidence ≥ {threshold} не выявлено")
+    html = render_report(records, threshold, anomaly_types)
+    _log("итог", f"html {len(html)} симв., светофор {color}: {title}")
     return {
-        "anomaly_report": render_report(records, threshold, anomaly_types),
+        "anomaly_report": html,
         "all_results": {**summarize(records), "shown": n, "min_confidence": threshold,
                         "anomaly_types_shown": types_available(records, anomaly_types),
                         "shown_by_type": summarize(shown)["by_type"],

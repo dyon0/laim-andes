@@ -180,6 +180,29 @@ done that well (e.g. «агент не нашёл ГБК, хотя в трейс
 - `rca_results.related_traces` lists the other traces the RCA cites. The
   report node links those trace_ids to their cards.
 
+## Run log
+
+Every stage prints an explicit line (`print(..., flush=True)`, so it shows in
+the SberDS run log immediately), formatted `[RCA HH:MM:SS +N.Ns] stage: message`:
+- `старт`: parameters;
+- `вход`: record and trace counts;
+- `детектор`: how many records carry `detector_rca`, and the signal mix;
+- `отчёт`: whether the port is empty, the detected format (path/pickle/.docx/
+  HTML/MHTML/text/doc-browser), size in the prompt, template sections found,
+  sections dropped by `report_max_chars`, and the start of the loaded text.
+  A read error is printed too;
+- `модель`: client created or not;
+- `связи`: records with related traces, with examples;
+- `промпт`: system prompt size, and whether the report, detector signal and
+  `add_info` are included;
+- `LLM`: every batch (size, bytes, trace_ids), its time and verdicts; failures,
+  splits, 429/503 waits, retries, records skipped by the model, fallback;
+- `итог`: verdict counts, requests, and in how many output records the report
+  was used and other traces were cited.
+
+The report node logs `[REPORT …]` lines: input, types shown or hidden and
+why, RCA format, traffic light.
+
 ## Parameters
 
 | parameter | default | meaning |

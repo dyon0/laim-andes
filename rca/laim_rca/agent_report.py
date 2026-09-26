@@ -26,6 +26,8 @@ from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree
 
+from laim_rca.log import log
+
 _W = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
 CELL_CHARS = 1200               # длинные ячейки (промпты в приложении) режутся
 _TEMPLATE = re.compile(
@@ -56,10 +58,12 @@ class AgentReport:
     source: str             # docx | html | text | doc_browser
     chars_total: int        # до усечения по бюджету
     truncated: bool
+    sections: tuple[str, ...] = ()      # разделы шаблона, найденные в отчёте
+    dropped: tuple[str, ...] = ()       # разделы, выброшенные по бюджету
 
     def audit(self) -> dict:
-        return {'source': self.source, 'chars': len(self.text),
-                'chars_total': self.chars_total, 'truncated': self.truncated}
+        return {'source': self.source, 'chars': len(self.text), 'chars_total': self.chars_total,
+                'truncated': self.truncated, 'sections': list(self.sections), 'dropped': list(self.dropped)}
 
 
 def _cut(text: str, limit: int) -> str:
@@ -263,20 +267,24 @@ def _looks_like_text(text: str) -> bool:
 def _from_bytes(data: bytes, ext: str = '') -> tuple[str, str] | None:
     ext = ext.lstrip('.').lower()
     if data[:1] == b'\x80' or ext in ('pkl', 'pickle'):             # pickle протокола 2+
+        log('отчёт', f'формат: pickle ({len(data)} байт) — читаем только встроенные типы')
         try:
             obj = _BuiltinsOnly(io.BytesIO(data)).load()
         except (pickle.UnpicklingError, EOFError, ValueError) as error:
             raise ValueError(f'отчёт в pickle не прочитан: {error}') from error
         return _from_object(obj)
     if data[:2] == b'PK' or ext == 'docx':
+        log('отчёт', f'формат: .docx ({len(data)} байт)')
         return '\n'.join(_drop_template(_docx_lines(data))), 'docx'
     if data[:5] == b'%PDF-' or ext == 'pdf':
         raise ValueError('PDF не поддерживается: подайте отчёт в .docx, HTML или текстом')
     head = data[:4096].lstrip().lower()
     if ext in ('mht', 'mhtml') or (head.startswith((b'mime-version', b'from:', b'content-type'))
                                    and b'multipart/related' in data[:8192].lower()):
+        log('отчёт', f'формат: MHTML ({len(data)} байт) — извлекаем HTML-часть')
         return '\n'.join(_drop_template(_html_lines(_mhtml_html(data)))), 'html'
     if ext in ('html', 'htm'):
+        log('отчёт', f'формат: HTML ({len(data)} байт)')
         return '\n'.join(_drop_template(_html_lines(_decode(data)))), 'html'
     text = _decode(data)
     if not _looks_like_text(text):
@@ -289,6 +297,7 @@ def _from_text(text: str) -> tuple[str, str] | None:
     if not stripped:
         return None
     if _HTML_START.match(stripped):
+        log('отчёт', f'формат: HTML-текст ({len(stripped)} симв.)')
         return '\n'.join(_drop_template(_html_lines(stripped))), 'html'
     if stripped[:1] in '{[':
         try:
@@ -296,15 +305,19 @@ def _from_text(text: str) -> tuple[str, str] | None:
         except json.JSONDecodeError:
             payload = None
         if isinstance(payload, dict):
+            log('отчёт', 'формат: JSON-объект')
             return _from_object(payload)
+    log('отчёт', f'формат: обычный текст ({len(stripped)} симв.)')
     return stripped, 'text'
 
 
 def _from_object(source: Any) -> tuple[str, str] | None:
     if isinstance(source, dict):
         if isinstance(source.get('bin'), (bytes, bytearray)):          # вход doc-browser: {"bin", "ext"}
+            log('отчёт', f'получен словарь {{"bin", "ext"}} (ext={source.get("ext")!r})')
             return _from_bytes(bytes(source['bin']), str(source.get('ext', '')))
         text = _doc_browser_text(source)
+        log('отчёт', 'формат: выход g-aiva-doc-browser' if text else 'словарь без распознаваемых полей отчёта')
         return (text, 'doc_browser') if text else None
     if isinstance(source, (bytes, bytearray)):
         return _from_bytes(bytes(source))
@@ -314,6 +327,7 @@ def _from_object(source: Any) -> tuple[str, str] | None:
             try:
                 path = Path(candidate)
                 if path.is_file():                                   # порт отдал путь к файлу
+                    log('отчёт', f'порт передал путь к файлу: {path} ({path.stat().st_size} байт)')
                     return _from_bytes(path.read_bytes(), path.suffix)
             except OSError:
                 pass
@@ -325,7 +339,9 @@ def load(source: Any, max_chars: int = 20_000) -> AgentReport | None:
     """AgentReport из порта agent_report; None, если порт пуст.
     ValueError — если данные поданы, но прочитать их нельзя."""
     if source is None or (isinstance(source, str) and not source.strip()):
+        log('отчёт', 'порт agent_report пуст — анализ без отчёта о разработке')
         return None
+    log('отчёт', f'порт agent_report подан: {type(source).__name__}')
     parsed = _from_object(source)
     if parsed is None:
         return None
@@ -335,9 +351,12 @@ def load(source: Any, max_chars: int = 20_000) -> AgentReport | None:
     text = '\n'.join(line for i, line in enumerate(lines)
                      if _section_of(line) is None or (i + 1 < len(lines) and _section_of(lines[i + 1]) is None))
     total = len(text)
+    sections = tuple(dict.fromkeys(name for line in text.split('\n') if (name := _section_of(line))))
+    dropped: tuple[str, ...] = ()
     if total > max_chars:
-        text = _fit(text, max_chars)
-    return AgentReport(text=text, source=kind, chars_total=total, truncated=total > max_chars)
+        text, dropped = _fit(text, max_chars)
+    return AgentReport(text=text, source=kind, chars_total=total, truncated=total > max_chars,
+                       sections=sections, dropped=dropped)
 
 
 def _section_of(line: str) -> str | None:
@@ -345,7 +364,7 @@ def _section_of(line: str) -> str | None:
     return next((s for s in SECTIONS if title.startswith(s) and len(title) < len(s) + 60), None)
 
 
-def _fit(text: str, max_chars: int) -> str:
+def _fit(text: str, max_chars: int) -> tuple[str, tuple[str, ...]]:
     """В бюджет: сначала выбрасываются разделы про валидацию модели (DROP_ORDER),
     затем — если всё ещё много — хвост документа."""
     sections: list[tuple[str | None, list[str]]] = [(None, [])]
@@ -366,4 +385,4 @@ def _fit(text: str, max_chars: int) -> str:
     if len(fitted) > max_chars:
         fitted = fitted[:max_chars].rsplit('\n', 1)[0] + '\n…'
     note = f'\n[отчёт сокращён до {max_chars} симв.' + (f'; опущены разделы: {", ".join(dropped)}' if dropped else '') + ']'
-    return fitted + note
+    return fitted + note, tuple(dropped)

@@ -2,13 +2,12 @@
 from __future__ import annotations
 
 import json
-import logging
 import math
 import re
 from dataclasses import dataclass
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from laim_rca.log import log
 
 VERDICTS = ('anomaly', 'normal', 'uncertain')
 SEVERITIES = ('low', 'medium', 'high', 'critical')
@@ -148,13 +147,13 @@ def match(items: list[dict], batch: list[int], records: list[dict]) -> dict[int,
         elif len(batch) == 1 and len(items) == 1:
             index = batch[0]
         if index is None:
-            logger.warning('RCA: модель вернула неизвестную запись id=%r trace_id=%r', item.get('id'), item.get('trace_id'))
+            log('LLM', f'модель вернула неизвестную запись id={item.get("id")!r} trace_id={item.get("trace_id")!r} — пропущена')
             continue
         if index in found:
             continue
         analysis = parse_analysis(item)
         if analysis is None:
-            logger.warning('RCA: негодный анализ записи id=%s (нет вердикта или причины)', index)
+            log('LLM', f'негодный анализ записи id={index} (нет вердикта или причины) — запись будет повторена')
             continue
         found[index] = analysis
     return found
