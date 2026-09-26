@@ -229,3 +229,74 @@ def test_results_say_the_report_was_used(fake_llm):
     assert out['anomalies'][0]['rca_results']['agent_report_used'] is True
     plain = json.loads(rca.main(json.dumps({'anomalies': [anomaly(0)]}))['res'])
     assert 'agent_report_used' not in plain['anomalies'][0]['rca_results']
+
+
+# --- транспорт порта SberDS (как development_report_artifact в kriteria-selector) ---
+
+class _Frame:
+    """Стенд pandas.DataFrame: однострочная parquet-обёртка DataArtifact."""
+
+    def __init__(self, rows):
+        self.rows, self.columns, self.shape = rows, list(rows[0]), (len(rows), len(rows[0]))
+
+    def to_dict(self, orient='dict'):
+        return self.rows
+
+
+def _port_directory(tmp_path, payload: bytes):
+    directory = tmp_path / 'agent_report'
+    directory.mkdir()
+    (directory / '_SUCCESS').write_bytes(b'')
+    (directory / '.part-0.crc').write_bytes(b'crc')
+    (directory / 'unstructured_data').write_bytes(payload)
+    return directory
+
+
+@pytest.mark.parametrize('shape', ['directory', 'directory_pickle', 'path_object', 'content_key', 'base64_bin',
+                                   'nested', 'one_item_list', 'frame_bytes', 'frame_path', 'bytearray'])
+def test_platform_transports_of_a_docx(fake_llm, tmp_path, shape):
+    import base64
+    import pickle
+    from pathlib import Path
+
+    docx = make_docx()
+    source = {
+        'directory': lambda: str(_port_directory(tmp_path, docx)),
+        'directory_pickle': lambda: str(_port_directory(tmp_path, pickle.dumps({'bin': docx, 'ext': '.docx'}))),
+        'path_object': lambda: Path(_port_directory(tmp_path, docx)) / 'unstructured_data',
+        'content_key': lambda: {'content': docx, 'filename': 'Отчет о разработке.docx'},
+        'base64_bin': lambda: {'bin': base64.b64encode(docx).decode(), 'ext': '.docx'},
+        'nested': lambda: {'report_dict': None, 'data': {'bin': docx, 'ext': 'docx'}},
+        'one_item_list': lambda: [{'bin': docx, 'ext': '.docx'}],
+        'frame_bytes': lambda: _Frame([{'bin': docx, 'ext': '.docx'}]),
+        'frame_path': lambda: _Frame([{'path': str(_port_directory(tmp_path, docx) / 'unstructured_data')}]),
+        'bytearray': lambda: bytearray(docx),
+    }[shape]()
+    out = run_audit(agent_report=source)
+    assert out['agent_report']['source'] == 'docx', out['agent_report']
+    assert 'get_restrictions' in system_of(fake_llm)
+
+
+def test_supplied_but_unreadable_is_not_reported_as_missing(fake_llm, tmp_path, capsys):
+    out = run_audit(agent_report=str(tmp_path / 'нет_такого' / 'unstructured_data'))
+    assert 'не найден' in out['agent_report']['error']
+    printed = capsys.readouterr().out
+    assert 'НЕ ПРОЧИТАН' in printed and 'не подан' not in printed
+    out = run_audit(agent_report={'unexpected': 1})
+    assert "ключи ['unexpected']" in out['agent_report']['error']
+    out = run_audit(agent_report=_Frame([{'bin': b'a'}, {'bin': b'b'}]))
+    assert '2 строк' in out['agent_report']['error']
+
+
+def test_empty_port_markers_mean_not_provided(fake_llm, capsys):
+    for empty in (None, '', 'None', 'nan', float('nan')):
+        out = run_audit(agent_report=empty)
+        assert out['agent_report'] is None
+    assert 'не подан' in capsys.readouterr().out
+
+
+def test_ordinary_text_is_not_mistaken_for_a_path_or_base64():
+    report = agent_report.load('Агент отвечает по API/ФССК. Штраф за стоп-фразы.')
+    assert report.source == 'text'
+    report = agent_report.load('The agent answers questions about loans and never promises approval ' * 3)
+    assert report.source == 'text'

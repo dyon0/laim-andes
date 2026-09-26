@@ -124,7 +124,7 @@
       "in": true,
       "type": "default",
       "shape": "shape_model",
-      "description": "ОПЦИОНАЛЬНО: отчёт о разработке агента (.docx как файл/bytes/{\"bin\",\"ext\"}, текст или выход g-aiva-doc-browser) — контекст для анализа",
+      "description": "ОПЦИОНАЛЬНО: отчёт о разработке агента (.docx/HTML: файл или каталог порта, bytes, report_dict коннектора {\"bin\",\"ext\"} в т.ч. pickle/parquet; текст или выход g-aiva-doc-browser) — контекст для анализа",
       "required": false,
       "order": 2
     },

@@ -24,10 +24,8 @@ from __future__ import annotations
 import json
 import math
 import time
-import zipfile
 from collections import deque
 from typing import Any
-from xml.etree import ElementTree
 
 import httpx
 import requests
@@ -153,7 +151,7 @@ def _load_agent_report(source: Any, max_chars: Any) -> tuple[AgentReport | None,
     роняют ноду (отчёт — обогащение), причина уходит в аудит и лог."""
     try:
         report = agent_report.load(source, max_chars=max(1000, int(float(max_chars or 20_000))))
-    except (ValueError, OSError, KeyError, zipfile.BadZipFile, ElementTree.ParseError) as error:
+    except Exception as error:      # отчёт — обогащение: любой сбой чтения не роняет ноду
         log('отчёт', f'НЕ ПРОЧИТАН, анализ пойдёт без него: {type(error).__name__}: {error}')
         return None, {'error': f'{type(error).__name__}: {error}'}
     if report is not None:
@@ -164,6 +162,14 @@ def _load_agent_report(source: Any, max_chars: Any) -> tuple[AgentReport | None,
             log('отчёт', f'опущены по лимиту report_max_chars: {", ".join(report.dropped)}')
         log('отчёт', f'начало: {preview(report.text)}')
     return report, (report.audit() if report is not None else None)
+
+
+def _context_state(context: AgentReport | None, audit: dict | None) -> str:
+    if context is not None:
+        return f"ВКЛЮЧЁН ({len(context.text)} симв.)"
+    if audit and audit.get("error"):
+        return "подан, но НЕ ПРОЧИТАН (причина выше, в строках [отчёт])"
+    return "не подан"
 
 
 def _trace_grouped(records: list[dict]) -> list[int]:
@@ -362,7 +368,7 @@ def main(
                      for i, (r, e) in enumerate(zip(records, evidences))]
             system = system_prompt(add_info, with_evidence, context.text if context else None)
             log('промпт', f'системный промпт {len(system)} симв.: отчёт о разработке '
-                          f'{"ВКЛЮЧЁН (" + str(len(context.text)) + " симв.)" if context else "не подан"}, '
+                          f'{_context_state(context, context_audit)}, '
                           f'сигнал детектора {("в промпте, режим " + detail) if with_evidence else "выключен"}, '
                           f'add_info {"включён" if str(add_info or "").strip() else "пуст"}')
             analyses, failure = _analyze(records, views, model, model_id, system, stats,

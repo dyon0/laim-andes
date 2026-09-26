@@ -117,6 +117,22 @@ Accepted inputs (the format is detected by content, not by file name):
 | **plain text / Markdown** | a string |
 | **g-aiva-doc-browser output** | `{"all_results": {"bp_card": …}, "extracted_fields": {…}}` or either part alone |
 
+How the platform delivers the port is normalized first, the same way the
+kriteria-selector node reads `development_report_artifact`. SberDS has no single Python form
+for a DataArtifact, so all of these lead to the document bytes:
+a file path (with or without extension), a **port directory** mounted "as files and folders"
+(service files `_SUCCESS`, `_committed*`, `*.crc`, dotfiles are ignored; with several files
+.docx > HTML > MHTML > pickle > extension-less > text), raw bytes / `bytearray` / `memoryview`,
+a dict with the document under any of `bin`, `bytes`, `content`, `data`, `payload`, `value`,
+`unstructured_data`, `path`, `local_path`, `file` (extension from `ext`/`extension`/`filename`/`name`;
+nested dicts and base64 strings too), a pickle of such a dict, a one-row **parquet container**
+or `pandas.DataFrame`/`Series` with bytes or a path inside, and a one-item list.
+The run log shows what arrived (`порт agent_report подан: dict {bin: bytes, ext: str}`,
+`путь к каталогу … (файлы: …)`) and every unwrapping step. If a report was supplied but
+could not be read, the log and the prompt line say **«подан, но НЕ ПРОЧИТАН»** with the
+reason. They never say «не подан» in that case. «не подан» means the port really was empty
+(`None`, an empty string, `"None"`, `NaN`).
+
 PDF is rejected with a clear message: convert the report to .docx or HTML. A pickle file (doc-browser's
 `report_dict` form) is read with a builtins-only unpickler: dicts, strings and
 bytes are allowed, any class is refused. Bytes that are not text, .docx or
