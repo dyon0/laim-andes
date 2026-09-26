@@ -47,6 +47,11 @@ type-related:
   the detector's hypothesis, plus tags for severity and for records the LLM
   was unsure about or did not verify. Plain-string `rca_results` render as
   before.
+- RCA categories are never shown: `category` / `anomaly_category` / `type`
+  keys are skipped, and leading labels («ГАЛЛЮЦИНАЦИЯ:», «Категория: …»,
+  `snake_case:`) are stripped. Known English keys get Russian labels
+  («Цитата с ошибкой», «Корректное значение», …). Unknown English keys are
+  shown as the value only, without the key.
 
 ## Tests
 

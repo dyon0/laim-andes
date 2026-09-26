@@ -655,18 +655,40 @@ def _dialogue(label: str, who: str, raw: Any) -> str:
 _VERDICT_NOTE = {"uncertain": "LLM не уверена в аномалии",
                  "unverified": "LLM не проверяла запись — причина по сигналу детектора"}
 _SEVERITY = {"low": "низкая", "medium": "средняя", "high": "высокая", "critical": "критическая"}
-_RCA_KEYS = {"category": "Категория", "root_cause": "Причина", "evidence": "Доказательства",
-             "recommendation": "Рекомендация"}
+# подписи известных полей RCA (в т. ч. формата из add_info); категории не показываются вовсе
+_RCA_KEYS = {"root_cause": "Причина", "reason": "Причина", "error_source": "Источник ошибки",
+             "evidence": "Доказательства", "quote_with_error": "Цитата с ошибкой",
+             "correct_value": "Корректное значение", "impact": "Последствия",
+             "numbers_identified": "Числа в ответе", "recommendation": "Рекомендация",
+             "value": "Значение", "source": "Источник", "context": "Контекст"}
+_CATEGORY_KEYS = frozenset({"category", "anomaly_category", "categories", "type", "anomaly_type", "error_type",
+                            "class", "label", "tag", "tags", "категория", "тип"})
+_LABEL_PREFIX = re.compile(
+    r"^\s*(?:(?i:категория|category)\s*[:\-—]\s*[^\n.;]*[.;\n]?\s*"
+    r"|(?:[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)+|[A-ZА-ЯЁ][A-ZА-ЯЁ0-9 /\-]{4,60}[A-ZА-ЯЁ0-9])\s*[:—]\s+)+")
+_LATIN_KEY = re.compile(r"^[A-Za-z0-9_ ]+$")
+
+
+def _without_label(text: str) -> str:
+    """«ГАЛЛЮЦИНАЦИЯ: …», «Категория: x_y. …», «snake_case_label: …» → текст без метки."""
+    stripped = _LABEL_PREFIX.sub("", text, count=1).strip()
+    if not stripped or stripped == text.strip():
+        return text.strip()
+    return stripped[:1].upper() + stripped[1:]
 
 
 def _plain(value: Any, indent: str = "") -> str:
-    """Произвольная структура RCA → читаемый текст «ключ: значение» / «• пункт»."""
+    """Произвольная структура RCA → читаемый текст «Подпись: значение» / «• пункт».
+    Категории пропускаются; английские ключи без русской подписи выводятся без подписи."""
     if isinstance(value, dict):
         lines = []
         for key, item in value.items():
-            if item in (None, "", [], {}):
+            if item in (None, "", [], {}) or str(key).strip().lower() in _CATEGORY_KEYS:
                 continue
-            label = _RCA_KEYS.get(key, str(key).replace("_", " "))
+            label = _RCA_KEYS.get(key) or (None if _LATIN_KEY.match(str(key)) else str(key))
+            if label is None:                       # английский ключ без подписи — только значение
+                lines.append(_plain(item, indent))
+                continue
             body = _plain(item, indent + "  ")
             block = "\n" in body or isinstance(item, (list, dict))
             lines.append(f"{indent}{label}:\n{body}" if block else f"{indent}{label}: {body.strip()}")
@@ -674,7 +696,7 @@ def _plain(value: Any, indent: str = "") -> str:
     if isinstance(value, list):
         return "\n".join(f"{indent}• {_plain(item, indent + '  ').strip()}" for item in value
                          if item not in (None, "", [], {}))
-    return str(value).strip()
+    return indent + _without_label(str(value)) if indent else _without_label(str(value))
 
 
 def rca_text(value: Any) -> tuple[str, list[str]]:
@@ -686,7 +708,7 @@ def rca_text(value: Any) -> tuple[str, list[str]]:
         except json.JSONDecodeError:
             pass
     if not (isinstance(value, dict) and "verdict" in value and "rca" in value):
-        return (_plain(value) if isinstance(value, (dict, list)) else human_text(value)), []
+        return (_plain(value) if isinstance(value, (dict, list)) else _without_label(human_text(value))), []
     tags = []
     if value.get("verdict") in _VERDICT_NOTE:
         tags.append(_VERDICT_NOTE[value["verdict"]])

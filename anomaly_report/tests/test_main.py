@@ -86,7 +86,8 @@ def test_no_header_and_no_markup_messages(typed):
 def test_rca_object_from_laim_rca_node_is_readable():
     html, _ = render([record(0, rca_results=RCA_OBJECT)])
     text, tags = report.rca_text(RCA_OBJECT)
-    assert text.startswith('Категория: Галлюцинация\nПричина: Неверная ставка\nДоказательства:\n  • 22,5%/12')
+    assert text.startswith('Причина: Неверная ставка\nДоказательства:\n  • 22,5%/12')
+    assert 'Категория' not in text and 'Галлюцинация' not in text          # категории не показываем
     assert 'Где: шаг «get_rate» (tool), агент agent-1' in text
     assert 'Сигнал детектора' not in text                         # числа детектора — не для отчёта
     assert tags == ['LLM не уверена в аномалии', 'критичность: высокая']
@@ -96,7 +97,11 @@ def test_rca_object_from_laim_rca_node_is_readable():
 @pytest.mark.parametrize('value,expected', [
     ('Арифметическая ошибка в ставке', 'Арифметическая ошибка в ставке'),              # прежний RCA: строка
     ({'anomaly_category': '1 - Арифметика', 'quote_with_error': '0,1875'},
-     'anomaly category: 1 - Арифметика\nquote with error: 0,1875'),                  # объект по add_info
+     'Цитата с ошибкой: 0,1875'),                                                    # объект по add_info
+    ({'category': 'failure_propagation_or_guardrail', 'data_amiguity_or_lookup_result': 'Код не найден.'},
+     'Код не найден.'),                                                             # без англ. меток
+    ('ГАЛЛЮЦИНАЦИЯ: Агент дал неверное определение ГБК.', 'Агент дал неверное определение ГБК.'),
+    ('Категория: data_lookup. Агент не нашёл код.', 'Агент не нашёл код.'),
     ({'verdict': 'anomaly', 'rca': 'Смешение продуктов'}, 'Смешение продуктов'),
     ('', ''),
 ])

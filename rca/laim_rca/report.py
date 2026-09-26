@@ -24,12 +24,10 @@ _NARRATIVE = ('business_description',)
 def detector_rca(evidence: Evidence | None) -> dict:
     """RCA без LLM — по сигналу детектора."""
     if evidence is None:
-        return {'category': CATEGORIES['unknown'],
-                'root_cause': 'Анализ не выполнен: у записи нет объяснения детектора (detector_rca), LLM не использовалась.',
+        return {'root_cause': 'Анализ не выполнен: у записи нет объяснения детектора (detector_rca), LLM не использовалась.',
                 'evidence': [], 'recommendation': RECOMMENDATIONS['unknown']}
     facts = [f'{s.title}: ' + '; '.join(s.drivers) for s in evidence.spans[:3] if s.drivers] + evidence.features[:3]
-    return {'category': CATEGORIES[evidence.category],
-            'root_cause': evidence.hypothesis or CATEGORIES['unknown'],
+    return {'root_cause': evidence.hypothesis or CATEGORIES['unknown'],
             'evidence': facts,
             'recommendation': RECOMMENDATIONS[evidence.category]}
 

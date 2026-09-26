@@ -150,7 +150,7 @@ def test_output_keeps_detector_fields_and_fills_only_blank_narratives(fake_llm):
 
 
 def test_rca_results_structure(fake_llm):
-    rca_obj = {'anomaly_category': 'арифметика', 'quote_with_error': '22,5%/12'}
+    rca_obj = {'anomaly_category': 'арифметика', 'quote_with_error': '22,5%/12'}   # категория будет убрана
     fake_llm.behavior = staticmethod(lambda m: results([{
         'id': '0', 'verdict': 'anomaly', 'confidence': '85%', 'severity': 'Высокая', 'span_id': 's-llm',
         'rca': rca_obj}]))
@@ -158,7 +158,7 @@ def test_rca_results_structure(fake_llm):
     got = run([anomaly(0, detector_rca=detector_rca())])[0]['rca_results']
 
     assert got['verdict'] == 'anomaly' and got['verdict_confidence'] == 85 and got['severity'] == 'high'
-    assert got['rca'] == rca_obj                                   # формат rca задаёт add_info — хранится как есть
+    assert got['rca'] == {'quote_with_error': '22,5%/12'}          # формат из add_info сохраняется, категория — нет
     assert got['location'] == {'agent_id': 'agent-1', 'span_id': 's-llm', 'span_name': 'answer',
                                'span_kind': 'llm', 'source': 'llm'}
     assert got['detector_evidence']['category'] == 'Аномальные задержки'
@@ -206,7 +206,8 @@ def test_legacy_full_echo_answer_is_understood(fake_llm):
     out = run(records)
 
     assert [a['trace_id'] for a in out] == [r['trace_id'] for r in records]
-    assert out[0]['rca_results']['rca']['anomaly_category'].startswith('3 - Противоречие')
+    assert 'anomaly_category' not in out[0]['rca_results']['rca']            # категории не показываем
+    assert out[0]['rca_results']['rca']['quote_with_error'].startswith('В банкоматах банка')
     assert out[0]['business_description'].startswith('Агент предоставил противоречивую')
 
 
@@ -278,7 +279,8 @@ def test_record_the_model_never_analyzes_stays_unverified_with_detector_rca(fake
         ('t0', 'anomaly'), ('t1', 'anomaly'), ('t2', 'unverified')]
     unverified = out[2]
     assert unverified['rca_results']['analyzed_by'] == 'detector'
-    assert unverified['rca_results']['rca']['category'] == 'Аномальные задержки'
+    assert unverified['rca_results']['rca']['root_cause'].startswith('Аномальные задержки')
+    assert 'category' not in unverified['rca_results']['rca']
     assert unverified.get('tech_details', '') == ''                                  # не дублируем RCA
     assert audit['counts']['unverified'] == 1
     assert [a['trace_id'] for a in run(records, keep_uncertain=False)] == ['t0', 't1']
@@ -401,7 +403,7 @@ def test_fallback_mode_survives_dead_llm_with_detector_rca(fake_llm):
     out, audit = run_full([anomaly(0, detector_rca=detector_rca()), anomaly(1)], mode='llm_fallback')
 
     assert [a['rca_results']['verdict'] for a in out] == ['unverified', 'unverified']
-    assert out[0]['rca_results']['rca']['category'] == 'Аномальные задержки'
+    assert out[0]['rca_results']['rca']['root_cause'].startswith('Аномальные задержки')
     assert 'нет объяснения детектора' in out[1]['rca_results']['rca']['root_cause']
     assert 'ни один запрос' in audit['llm']['fallback']
 
@@ -588,7 +590,8 @@ def test_related_traces_are_in_the_prompt_and_in_one_batch(fake_llm):
     first = [v['trace_id'] for v in sent_views(fake_llm.calls[0])]
     assert first[:2] == ['aaaa1111bbbb2222', 'eeee5555ffff6666']  # связанные — рядом, в одном пакете
     system = fake_llm.calls[0][0][1]
-    assert 'Сравни запись с related' in system and 'ПРОТИВОРЕЧИЕ МЕЖДУ ТРЕЙСАМИ' in system
+    assert 'Сравни запись с related' in system and 'КАТЕГОРИЯ' not in system
+    assert 'Не вводи собственных категорий' in system and 'snake_case' in system
 
 
 def test_referenced_traces_are_recorded(fake_llm):
@@ -616,3 +619,21 @@ def test_tech_details_are_neither_requested_nor_filled(fake_llm):
     assert out.get('tech_details', '') == ''
     assert 'tech_details' not in fake_llm.calls[0][0][1]
     assert run([anomaly(0, detector_rca=detector_rca())], mode='detector_only')[0].get('tech_details', '') == ''
+
+
+@pytest.mark.parametrize('raw,expected', [
+    ('Категория: failure_propagation_or_guardrail. Агент вернул ошибку сети.', 'Агент вернул ошибку сети.'),
+    ('data_amiguity_or_lookup_result: агент не нашёл код.', 'Агент не нашёл код.'),
+    ('ГАЛЛЮЦИНАЦИЯ: Агент дал неверное определение ГБК.', 'Агент дал неверное определение ГБК.'),
+    ('ГБК: агент не нашёл расшифровку.', 'ГБК: агент не нашёл расшифровку.'),      # код — не метка
+    ('Агент ответил: «не найдено».', 'Агент ответил: «не найдено».'),
+])
+def test_self_invented_categories_are_removed(fake_llm, raw, expected):
+    fake_llm.behavior = staticmethod(lambda m: results([{'id': '0', 'verdict': 'anomaly', 'rca': raw}]))
+    assert run([anomaly(0)])[0]['rca_results']['rca'] == expected
+
+
+def test_category_keys_are_removed_from_structured_rca(fake_llm):
+    fake_llm.behavior = staticmethod(lambda m: results([{'id': '0', 'verdict': 'anomaly', 'rca': {
+        'category': 'failure_propagation_or_guardrail', 'root_cause': 'Агент вернул ошибку сети.'}}]))
+    assert run([anomaly(0)])[0]['rca_results']['rca'] == {'root_cause': 'Агент вернул ошибку сети.'}

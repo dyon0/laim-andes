@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -77,6 +78,27 @@ def _confidence(value: Any) -> int | None:
     return int(round(min(max(value, 0), 100)))
 
 
+# категории и метки, которые модель ставит сама («Категория: failure_propagation…»,
+# «ГАЛЛЮЦИНАЦИЯ: …», {"category": …}): в отчёт они не идут
+_CATEGORY_KEYS = frozenset({'category', 'anomaly_category', 'categories', 'type', 'anomaly_type', 'error_type',
+                            'class', 'label', 'tag', 'tags', 'категория', 'тип'})
+_LABEL_PREFIX = re.compile(
+    r'^\s*(?:(?i:категория|category)\s*[:\-—]\s*[^\n.;]*[.;\n]?\s*'
+    r'|(?:[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)+|[A-ZА-ЯЁ][A-ZА-ЯЁ0-9 /\-]{4,60}[A-ZА-ЯЁ0-9])\s*[:—]\s+)+')
+
+
+def strip_categories(rca: Any) -> Any:
+    """RCA без категорий: ключи-категории из объекта, метки в начале строки."""
+    if isinstance(rca, dict):
+        return {k: strip_categories(v) for k, v in rca.items() if str(k).strip().lower() not in _CATEGORY_KEYS}
+    if isinstance(rca, str):
+        stripped = _LABEL_PREFIX.sub('', rca, count=1).strip()
+        if not stripped or stripped == rca.strip():
+            return rca.strip()
+        return stripped[:1].upper() + stripped[1:]
+    return rca
+
+
 def parse_analysis(item: dict) -> Analysis | None:
     """Analysis из элемента ответа; None, если элемент не годится (запись уйдёт на повтор).
 
@@ -84,6 +106,7 @@ def parse_analysis(item: dict) -> Analysis | None:
     подтверждение аномалии: так работал прежний протокол «оставь аномальные».
     """
     rca = item.get('rca') if _present(item.get('rca')) else item.get('rca_results')
+    rca = strip_categories(rca) if _present(rca) else rca
     raw_verdict = item.get('verdict')
     if raw_verdict is None:
         if not _present(rca):

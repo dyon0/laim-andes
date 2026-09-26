@@ -150,10 +150,14 @@ done that well (e.g. «агент не нашёл ГБК, хотя в трейс
   there", different expansions of one term, the same failure repeated) and to
   cite trace_ids.
 - **`rca` format** is back to the proven short form, one string of at most
-  600 characters: «КАТЕГОРИЯ: суть с фактами и trace_id. Возможные причины:
-  1) …; 2) …; 3) …», with a fixed category list (ГАЛЛЮЦИНАЦИЯ, ПРОТИВОРЕЧИЕ
-  МЕЖДУ ТРЕЙСАМИ, НЕПОЛНЫЙ ОТВЕТ, ВЫХОД ЗА ТЕМАТИКУ, …). `add_info` can still
-  define another format.
+  600 characters: «суть с фактами и trace_id. Возможные причины: 1) …;
+  2) …; 3) …». **No categories.** The model is told not to invent categories,
+  classifications, terms or abbreviations, and to write plain Russian (English
+  only when quoting data: trace_id, codes, step names). Labels it adds anyway
+  are stripped: «Категория: failure_propagation_or_guardrail.», «ГАЛЛЮЦИНАЦИЯ:»,
+  `snake_case:` prefixes, and `category` / `anomaly_category` / `type` keys.
+  Codes like «ГБК:» are kept. `add_info` can still define another format;
+  category fields in it are not shown either.
 - **Detector signal in the prompt is brief by default**
   (`evidence_detail = brief`): probability, signal, and the suspicious steps
   with excerpts. It no longer includes feature numbers or a generated
