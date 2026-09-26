@@ -126,7 +126,10 @@ a file path (with or without extension), a **port directory** mounted "as files 
 a dict with the document under any of `bin`, `bytes`, `content`, `data`, `payload`, `value`,
 `unstructured_data`, `path`, `local_path`, `file` (extension from `ext`/`extension`/`filename`/`name`;
 nested dicts and base64 strings too), a pickle of such a dict, a one-row **parquet container**
-or `pandas.DataFrame`/`Series` with bytes or a path inside, and a one-item list.
+or `pandas.DataFrame`/`Series` with bytes or a path inside, a one-item list, a file-like object,
+and an **opened python-docx `Document`**, which is how SberDS delivers a .docx port. The Document is
+saved back to .docx bytes and parsed by the same parser as a file. If saving fails, paragraph and table text
+is taken through the python-docx API.
 The run log shows what arrived (`порт agent_report подан: dict {bin: bytes, ext: str}`,
 `путь к каталогу … (файлы: …)`) and every unwrapping step. If a report was supplied but
 could not be read, the log and the prompt line say **«подан, но НЕ ПРОЧИТАН»** with the

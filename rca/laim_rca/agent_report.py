@@ -328,7 +328,7 @@ def describe(source: Any) -> str:
         return f'{kind}, {len(text)} симв., начало {text[:60]!r}'
     if hasattr(source, 'columns') and hasattr(source, 'to_dict'):
         return f'{kind} {getattr(source, "shape", "")}, колонки {list(source.columns)[:10]}'
-    return kind
+    return _type_name(source)
 
 
 def _directory_file(directory: Path) -> Path:
@@ -509,7 +509,53 @@ def _from_object(source: Any, ext: str = '', depth: int = 0) -> tuple[str, str] 
     if hasattr(source, 'to_dict') and (hasattr(source, 'columns') or hasattr(source, 'index')):
         log('отчёт', f'табличная обёртка: {describe(source)}')
         return _from_rows(_frame_rows(source), ext, depth)
-    raise ValueError(f'неподдерживаемый формат отчёта: {type(source).__name__}')
+    if callable(getattr(source, 'save', None)) and hasattr(source, 'paragraphs'):
+        return _from_document(source, depth)
+    if callable(getattr(source, 'getvalue', None)) or callable(getattr(source, 'read', None)):
+        log('отчёт', f'файловый объект {type(source).__name__} — читаем содержимое')
+        if callable(getattr(source, 'seek', None)):
+            try:
+                source.seek(0)
+            except (OSError, ValueError):
+                pass
+        data = source.getvalue() if callable(getattr(source, 'getvalue', None)) else source.read()
+        return _from_object(data, ext, depth + 1)
+    raise ValueError(f'неподдерживаемый формат отчёта: {_type_name(source)}')
+
+
+def _type_name(source: Any) -> str:
+    kind = type(source)
+    return f'{kind.__module__}.{kind.__qualname__}' if kind.__module__ != 'builtins' else kind.__name__
+
+
+def _from_document(document: Any, depth: int) -> tuple[str, str] | None:
+    """Открытый документ python-docx (docx.document.Document) — так SberDS отдаёт
+    порт с .docx. Сохраняется в .docx-байты и разбирается тем же парсером, что и
+    файл (порядок абзацев и таблиц, стили заголовков). Если сохранить не
+    удалось — текст абзацев и таблиц через API python-docx."""
+    log('отчёт', f'объект Word-документа {_type_name(document)} — сохраняем в .docx и разбираем')
+    buffer = io.BytesIO()
+    try:
+        document.save(buffer)
+        return _from_bytes(buffer.getvalue(), 'docx', depth + 1)
+    except Exception as error:                                  # noqa: BLE001 — есть запасной путь
+        log('отчёт', f'сохранить документ не удалось ({type(error).__name__}: {error}) — берём текст через API')
+    lines: list[tuple[str, bool]] = []
+    for paragraph in getattr(document, 'paragraphs', ()):
+        style = str(getattr(getattr(paragraph, 'style', None), 'name', '') or '').lower()
+        text = ' '.join(str(getattr(paragraph, 'text', '') or '').split())
+        if text:
+            lines.append((text, style.startswith(('heading', 'заголовок', 'title'))))
+    for table in getattr(document, 'tables', ()):
+        for row in table.rows:
+            cells: list[str] = []
+            for cell in row.cells:
+                text = _cut(str(cell.text or ''), CELL_CHARS)
+                if text and (not cells or cells[-1] != text):
+                    cells.append(text)
+            if len(cells) > 1 or (cells and len(cells[0]) > 40):
+                lines.append(('| ' + ' | '.join(cells), False))
+    return '\n'.join(_drop_template(lines)), 'docx'
 
 
 def load(source: Any, max_chars: int = 20_000) -> AgentReport | None:

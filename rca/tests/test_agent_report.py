@@ -300,3 +300,44 @@ def test_ordinary_text_is_not_mistaken_for_a_path_or_base64():
     assert report.source == 'text'
     report = agent_report.load('The agent answers questions about loans and never promises approval ' * 3)
     assert report.source == 'text'
+
+
+class _WordDocument:
+    """Стенд docx.document.Document: так SberDS отдаёт порт с .docx."""
+
+    def __init__(self, data: bytes, broken: bool = False):
+        self.data, self.broken = data, broken
+        self.paragraphs, self.tables = [], []
+
+    def save(self, stream):
+        if self.broken:
+            raise OSError('read-only package')
+        stream.write(self.data)
+
+
+def test_python_docx_document_object(fake_llm):
+    out = run_audit(agent_report=_WordDocument(make_docx()))
+    assert out['agent_report']['source'] == 'docx' and 'get_restrictions' in system_of(fake_llm)
+
+
+def test_real_python_docx_document_and_api_fallback():
+    docx = pytest.importorskip('docx')
+    document = docx.Document()
+    document.add_heading('Техническое задание', level=1)
+    document.add_paragraph('Тул get_restrictions — при ошибке заглушка «По техническим причинам…»')
+    table = document.add_table(rows=1, cols=2)
+    table.rows[0].cells[0].text, table.rows[0].cells[1].text = 'Цель применения LLM', 'Определить статус ограничения'
+    report = agent_report.load(document)
+    assert report.source == 'docx' and '## Техническое задание' in report.text
+    assert '| Цель применения LLM | Определить статус ограничения' in report.text
+
+    broken = _WordDocument(b'', broken=True)
+    broken.paragraphs, broken.tables = document.paragraphs, document.tables
+    report = agent_report.load(broken)
+    assert '## Техническое задание' in report.text and 'get_restrictions' in report.text
+    assert '| Цель применения LLM | Определить статус ограничения' in report.text
+
+
+def test_file_like_object(fake_llm):
+    out = run_audit(agent_report=io.BytesIO(make_docx()))
+    assert out['agent_report']['source'] == 'docx'
