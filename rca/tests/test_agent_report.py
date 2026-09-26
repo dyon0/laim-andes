@@ -84,7 +84,7 @@ def test_report_goes_to_the_system_prompt(fake_llm):
 
     system = system_of(fake_llm)
     assert 'AGENT_REPORT:\n' in system and 'get_restrictions' in system
-    assert 'штатная заглушка' in system                            # как пользоваться отчётом
+    assert 'Штатная заглушка или сценарий из отчёта' in system      # как пользоваться отчётом
     assert system.index('AGENT_REPORT') < len(system)
     assert 'get_restrictions' not in fake_llm.calls[0][1][1]         # в данных пакета отчёта нет
     assert out['agent_report']['source'] == 'docx' and out['agent_report']['truncated'] is False
@@ -192,3 +192,40 @@ def test_docx_line_breaks_keep_list_items():
     br = '<w:p><w:r><w:t>Источники данных:</w:t><w:br/><w:t>- API ФССК (версия 1.0)</w:t><w:br/><w:t>- API Исп.П</w:t></w:r></w:p>'
     text = agent_report.load(make_docx(br), max_chars=100_000).text
     assert '- API ФССК (версия 1.0)\n- API Исп.П' in text
+
+
+# --- отчёт действительно доходит до модели и используется ------------------------
+
+def test_pickled_doc_browser_input_is_read_safely(fake_llm, tmp_path):
+    """Порт g-aiva-doc-browser принимает pickle {"bin", "ext"} — такой файл тоже читается."""
+    import pickle
+    path = tmp_path / 'unstructured_data'
+    path.write_bytes(pickle.dumps({'bin': make_docx(), 'ext': 'docx'}))
+    out = run_audit(agent_report=str(path))
+    assert out['agent_report']['source'] == 'docx' and 'get_restrictions' in system_of(fake_llm)
+
+
+def test_pickle_with_classes_and_binary_garbage_are_refused(fake_llm):
+    import datetime
+    import pickle
+    out = run_audit(agent_report=pickle.dumps({'bin': b'x', 'when': datetime.date(2026, 1, 1)}))
+    assert 'не поддерживается' in out['agent_report']['error']      # классы в pickle запрещены
+    out = run_audit(agent_report=bytes(range(256)) * 20)
+    assert 'не похожи на текст' in out['agent_report']['error']       # мусор не уходит модели
+    assert 'AGENT_REPORT' not in system_of(fake_llm)
+
+
+def test_report_is_the_leading_context_of_the_prompt(fake_llm):
+    run_audit(agent_report=make_docx())
+    system = system_of(fake_llm)
+    assert system.index('ГЛАВНЫЙ КОНТЕКСТ') < system.index('Поля записи') < system.index('Как анализировать')
+    assert '0. Сначала определи по AGENT_REPORT' in system
+    assert '«По отчёту о разработке агент должен …, а в ответе …»' in system
+    assert system.index('КОНЕЦ AGENT_REPORT') > system.index('get_restrictions')
+
+
+def test_results_say_the_report_was_used(fake_llm):
+    out = json.loads(rca.main(json.dumps({'anomalies': [anomaly(0)]}), agent_report=make_docx())['res'])
+    assert out['anomalies'][0]['rca_results']['agent_report_used'] is True
+    plain = json.loads(rca.main(json.dumps({'anomalies': [anomaly(0)]}))['res'])
+    assert 'agent_report_used' not in plain['anomalies'][0]['rca_results']

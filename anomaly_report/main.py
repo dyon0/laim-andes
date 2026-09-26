@@ -714,6 +714,8 @@ def rca_text(value: Any) -> tuple[str, list[str]]:
         tags.append(_VERDICT_NOTE[value["verdict"]])
     if value.get("severity") in _SEVERITY:
         tags.append(f'критичность: {_SEVERITY[value["severity"]]}')
+    if value.get("agent_report_used"):
+        tags.append("с учётом отчёта о разработке")
     text = _plain(value.get("rca"))
     location = value.get("location") if isinstance(value.get("location"), dict) else {}
     span = location.get("span_name") or location.get("span_id")

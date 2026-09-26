@@ -130,3 +130,8 @@ def test_trace_ids_in_rca_link_to_their_cards():
     assert '<a class="trace-ref" href="#trace-eeee5555ffff6666aaaa">eeee5555ffff (#002)</a>' in html
     assert '<a class="trace-ref" href="#trace-aaaa1111bbbb2222cccc">aaaa1111bbbb2222cccc (#001)</a>' in html
     assert '0123456789abcdef (не в отчёте)' in html                  # чужой id без карточки — просто текст
+
+
+def test_report_usage_is_visible_on_the_card():
+    html, _ = render([record(0, rca_results={'verdict': 'anomaly', 'rca': 'Причина.', 'agent_report_used': True})])
+    assert 'с учётом отчёта о разработке' in html

@@ -77,7 +77,8 @@ def _reason(rca: Any) -> str:
 
 
 def assemble(records: list[dict], evidences: list[Evidence | None], analyses: dict[int, Analysis], *,
-             analyzed_by: str, keep_uncertain: bool, llm_used: bool) -> tuple[list[dict], list[dict]]:
+             analyzed_by: str, keep_uncertain: bool, llm_used: bool,
+             agent_report_used: bool = False) -> tuple[list[dict], list[dict]]:
     """(выходные записи в исходном порядке, решения по всем записям для аудита)."""
     output, decisions = [], []
     known_traces = [str(r.get('trace_id')) for r in records if r.get('trace_id')]
@@ -104,6 +105,8 @@ def assemble(records: list[dict], evidences: list[Evidence | None], analyses: di
         if evidence is not None:
             results['detector_evidence'] = evidence.output_view()
         results['analyzed_by'] = analyzed_by if analysis is not None else 'detector'
+        if analysis is not None and agent_report_used:
+            results['agent_report_used'] = True       # модель анализировала с отчётом о разработке
 
         if kept:
             out = {key: value for key, value in record.items() if key != 'detector_rca'}

@@ -117,7 +117,21 @@ Accepted inputs (the format is detected by content, not by file name):
 | **plain text / Markdown** | a string |
 | **g-aiva-doc-browser output** | `{"all_results": {"bp_card": …}, "extracted_fields": {…}}` or either part alone |
 
-PDF is rejected with a clear message: convert the report to .docx or HTML.
+PDF is rejected with a clear message: convert the report to .docx or HTML. A pickle file (doc-browser's
+`report_dict` form) is read with a builtins-only unpickler: dicts, strings and
+bytes are allowed, any class is refused. Bytes that are not text, .docx or
+HTML are refused rather than sent to the model. Either way the reason ends up
+in `rca_audit.agent_report.error`.
+
+How the report is used in the prompt: it comes right after the role, as the
+**leading context**, before the record fields. The analysis steps start with
+it ("step 0: determine from the report what the agent should have done").
+The RCA must cite a violated requirement explicitly («По отчёту о разработке
+агент должен …, а в ответе …»), and `business_description` is written in terms
+of the report's business process. Records analyzed with the report carry
+`rca_results.agent_report_used = true`, which the report node shows as the tag
+«с учётом отчёта о разработке». If that tag is missing, the report did not
+reach the model: check `rca_audit.agent_report`.
 
 Parsing uses only the standard library (zipfile + XML, `html.parser`, `email`
 for MHTML), so no new requirements. Paragraphs and tables are kept in document

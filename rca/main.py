@@ -336,7 +336,8 @@ def main(
     llm_used = bool(analyses) or (mode != 'detector_only' and stats["requests"] > stats["failed_requests"])
     output, decisions = assemble(
         records, evidences, analyses,
-        analyzed_by=f"llm:{model_id}", keep_uncertain=keep, llm_used=llm_used)
+        analyzed_by=f"llm:{model_id}", keep_uncertain=keep, llm_used=llm_used,
+        agent_report_used=context is not None)
     report = audit(decisions, mode=mode, model_id=model_id, use_detector_evidence=with_evidence,
                    keep_uncertain=keep, llm=stats)
     report['agent_report'] = context_audit

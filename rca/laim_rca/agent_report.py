@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import io
 import json
+import pickle
 import re
 import zipfile
 from dataclasses import dataclass
@@ -243,8 +244,30 @@ def _decode(data: bytes) -> str:
     return data.decode('utf-8', errors='replace')
 
 
+class _BuiltinsOnly(pickle.Unpickler):
+    """pickle только из встроенных типов (dict/list/str/bytes/числа): так порт
+    g-aiva-doc-browser отдаёт {"bin", "ext"}; любые классы запрещены — чужой
+    pickle не может исполнить код."""
+
+    def find_class(self, module: str, name: str):
+        raise ValueError(f'pickle с объектом {module}.{name} не поддерживается: подайте .docx, HTML или текст')
+
+
+def _looks_like_text(text: str) -> bool:
+    if not text:
+        return False
+    noise = sum(1 for c in text if (ord(c) < 32 and c not in '\n\r\t') or c == '\ufffd')
+    return noise <= 0.01 * len(text)
+
+
 def _from_bytes(data: bytes, ext: str = '') -> tuple[str, str] | None:
     ext = ext.lstrip('.').lower()
+    if data[:1] == b'\x80' or ext in ('pkl', 'pickle'):             # pickle протокола 2+
+        try:
+            obj = _BuiltinsOnly(io.BytesIO(data)).load()
+        except (pickle.UnpicklingError, EOFError, ValueError) as error:
+            raise ValueError(f'отчёт в pickle не прочитан: {error}') from error
+        return _from_object(obj)
     if data[:2] == b'PK' or ext == 'docx':
         return '\n'.join(_drop_template(_docx_lines(data))), 'docx'
     if data[:5] == b'%PDF-' or ext == 'pdf':
@@ -255,7 +278,10 @@ def _from_bytes(data: bytes, ext: str = '') -> tuple[str, str] | None:
         return '\n'.join(_drop_template(_html_lines(_mhtml_html(data)))), 'html'
     if ext in ('html', 'htm'):
         return '\n'.join(_drop_template(_html_lines(_decode(data)))), 'html'
-    return _from_text(_decode(data))
+    text = _decode(data)
+    if not _looks_like_text(text):
+        raise ValueError('данные порта agent_report не похожи на текст, .docx или HTML')
+    return _from_text(text)
 
 
 def _from_text(text: str) -> tuple[str, str] | None:
