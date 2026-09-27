@@ -94,6 +94,16 @@ fails before and passes after.
   metaparameter falls back to the test value for such bundles, so an old
   classifier still sees the constant it was trained with.
 
+- **F-84 (P3)** documentation vs code: the platform calls
+  `run.py::main` -> `laim.platform.run_node`, not `ars/main.py::main`
+  (CLAUDE.md); branch errors are the per-element LOSS of each branch
+  (Huber for EPI in both default experiments), not MSE (CLAUDE.md);
+  `detections.parquet` has no `rca_report_str` (README); `model_out` carries
+  the bundle bytes, not a path (deploy/README diagram, `laim/platform.py`
+  docstring); `device` now really applies to the inference embedder (F-76).
+  From the audit's minor leads: EXPERIMENTS.md now lists the combined-FMLP
+  widths the deep/wide builders actually produce.
+
 ## Fixed (P0s, each with the test that failed before / passes after)
 
 - **F-36** injector text-noise crashed on ~5% of spans (u64 hash → i64 wrap in

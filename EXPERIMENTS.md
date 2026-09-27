@@ -31,8 +31,8 @@ combined, batch 32, lr 1e-4, "deep" architecture.
 | Name | EPI LSTM-AE | SEM LSTM-AE | Combined FMLP-AE | Character |
 |---|---|---|---|---|
 | `default` | 2 layers (uni 64 → bi 32), latent 128 | 2 layers (bi 512 → uni 256), latent 768 | 3 layers (relu 128, tanh 32, relu 64) | The validated baseline. Fast, stable, fits small corpora. |
-| `deep` | 10 alternating uni/bi layers (64→…→8→32→…→256), latent 128 | 14 alternating layers (768→…→24→256→…→512), latent 768 | 14-layer funnel (768→…→32→…→64) | Much higher capacity; needs large corpora and more epochs; slowest. |
-| `wide` | growing widths (512→1024…, power-of-2 rounded), latent 128 | growing widths (2048→4096…), latent 768 | wide FMLP (768→…→512) | Widest layers, largest VRAM footprint per step; mid training cost. |
+| `deep` | 10 alternating uni/bi layers (64→…→8→32→…→256), latent 128 | 14 alternating layers (768→…→24→256→…→512), latent 768 | 14 hidden layers 768→384→…→12→32→12→…→384 (the builder's closing 768 and 64 widths are cut: 16 widths are zipped with 14 activations) | Much higher capacity; needs large corpora and more epochs; slowest. |
+| `wide` | growing widths (512→1024…, power-of-2 rounded), latent 128 | growing widths (2048→4096…), latent 768 | 6 hidden layers 1024→2048→4096→1024→4096→2048 (power-of-2 rounded; the closing 768/512 widths are cut the same way) | Widest layers, largest VRAM footprint per step; mid training cost. |
 
 ## The catalogue
 

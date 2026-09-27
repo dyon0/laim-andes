@@ -213,9 +213,12 @@ Writes `detections.parquet` with a **full audit trail**: every input trace with
 `detector_p_anomaly`, `detector_confidence`, per-branch errors, normalized
 latents, `detector_is_anomaly`, `detector_truncated` (traces longer than the
 trained sequence budget), and RCA attribution columns
-(`rca_top_span_indices/errors`, `rca_top_feature_indices/errors`,
-`rca_report_str`). Inference verifies the embedder fingerprint against the
-training artifacts and refuses to serve on mismatch.
+(`rca_top_span_indices/errors`, `rca_top_feature_indices/errors`, the
+index-space `rca_attribution` JSON for every trace, and `detector_rca` for
+flagged traces). (`rca_report_str` exists only on the legacy `ars/main.py`
+path, where `s4__rca.analyze_anomalies` runs.) Inference verifies the
+embedder fingerprint against the training artifacts and refuses to serve on
+mismatch.
 
 ---
 

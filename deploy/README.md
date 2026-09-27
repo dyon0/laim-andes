@@ -19,7 +19,7 @@ One node type, two modes (`mode` UI parameter):
              ┌─────────────────────────────┐          ┌──────────────────────────────┐
  spans ────▶ │ laim-detector  mode=train   │          │ laim-detector  mode=inference │
  embedder ─▶ │                             │          │                              │
-             │ model_out ─── path to zip ──┼────────▶ │ model_in                     │
+             │ model_out ── zip bytes ─────┼────────▶ │ model_in                     │
              │ eval_report / html_reports  │          │ path_traces_infer ◀── spans  │
              │ detector_metrics_holdout    │          │ path_embedder    ◀── embedder│
              └─────────────────────────────┘          │ anomaly_traces / test_anomalies

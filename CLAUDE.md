@@ -7,7 +7,8 @@ architecture (paper: `docs/lumimas.pdf`). Unsupervised detector over AEF span
 traces: EPI features + semantic embeddings → two LSTM autoencoders → combined
 FMLP autoencoder → reconstruction error → calibrated `p_anomaly`. A supervised
 anomaly-type classifier (s3) and an RCA seam (s4) sit downstream. Deploy target
-is a SberDS-style node platform (`deploy/`), which calls `ars/main.py::main`.
+is a SberDS-style node platform (`deploy/`): `descriptor.json` points it at
+`run.py::main`, which calls `laim.platform.run_node`.
 
 Read in this order: `PLAN.md` **"Active threads"** (current state + agreed
 next steps — start here), `AUDIT_00_baseline.md` (what the legacy code did),
@@ -91,13 +92,19 @@ authoritative: 46 fields, sentinels instead of NULL (-1 / -1.0 / False / '' /
   malformed codes fail before s1 — F-78), and every experiment uses
   `detector.threshold_metric` (the old per-position metric cycling in
   `build_grid` is gone — F-77). Full catalogue: `EXPERIMENTS.md`.
-- `ars/main.py` is the deploy-platform adapter (legacy contract). Don't break
-  its signature; it is not the way to run things locally.
+- `ars/main.py` is the LEGACY platform adapter (pre-`laim` contract) and a
+  library: `laim.platform` imports `Anomalies` and `extract_query_response`
+  from it. The platform itself calls `run.py::main` -> `laim.platform.run_node`.
+  Don't break those imports; `ars/main.py::main` is not the way to run things.
 - TUI prints are Russian; logs from `laim` are English. Chart rendering is
   crash-proof (degrades to missing images).
-- Metric semantics: branch errors are per-element MSE (comparable across
-  EPI/SEM/Combined since F-23). Old reports' "~1200 MSE" numbers used
-  timestep-normalized loss on unfloored robust scales — not comparable.
+- Metric semantics: the per-trace branch errors (`e_epi`/`e_sem`/`e_comb`,
+  what scoring, threshold and calibration use) are the per-element LOSS of
+  that branch — Huber for EPI in both default experiments (and for the FMLP
+  in `hub_mse_hub_32_4_deep`), MSE otherwise — normalized per element since
+  F-23. The `*_mse` diagnostics in `results.json` are plain per-element MSE.
+  Old reports' "~1200 MSE" numbers used timestep-normalized loss on unfloored
+  robust scales — not comparable.
 
 ## Where the bodies were buried (fixed, but instructive)
 

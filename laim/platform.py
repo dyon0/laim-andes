@@ -7,9 +7,11 @@ The returned dict's keys must match the descriptor's OUT port names.
 
 One dual-mode node:
   mode = "train"      spans → prepare → detector (+classifier) → eval →
-                      self-contained model bundle (zip) on shared storage,
-                      path emitted on `model_out`; optionally scores
-                      `path_traces_infer` in the same run.
+                      self-contained model bundle (zip); `model_out` carries
+                      the bundle BYTES (base64 inside its JSON payload, with
+                      sha256; bundles > 256 MB travel as the store path
+                      only); optionally scores `path_traces_infer` in the
+                      same run.
   mode = "inference"  model bundle (port file or shared path) + spans →
                       full audit-trail scoring + the legacy product contract
                       (`anomaly_traces` dataframe / `test_anomalies` JSON).
