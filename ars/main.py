@@ -10,7 +10,7 @@ from    argparse                            import ArgumentParser
 from    pathlib                             import PurePath, Path
 from    datetime                            import datetime
 from    random                              import choices
-from    json                                import dumps
+from    json                                import dumps, loads
 from    sys                                 import exit
 from    zipfile                             import ZipFile
 
@@ -50,7 +50,9 @@ class Anomalies:
                      .with_columns(
                          pl.col('_t0').cast(pl.Datetime(time_unit = 'ns')).dt.strftime(Anomalies.clock).alias('starttime'),
                          pl.col('_t1').cast(pl.Datetime(time_unit = 'ns')).dt.strftime(Anomalies.clock).alias('endtime'),
-                         (pl.col('detector_confidence') * 100).round().cast(pl.Int64).alias('confidence'))
+                         # confidence OF THE ANOMALY: p_anomaly, not detector_confidence =
+                         # max(p, 1-p) — that read 70 for a flagged trace with p = 0.3
+                         (pl.col('detector_p_anomaly') * 100).round().cast(pl.Int64).alias('confidence'))
                      .drop('_t0', '_t1'))
         absent  = filter(lambda n: n not in timed.columns, Anomalies.blanks)
 
@@ -59,6 +61,9 @@ class Anomalies:
     @staticmethod
     def records(frame: pl.DataFrame) -> list:
         field   = lambda r, n: r[n] if n in r else ''
+        # detector_rca (s4 export, flagged traces with attribution on) rides
+        # along as a nested object for the downstream RCA node
+        extra   = lambda r: {'detector_rca': loads(r['detector_rca'])} if r.get('detector_rca') else {}
         row     = lambda r: {
             '_comment'              : field(r, '_comment'),
             'trace_id'              : r['trace_id'],
@@ -70,7 +75,8 @@ class Anomalies:
             'user_query'            : field(r, 'user_query'),
             'agent_response'        : field(r, 'agent_response'),
             'tech_details'          : field(r, 'tech_details'),
-            'rca_results'           : field(r, 'rca_results')}
+            'rca_results'           : field(r, 'rca_results'),
+            **extra(r)}
 
         return list(map(row, frame.to_dicts()))
 

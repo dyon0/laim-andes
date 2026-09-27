@@ -1,0 +1,1614 @@
+{
+ "anomalies": [
+  {
+   "_comment": "",
+   "trace_id": "064b05589a9351402add355119b481c5",
+   "starttime": "2026-05-20T09:18:40Z",
+   "endtime": "2026-05-20T09:19:00Z",
+   "anomaly_type": "",
+   "confidence": 99,
+   "business_description": "",
+   "user_query": "<запрос пользователя не обнаружен>",
+   "agent_response": "{\"choices\":[{\"message\":{\"content\":\"Добрый день, нам по контракту, который стоит у вас на учете, нерезидент отправил частичную оплату через платежного агента. То есть третье лицо (нерезидент) отправили нам оплату по поручению нашего покупателя за товар (чечевица). Подскажите, нужно ли нам что-то предоставить и как зачесть данную сумму как оплату за товар отгруженный, чтоб она учлась в вбк?\",\"role\":\"assistant\"},\"index\":0,\"finish_reason\":\"stop\"}],\"created\":1779268740,\"model\":\"GigaChat-2-Max:2.0.28.2\",\"object\":\"chat.completion\",\"usage\":{\"prompt_tokens\":1053,\"completion_tokens\":82,\"total_tokens\":1135,\"precached_prompt_tokens\":2}}",
+   "tech_details": "",
+   "rca_results": "",
+   "detector_rca": {
+    "schema": "laim.detector_rca/1",
+    "agent_id": "CI09774440",
+    "scores": {
+     "p_anomaly": 0.994883,
+     "reconstruction_error": 0.577527,
+     "threshold": 0.486423,
+     "branch_z": {
+      "behavior": 29.1252,
+      "semantic": -0.00661052
+     },
+     "flag_share": {
+      "behavior": 0.843884,
+      "semantic": 0.156116
+     },
+     "logit": {
+      "behavior": 5.42504,
+      "semantic": -0.401322,
+      "combined": 0.246397,
+      "bias": 0.0
+     }
+    },
+    "sequence": {
+     "spans": 13,
+     "scored": 13,
+     "truncated": false
+    },
+    "spans": {
+     "cbd6113833b67936": {
+      "name": "input_request",
+      "kind": "input_request",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "cfae1994dce88f62",
+      "http_method": "GET",
+      "http_path": "/dummy",
+      "http_status_code": 200,
+      "start_time": "2026-05-20T09:18:40.949Z",
+      "duration_s": 19.8694,
+      "output_excerpt": "{\"message\": {\"version\": \"1.2\", \"performative\": \"inform\", \"sender\": \"aigw-ai-account-restr\", \"receiver\": \"GIGAASSISTANT\", \"conversation_id\": \"93c8c2dc-0a3e-460c-a616-37a8305e0fb6\", \"in_reply_to\": \"129…"
+     },
+     "730d7bdfcc8dae6e": {
+      "name": "OutgoingWebRequest",
+      "kind": "output_request",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "7857eaa4dd35aaf2",
+      "http_method": "POST",
+      "http_path": "/dummy_not",
+      "http_status_code": 200,
+      "start_time": "2026-05-20T09:18:50.291Z",
+      "duration_s": 0.0861831
+     },
+     "db74aedd898fc142": {
+      "name": "OutgoingWebRequest",
+      "kind": "output_request",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "7857eaa4dd35aaf2",
+      "http_method": "POST",
+      "http_path": "/dummy_not",
+      "http_status_code": 200,
+      "start_time": "2026-05-20T09:18:40.993Z",
+      "duration_s": 9.29404,
+      "output_excerpt": "{\"jsonrpc\":\"2.0\",\"id\":0,\"result\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{\"experimental\":{},\"prompts\":{\"listChanged\":false},\"resources\":{\"subscribe\":false,\"listChanged\":false},\"tools\":{\"listCh…"
+     },
+     "f978685c4366c28e": {
+      "name": "LangGraph",
+      "kind": "chain",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "4f4c825917a8cbf3",
+      "start_time": "2026-05-20T09:18:50.382Z",
+      "duration_s": 10.3269,
+      "input_excerpt": "{\"user_question\": \"добрый день, нам по контракту, который стоит у вас на учете, нерезидент отправил частичную оплату через платежного агента. То есть третье лицо (нерезидент) отправили нам оплату по…",
+      "output_excerpt": "{\"user_question\": \"добрый день, нам по контракту, который стоит у вас на учете, нерезидент отправил частичную оплату через платежного агента. То есть третье лицо (нерезидент) отправили нам оплату по…"
+     },
+     "d2499f7d905e3490": {
+      "name": "data_enrichment_node",
+      "kind": "chain",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "f978685c4366c28e",
+      "graph_node": "data_enrichment_node",
+      "start_time": "2026-05-20T09:18:50.383Z",
+      "duration_s": 10.3244,
+      "input_excerpt": "{\"user_question\": \"добрый день, нам по контракту, который стоит у вас на учете, нерезидент отправил частичную оплату через платежного агента. То есть третье лицо (нерезидент) отправили нам оплату по…",
+      "output_excerpt": "{\"skill\": null, \"main_prompt\": \"Добрый день, нам по контракту, который стоит у вас на учете, нерезидент отправил частичную оплату через платежного агента. То есть третье лицо (нерезидент) отправили н…"
+     },
+     "76578df0be8fe651": {
+      "name": "OutgoingWebRequest",
+      "kind": "output_request",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "7857eaa4dd35aaf2",
+      "http_method": "POST",
+      "http_path": "/dummy_not",
+      "http_status_code": 200,
+      "start_time": "2026-05-20T09:19:00.794Z",
+      "duration_s": 0.0189326
+     },
+     "a65726d14d96b9fc": {
+      "name": "not_related_to_restriction_node",
+      "kind": "chain",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "f978685c4366c28e",
+      "graph_node": "not_related_to_restriction_node",
+      "start_time": "2026-05-20T09:19:00.708Z",
+      "duration_s": 0.000222738,
+      "input_excerpt": "{\"user_question\": \"добрый день, нам по контракту, который стоит у вас на учете, нерезидент отправил частичную оплату через платежного агента. То есть третье лицо (нерезидент) отправили нам оплату по…",
+      "output_excerpt": "{\"final_response\": [\"Вопрос не относится к ограничениям\"], \"status_code\": \"202-1\", \"final_message\": true}"
+     },
+     "27884ba3082708fe": {
+      "name": "grade_restriction",
+      "kind": "chain",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "d2499f7d905e3490",
+      "graph_node": "data_enrichment_node",
+      "start_time": "2026-05-20T09:19:00.706Z",
+      "duration_s": 0.000972733,
+      "input_excerpt": "{\"user_question\": \"добрый день, нам по контракту, который стоит у вас на учете, нерезидент отправил частичную оплату через платежного агента. То есть третье лицо (нерезидент) отправили нам оплату по…",
+      "output_excerpt": "not_related_to_restriction_node"
+     },
+     "678573cb8b5da3b2": {
+      "name": "GigaChat",
+      "kind": "llm",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "4f9ddedf92cd9665",
+      "llm_model": "GigaChat-2-Pro:2.0.28.2",
+      "llm_total_tokens": 1743,
+      "graph_node": "data_enrichment_node",
+      "start_time": "2026-05-20T09:18:50.391Z",
+      "duration_s": 1.57452,
+      "input_excerpt": "[[{\"content\": \"\\nТы — специализированный ассистент банка по вопросам государственных ограничений, арестов, инкассовых поручений, постановлений ФССП и ФНС и т.п.\\n\\nТвоя задача — проанализировать полн…",
+      "output_excerpt": "{\"content\": \"\", \"additional_kwargs\": {\"function_call\": {\"name\": \"DialogAnalysisOutput\", \"arguments\": {\"label\": \"off_topic\", \"sentiment_detected\": \"neutral\"}}, \"functions_state_id\": \"019e44ae-4407-728…"
+     },
+     "fd17186d40894f86": {
+      "name": "OutgoingWebRequest",
+      "kind": "output_request",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "8c21e56851eb0274",
+      "http_method": "POST",
+      "http_path": "/dummy_not",
+      "http_status_code": 200,
+      "start_time": "2026-05-20T09:18:50.389Z",
+      "duration_s": 10.2632,
+      "output_excerpt": "{\"choices\":[{\"message\":{\"content\":\"Добрый день, нам по контракту, который стоит у вас на учете, нерезидент отправил частичную оплату через платежного агента. То есть третье лицо (нерезидент) отправил…"
+     }
+    },
+    "feature_info": {
+     "avg_word_length_sem_max": {
+      "base": "avg_word_length_sem",
+      "aggregation": "max",
+      "window": null,
+      "log1p": true,
+      "scope": "sequence"
+     },
+     "avg_word_length_sem_q95": {
+      "base": "avg_word_length_sem",
+      "aggregation": "q95",
+      "window": null,
+      "log1p": true,
+      "scope": "sequence"
+     },
+     "action_entropy": {
+      "base": "action_entropy",
+      "aggregation": null,
+      "window": null,
+      "log1p": false,
+      "scope": "sequence"
+     },
+     "avg_word_length_sem_q50": {
+      "base": "avg_word_length_sem",
+      "aggregation": "q50",
+      "window": null,
+      "log1p": true,
+      "scope": "sequence"
+     },
+     "avg_word_length_sem_rolling_q50_w100": {
+      "base": "avg_word_length_sem",
+      "aggregation": "rolling_q50",
+      "window": 100,
+      "log1p": true,
+      "scope": "step"
+     },
+     "avg_word_length_sem_rolling_min_w100": {
+      "base": "avg_word_length_sem",
+      "aggregation": "rolling_min",
+      "window": 100,
+      "log1p": true,
+      "scope": "step"
+     },
+     "avg_word_length_sem_rolling_q90_w100": {
+      "base": "avg_word_length_sem",
+      "aggregation": "rolling_q90",
+      "window": 100,
+      "log1p": true,
+      "scope": "step"
+     },
+     "avg_word_length_sem_rolling_q50_w10": {
+      "base": "avg_word_length_sem",
+      "aggregation": "rolling_q50",
+      "window": 10,
+      "log1p": true,
+      "scope": "step"
+     },
+     "avg_word_length_sem_rolling_min_w3": {
+      "base": "avg_word_length_sem",
+      "aggregation": "rolling_min",
+      "window": 3,
+      "log1p": true,
+      "scope": "step"
+     }
+    },
+    "behavior": {
+     "spans": [
+      {
+       "rank": 1,
+       "index": 0,
+       "span_id": "cbd6113833b67936",
+       "error": 3.998,
+       "error_share": 0.1151,
+       "vs_typical": 8.226,
+       "drivers": [
+        {
+         "feature": "avg_word_length_sem_rolling_min_w100",
+         "direction": "higher",
+         "observed": 0.2,
+         "expected": 0.0007673,
+         "observed_raw": 0.2214,
+         "expected_raw": 0.0007676,
+         "clipped": true,
+         "error": 19.42
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_q50_w100",
+         "direction": "lower",
+         "observed": 1.397,
+         "expected": 2.631,
+         "observed_raw": 3.041,
+         "expected_raw": 12.89,
+         "error": 16.18
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_q90_w100",
+         "direction": "lower",
+         "observed": 1.397,
+         "expected": 5.591,
+         "observed_raw": 3.041,
+         "expected_raw": 266.9,
+         "error": 8.633
+        }
+       ]
+      },
+      {
+       "rank": 2,
+       "index": 2,
+       "span_id": "730d7bdfcc8dae6e",
+       "error": 2.982,
+       "error_share": 0.08587,
+       "vs_typical": 6.135,
+       "drivers": [
+        {
+         "feature": "avg_word_length_sem_rolling_q50_w100",
+         "direction": "lower",
+         "observed": 1.397,
+         "expected": 2.631,
+         "observed_raw": 3.041,
+         "expected_raw": 12.89,
+         "error": 16.18
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_q50_w10",
+         "direction": "lower",
+         "observed": 1.397,
+         "expected": 2.641,
+         "observed_raw": 3.041,
+         "expected_raw": 13.03,
+         "error": 6.634
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_min_w3",
+         "direction": "lower",
+         "observed": -2.678e-06,
+         "expected": 2.543,
+         "observed_raw": -2.678e-06,
+         "expected_raw": 11.71,
+         "error": 3.526
+        }
+       ]
+      },
+      {
+       "rank": 3,
+       "index": 1,
+       "span_id": "db74aedd898fc142",
+       "error": 2.926,
+       "error_share": 0.08428,
+       "vs_typical": 6.021,
+       "drivers": [
+        {
+         "feature": "avg_word_length_sem_rolling_min_w100",
+         "direction": "higher",
+         "observed": 0.2,
+         "expected": 0.0007463,
+         "observed_raw": 0.2214,
+         "expected_raw": 0.0007465,
+         "clipped": true,
+         "error": 19.43
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_q50_w100",
+         "direction": "higher",
+         "observed": 3.516,
+         "expected": 2.631,
+         "observed_raw": 32.64,
+         "expected_raw": 12.89,
+         "error": 11.45
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_q50_w10",
+         "direction": "higher",
+         "observed": 3.516,
+         "expected": 2.642,
+         "observed_raw": 32.64,
+         "expected_raw": 13.04,
+         "error": 4.506
+        }
+       ]
+      },
+      {
+       "rank": 4,
+       "index": 3,
+       "span_id": "f978685c4366c28e",
+       "error": 2.793,
+       "error_share": 0.08045,
+       "vs_typical": 5.748,
+       "drivers": [
+        {
+         "feature": "avg_word_length_sem_rolling_q50_w100",
+         "direction": "lower",
+         "observed": 1.684,
+         "expected": 2.631,
+         "observed_raw": 4.389,
+         "expected_raw": 12.89,
+         "error": 12.29
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_q50_w10",
+         "direction": "lower",
+         "observed": 1.684,
+         "expected": 2.641,
+         "observed_raw": 4.389,
+         "expected_raw": 13.03,
+         "error": 4.982
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_min_w3",
+         "direction": "lower",
+         "observed": -2.678e-06,
+         "expected": 2.538,
+         "observed_raw": -2.678e-06,
+         "expected_raw": 11.66,
+         "error": 3.519
+        }
+       ]
+      },
+      {
+       "rank": 5,
+       "index": 4,
+       "span_id": "d2499f7d905e3490",
+       "error": 2.697,
+       "error_share": 0.07767,
+       "vs_typical": 5.55,
+       "drivers": [
+        {
+         "feature": "avg_word_length_sem_rolling_q50_w100",
+         "direction": "lower",
+         "observed": 1.972,
+         "expected": 2.631,
+         "observed_raw": 6.187,
+         "expected_raw": 12.89,
+         "error": 8.404
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_min_w3",
+         "direction": "lower",
+         "observed": -2.678e-06,
+         "expected": 2.536,
+         "observed_raw": -2.678e-06,
+         "expected_raw": 11.63,
+         "error": 3.515
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_q50_w10",
+         "direction": "lower",
+         "observed": 1.972,
+         "expected": 2.641,
+         "observed_raw": 6.187,
+         "expected_raw": 13.02,
+         "error": 3.331
+        }
+       ]
+      }
+     ],
+     "features": [
+      {
+       "rank": 1,
+       "feature": "avg_word_length_sem_max",
+       "direction": "lower",
+       "observed": 9.673,
+       "expected": 9.873,
+       "observed_raw": 15890.0,
+       "expected_raw": 19410.0,
+       "clipped": true,
+       "error": 19.5,
+       "error_share": 0.1622,
+       "vs_typical": 40.13,
+       "peak_span_index": 3,
+       "peak_span_id": "f978685c4366c28e"
+      },
+      {
+       "rank": 2,
+       "feature": "avg_word_length_sem_q95",
+       "direction": "lower",
+       "observed": 5.929,
+       "expected": 6.129,
+       "observed_raw": 374.8,
+       "expected_raw": 458.0,
+       "clipped": true,
+       "error": 19.49,
+       "error_share": 0.1621,
+       "vs_typical": 40.09,
+       "peak_span_index": 0,
+       "peak_span_id": "cbd6113833b67936"
+      },
+      {
+       "rank": 3,
+       "feature": "action_entropy",
+       "direction": "lower",
+       "observed": 1.573,
+       "expected": 2.011,
+       "observed_raw": 1.573,
+       "expected_raw": 2.011,
+       "error": 15.31,
+       "error_share": 0.1274,
+       "vs_typical": 31.51,
+       "peak_span_index": 12,
+       "peak_span_id": "76578df0be8fe651"
+      },
+      {
+       "rank": 4,
+       "feature": "avg_word_length_sem_q50",
+       "direction": "lower",
+       "observed": 2.361,
+       "expected": 2.639,
+       "observed_raw": 9.6,
+       "expected_raw": 13.0,
+       "error": 14.94,
+       "error_share": 0.1243,
+       "vs_typical": 30.74,
+       "peak_span_index": 1,
+       "peak_span_id": "db74aedd898fc142"
+      },
+      {
+       "rank": 5,
+       "feature": "avg_word_length_sem_rolling_q50_w100",
+       "direction": "lower",
+       "observed": 1.397,
+       "expected": 2.631,
+       "observed_raw": 3.041,
+       "expected_raw": 12.89,
+       "error": 7.701,
+       "error_share": 0.06407,
+       "vs_typical": 15.84,
+       "peak_span_index": 2,
+       "peak_span_id": "730d7bdfcc8dae6e"
+      }
+     ]
+    },
+    "semantic": {
+     "spans": [
+      {
+       "rank": 1,
+       "index": 12,
+       "span_id": "76578df0be8fe651",
+       "error": 0.00094,
+       "error_share": 0.07895,
+       "vs_typical": 1.016
+      },
+      {
+       "rank": 2,
+       "index": 11,
+       "span_id": "a65726d14d96b9fc",
+       "error": 0.000939,
+       "error_share": 0.07887,
+       "vs_typical": 1.014
+      },
+      {
+       "rank": 3,
+       "index": 10,
+       "span_id": "27884ba3082708fe",
+       "error": 0.0009377,
+       "error_share": 0.07875,
+       "vs_typical": 1.013
+      },
+      {
+       "rank": 4,
+       "index": 9,
+       "span_id": "678573cb8b5da3b2",
+       "error": 0.0009359,
+       "error_share": 0.0786,
+       "vs_typical": 1.011
+      },
+      {
+       "rank": 5,
+       "index": 8,
+       "span_id": "fd17186d40894f86",
+       "error": 0.0009334,
+       "error_share": 0.0784,
+       "vs_typical": 1.008
+      }
+     ]
+    }
+   }
+  },
+  {
+   "_comment": "",
+   "trace_id": "4b9652f8d5b0692eb1eea0bb271b3754",
+   "starttime": "2026-05-19T05:17:48Z",
+   "endtime": "2026-05-19T05:18:00Z",
+   "anomaly_type": "",
+   "confidence": 91,
+   "business_description": "",
+   "user_query": "<запрос пользователя не обнаружен>",
+   "agent_response": "{\"choices\":[{\"message\":{\"content\":\"\",\"role\":\"assistant\",\"function_call\":{\"name\":\"DialogAnalysisOutput\",\"arguments\":{\"label\":\"off_topic\",\"sentiment_detected\":\"neutral\"}},\"functions_state_id\":\"019e3eab-632a-76f1-acce-143bb6f8f9af\"},\"index\":0,\"finish_reason\":\"function_call\"}],\"created\":1779167879,\"model\":\"GigaChat-2-Pro:2.0.28.2\",\"object\":\"chat.completion\",\"usage\":{\"prompt_tokens\":1697,\"completion_tokens\":39,\"total_tokens\":1736,\"precached_prompt_tokens\":4}}",
+   "tech_details": "",
+   "rca_results": "",
+   "detector_rca": {
+    "schema": "laim.detector_rca/1",
+    "agent_id": "CI09774440",
+    "scores": {
+     "p_anomaly": 0.91024,
+     "reconstruction_error": 0.582219,
+     "threshold": 0.486423,
+     "branch_z": {
+      "behavior": 14.283,
+      "semantic": 0.00441988
+     },
+     "flag_share": {
+      "behavior": 0.942348,
+      "semantic": 0.057652
+     },
+     "logit": {
+      "behavior": 2.45659,
+      "semantic": -0.399116,
+      "combined": 0.259087,
+      "bias": 0.0
+     }
+    },
+    "sequence": {
+     "spans": 34,
+     "scored": 34,
+     "truncated": false
+    },
+    "spans": {
+     "b9b92335ef8ef801": {
+      "name": "OutgoingWebRequest",
+      "kind": "output_request",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "fdc96ef7709e12b1",
+      "http_method": "POST",
+      "http_path": "/dummy_not",
+      "http_status_code": 200,
+      "start_time": "2026-05-19T05:17:48.268Z",
+      "duration_s": 0.292249,
+      "output_excerpt": "{\"jsonrpc\":\"2.0\",\"id\":0,\"result\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{\"experimental\":{},\"prompts\":{\"listChanged\":false},\"resources\":{\"subscribe\":false,\"listChanged\":false},\"tools\":{\"listCh…"
+     },
+     "6de5223f6e41eea5": {
+      "name": "OutgoingWebRequest",
+      "kind": "output_request",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "fdc96ef7709e12b1",
+      "http_method": "POST",
+      "http_path": "/dummy_not",
+      "http_status_code": 200,
+      "start_time": "2026-05-19T05:17:48.562Z",
+      "duration_s": 0.0328044,
+      "output_excerpt": "{\"all_restrictions\":0,\"our_restrictions\":0,\"other_restrictions\":0,\"card_index_count\":0,\"is_arrested\":false,\"has_permissions\":true,\"jid_cancel_docs\":0,\"ens_cancel_docs\":0,\"accounts_short_info\":[],\"res…"
+     },
+     "0508b0229dbdd08d": {
+      "name": "OutgoingWebRequest",
+      "kind": "output_request",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "fdc96ef7709e12b1",
+      "http_method": "POST",
+      "http_path": "/dummy_not",
+      "http_status_code": 200,
+      "start_time": "2026-05-19T05:17:48.564Z",
+      "duration_s": 0.0359632
+     },
+     "50d39984c5194319": {
+      "name": "OutgoingWebRequest",
+      "kind": "output_request",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "cc83c374a2fe2a3a",
+      "http_method": "POST",
+      "http_path": "/dummy_not",
+      "http_status_code": 200,
+      "start_time": "2026-05-19T05:17:56.783Z",
+      "duration_s": 0.036662,
+      "output_excerpt": "{\"object\":\"list\",\"model\":\"Embeddings2\",\"data\":[{\"object\":\"embedding\",\"index\":0,\"embedding\":[0.0015230178833007812,-0.010711669921875,-0.0234832763671875,-0.04217529296875,0.0156097412109375,-0.008026…"
+     },
+     "9aba658ea48e377f": {
+      "name": "OutgoingWebRequest",
+      "kind": "output_request",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "cc83c374a2fe2a3a",
+      "http_method": "POST",
+      "http_path": "/dummy_not",
+      "http_status_code": 200,
+      "start_time": "2026-05-19T05:17:54.310Z",
+      "duration_s": 0.0631313,
+      "output_excerpt": "{\"object\":\"list\",\"model\":\"Embeddings2\",\"data\":[{\"object\":\"embedding\",\"index\":0,\"embedding\":[0.0015230178833007812,-0.010711669921875,-0.0234832763671875,-0.04217529296875,0.0156097412109375,-0.008026…"
+     },
+     "14f97c6cdfe71f13": {
+      "name": "OutgoingWebRequest",
+      "kind": "output_request",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "e1266dd090f8b457",
+      "http_method": "POST",
+      "http_path": "/dummy_not",
+      "http_status_code": 200,
+      "start_time": "2026-05-19T05:17:59.122Z",
+      "duration_s": 0.879405,
+      "output_excerpt": "{\"choices\":[{\"message\":{\"content\":\"\",\"role\":\"assistant\",\"function_call\":{\"name\":\"DialogAnalysisOutput\",\"arguments\":{\"label\":\"off_topic\",\"sentiment_detected\":\"neutral\"}},\"functions_state_id\":\"019e3eab…"
+     },
+     "e1266dd090f8b457": {
+      "name": "GigaChat",
+      "kind": "llm",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "1a19a0ce2643e884",
+      "llm_model": "GigaChat-2-Pro:2.0.28.2",
+      "llm_total_tokens": 1736,
+      "graph_node": "data_enrichment_node",
+      "start_time": "2026-05-19T05:17:59.121Z",
+      "duration_s": 0.882165,
+      "input_excerpt": "[[{\"content\": \"\\nТы — специализированный ассистент банка по вопросам государственных ограничений, арестов, инкассовых поручений, постановлений ФССП и ФНС и т.п.\\n\\nТвоя задача — проанализировать полн…",
+      "output_excerpt": "{\"content\": \"\", \"additional_kwargs\": {\"function_call\": {\"name\": \"DialogAnalysisOutput\", \"arguments\": {\"label\": \"off_topic\", \"sentiment_detected\": \"neutral\"}}, \"functions_state_id\": \"019e3eab-632a-76f…"
+     },
+     "809dd13e2e97497c": {
+      "name": "PydanticToolsParser",
+      "kind": "chain",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "1a19a0ce2643e884",
+      "graph_node": "data_enrichment_node",
+      "start_time": "2026-05-19T05:18:00.003Z",
+      "duration_s": 0.00065965,
+      "input_excerpt": "{\"content\": \"\", \"additional_kwargs\": {\"function_call\": {\"name\": \"DialogAnalysisOutput\", \"arguments\": {\"label\": \"off_topic\", \"sentiment_detected\": \"neutral\"}}, \"functions_state_id\": \"019e3eab-632a-76f…",
+      "output_excerpt": "{\"sentiment_detected\": \"neutral\", \"label\": \"off_topic\"}"
+     },
+     "44944201e6c0e4ea": {
+      "name": "OutgoingWebRequest",
+      "kind": "output_request",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "42201ae19478eb34",
+      "http_method": "POST",
+      "http_path": "/dummy_not",
+      "http_status_code": 200,
+      "start_time": "2026-05-19T05:17:56.836Z",
+      "duration_s": 0.981452,
+      "output_excerpt": "{\"choices\":[{\"message\":{\"content\":\"(нет подходящей инструкции)\",\"role\":\"assistant\",\"functions_state_id\":\"019e3eab-5aa1-723b-b257-4150ea41f3f5\"},\"index\":0,\"finish_reason\":\"stop\"}],\"created\":1779167877…"
+     },
+     "1a19a0ce2643e884": {
+      "name": "RunnableSequence",
+      "kind": "chain",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "8588a4ea84152879",
+      "graph_node": "data_enrichment_node",
+      "start_time": "2026-05-19T05:17:59.118Z",
+      "duration_s": 0.886697,
+      "input_excerpt": "[{\"content\": \"\\nТы — специализированный ассистент банка по вопросам государственных ограничений, арестов, инкассовых поручений, постановлений ФССП и ФНС и т.п.\\n\\nТвоя задача — проанализировать полны…",
+      "output_excerpt": "{\"sentiment_detected\": \"neutral\", \"label\": \"off_topic\"}"
+     },
+     "7bfcc88ca6c56433": {
+      "name": "OutgoingWebRequest",
+      "kind": "output_request",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "01433072180fd18b",
+      "http_method": "POST",
+      "http_path": "/dummy_not",
+      "http_status_code": 200,
+      "start_time": "2026-05-19T05:17:55.952Z",
+      "duration_s": 0.827857,
+      "output_excerpt": "{\"choices\":[{\"message\":{\"content\":\"почему на моем бонусном балансе есть 367 бонусов , но я могу конвертировать только 55 ?\",\"role\":\"assistant\"},\"index\":0,\"finish_reason\":\"stop\"}],\"created\":1779167876…"
+     }
+    },
+    "feature_info": {
+     "avg_word_length_sem_q95": {
+      "base": "avg_word_length_sem",
+      "aggregation": "q95",
+      "window": null,
+      "log1p": true,
+      "scope": "sequence"
+     },
+     "action_entropy": {
+      "base": "action_entropy",
+      "aggregation": null,
+      "window": null,
+      "log1p": false,
+      "scope": "sequence"
+     },
+     "avg_word_length_sem_q75": {
+      "base": "avg_word_length_sem",
+      "aggregation": "q75",
+      "window": null,
+      "log1p": true,
+      "scope": "sequence"
+     },
+     "avg_word_length_sem_q50": {
+      "base": "avg_word_length_sem",
+      "aggregation": "q50",
+      "window": null,
+      "log1p": true,
+      "scope": "sequence"
+     },
+     "avg_word_length_sem_rolling_q50_w100": {
+      "base": "avg_word_length_sem",
+      "aggregation": "rolling_q50",
+      "window": 100,
+      "log1p": true,
+      "scope": "step"
+     },
+     "avg_word_length_sem_rolling_min_w100": {
+      "base": "avg_word_length_sem",
+      "aggregation": "rolling_min",
+      "window": 100,
+      "log1p": true,
+      "scope": "step"
+     },
+     "avg_word_length_sem_rolling_q50_w10": {
+      "base": "avg_word_length_sem",
+      "aggregation": "rolling_q50",
+      "window": 10,
+      "log1p": true,
+      "scope": "step"
+     },
+     "avg_word_length_sem_rolling_min_w3": {
+      "base": "avg_word_length_sem",
+      "aggregation": "rolling_min",
+      "window": 3,
+      "log1p": true,
+      "scope": "step"
+     },
+     "avg_word_length_sem_rolling_q95_w30": {
+      "base": "avg_word_length_sem",
+      "aggregation": "rolling_q95",
+      "window": 30,
+      "log1p": true,
+      "scope": "step"
+     },
+     "avg_word_length_sem_rolling_q95_w100": {
+      "base": "avg_word_length_sem",
+      "aggregation": "rolling_q95",
+      "window": 100,
+      "log1p": true,
+      "scope": "step"
+     },
+     "avg_word_length_sem": {
+      "base": "avg_word_length_sem",
+      "aggregation": null,
+      "window": null,
+      "log1p": true,
+      "scope": "step"
+     }
+    },
+    "behavior": {
+     "spans": [
+      {
+       "rank": 1,
+       "index": 0,
+       "span_id": "b9b92335ef8ef801",
+       "error": 3.517,
+       "error_share": 0.06641,
+       "vs_typical": 7.236,
+       "drivers": [
+        {
+         "feature": "avg_word_length_sem_rolling_q50_w100",
+         "direction": "higher",
+         "observed": 4.113,
+         "expected": 2.623,
+         "observed_raw": 60.13,
+         "expected_raw": 12.77,
+         "clipped": true,
+         "error": 19.63
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_min_w100",
+         "direction": "higher",
+         "observed": 0.2,
+         "expected": 0.0005864,
+         "observed_raw": 0.2214,
+         "expected_raw": 0.0005866,
+         "clipped": true,
+         "error": 19.44
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_q50_w10",
+         "direction": "higher",
+         "observed": 5.635,
+         "expected": 2.656,
+         "observed_raw": 279.0,
+         "expected_raw": 13.24,
+         "error": 16.57
+        }
+       ]
+      },
+      {
+       "rank": 2,
+       "index": 1,
+       "span_id": "6de5223f6e41eea5",
+       "error": 3.465,
+       "error_share": 0.06543,
+       "vs_typical": 7.13,
+       "drivers": [
+        {
+         "feature": "avg_word_length_sem_rolling_q50_w100",
+         "direction": "higher",
+         "observed": 4.113,
+         "expected": 2.628,
+         "observed_raw": 60.13,
+         "expected_raw": 12.84,
+         "clipped": true,
+         "error": 19.56
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_min_w100",
+         "direction": "higher",
+         "observed": 0.2,
+         "expected": 0.0006035,
+         "observed_raw": 0.2214,
+         "expected_raw": 0.0006037,
+         "clipped": true,
+         "error": 19.44
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_q50_w10",
+         "direction": "higher",
+         "observed": 5.574,
+         "expected": 2.651,
+         "observed_raw": 262.5,
+         "expected_raw": 13.16,
+         "error": 16.25
+        }
+       ]
+      },
+      {
+       "rank": 3,
+       "index": 2,
+       "span_id": "0508b0229dbdd08d",
+       "error": 2.263,
+       "error_share": 0.04272,
+       "vs_typical": 4.655,
+       "drivers": [
+        {
+         "feature": "avg_word_length_sem_rolling_q50_w100",
+         "direction": "higher",
+         "observed": 4.113,
+         "expected": 2.631,
+         "observed_raw": 60.13,
+         "expected_raw": 12.88,
+         "clipped": true,
+         "error": 19.52
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_q50_w10",
+         "direction": "higher",
+         "observed": 5.513,
+         "expected": 2.647,
+         "observed_raw": 247.0,
+         "expected_raw": 13.11,
+         "error": 15.93
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_min_w3",
+         "direction": "lower",
+         "observed": -2.678e-06,
+         "expected": 2.527,
+         "observed_raw": -2.678e-06,
+         "expected_raw": 11.52,
+         "error": 3.501
+        }
+       ]
+      },
+      {
+       "rank": 4,
+       "index": 24,
+       "span_id": "50d39984c5194319",
+       "error": 1.929,
+       "error_share": 0.03643,
+       "vs_typical": 3.969,
+       "drivers": [
+        {
+         "feature": "avg_word_length_sem_rolling_q95_w30",
+         "direction": "higher",
+         "observed": 9.123,
+         "expected": 5.734,
+         "observed_raw": 9166.0,
+         "expected_raw": 308.1,
+         "error": 5.609
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_q95_w100",
+         "direction": "higher",
+         "observed": 9.123,
+         "expected": 5.735,
+         "observed_raw": 9166.0,
+         "expected_raw": 308.4,
+         "error": 5.607
+        },
+        {
+         "feature": "avg_word_length_sem",
+         "direction": "higher",
+         "observed": 9.872,
+         "expected": 2.64,
+         "observed_raw": 19380.0,
+         "expected_raw": 13.01,
+         "error": 5.286
+        }
+       ]
+      },
+      {
+       "rank": 5,
+       "index": 12,
+       "span_id": "9aba658ea48e377f",
+       "error": 1.812,
+       "error_share": 0.03421,
+       "vs_typical": 3.728,
+       "drivers": [
+        {
+         "feature": "avg_word_length_sem",
+         "direction": "higher",
+         "observed": 9.872,
+         "expected": 2.639,
+         "observed_raw": 19380.0,
+         "expected_raw": 13.0,
+         "error": 5.286
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_q95_w100",
+         "direction": "higher",
+         "observed": 7.626,
+         "expected": 5.734,
+         "observed_raw": 2050.0,
+         "expected_raw": 308.1,
+         "error": 2.91
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_q95_w30",
+         "direction": "higher",
+         "observed": 7.626,
+         "expected": 5.736,
+         "observed_raw": 2050.0,
+         "expected_raw": 308.9,
+         "error": 2.906
+        }
+       ]
+      }
+     ],
+     "features": [
+      {
+       "rank": 1,
+       "feature": "avg_word_length_sem_q95",
+       "direction": "higher",
+       "observed": 6.329,
+       "expected": 6.128,
+       "observed_raw": 559.6,
+       "expected_raw": 457.7,
+       "clipped": true,
+       "error": 19.5,
+       "error_share": 0.2783,
+       "vs_typical": 40.13,
+       "peak_span_index": 0,
+       "peak_span_id": "b9b92335ef8ef801"
+      },
+      {
+       "rank": 2,
+       "feature": "action_entropy",
+       "direction": "lower",
+       "observed": 1.521,
+       "expected": 2.011,
+       "observed_raw": 1.521,
+       "expected_raw": 2.011,
+       "error": 17.24,
+       "error_share": 0.246,
+       "vs_typical": 35.47,
+       "peak_span_index": 21,
+       "peak_span_id": "7bfcc88ca6c56433"
+      },
+      {
+       "rank": 3,
+       "feature": "avg_word_length_sem_q75",
+       "direction": "higher",
+       "observed": 4.376,
+       "expected": 3.611,
+       "observed_raw": 78.51,
+       "expected_raw": 36.0,
+       "error": 4.763,
+       "error_share": 0.06796,
+       "vs_typical": 9.8,
+       "peak_span_index": 33,
+       "peak_span_id": "809dd13e2e97497c"
+      },
+      {
+       "rank": 4,
+       "feature": "avg_word_length_sem_q50",
+       "direction": "higher",
+       "observed": 2.696,
+       "expected": 2.638,
+       "observed_raw": 13.82,
+       "expected_raw": 12.99,
+       "error": 2.658,
+       "error_share": 0.03793,
+       "vs_typical": 5.47,
+       "peak_span_index": 0,
+       "peak_span_id": "b9b92335ef8ef801"
+      },
+      {
+       "rank": 5,
+       "feature": "avg_word_length_sem_rolling_q50_w100",
+       "direction": "higher",
+       "observed": 4.113,
+       "expected": 2.623,
+       "observed_raw": 60.13,
+       "expected_raw": 12.77,
+       "clipped": true,
+       "error": 2.03,
+       "error_share": 0.02897,
+       "vs_typical": 4.177,
+       "peak_span_index": 0,
+       "peak_span_id": "b9b92335ef8ef801"
+      }
+     ]
+    },
+    "semantic": {
+     "spans": [
+      {
+       "rank": 1,
+       "index": 32,
+       "span_id": "14f97c6cdfe71f13",
+       "error": 0.0009428,
+       "error_share": 0.02975,
+       "vs_typical": 1.019
+      },
+      {
+       "rank": 2,
+       "index": 31,
+       "span_id": "e1266dd090f8b457",
+       "error": 0.0009428,
+       "error_share": 0.02975,
+       "vs_typical": 1.019
+      },
+      {
+       "rank": 3,
+       "index": 33,
+       "span_id": "809dd13e2e97497c",
+       "error": 0.0009428,
+       "error_share": 0.02975,
+       "vs_typical": 1.019
+      },
+      {
+       "rank": 4,
+       "index": 27,
+       "span_id": "44944201e6c0e4ea",
+       "error": 0.0009428,
+       "error_share": 0.02975,
+       "vs_typical": 1.019
+      },
+      {
+       "rank": 5,
+       "index": 30,
+       "span_id": "1a19a0ce2643e884",
+       "error": 0.0009428,
+       "error_share": 0.02975,
+       "vs_typical": 1.019
+      }
+     ]
+    }
+   }
+  },
+  {
+   "_comment": "",
+   "trace_id": "8a5f3e50355c418474839f9cd5684899",
+   "starttime": "2026-05-20T08:55:52Z",
+   "endtime": "2026-05-20T08:55:53Z",
+   "anomaly_type": "",
+   "confidence": 100,
+   "business_description": "",
+   "user_query": "<запрос пользователя не обнаружен>",
+   "agent_response": "{\"jsonrpc\":\"2.0\",\"id\":0,\"result\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{\"experimental\":{},\"prompts\":{\"listChanged\":false},\"resources\":{\"subscribe\":false,\"listChanged\":false},\"tools\":{\"listChanged\":false}},\"serverInfo\":{\"name\":\"ai-account-restr-mcp\",\"version\":\"1.27.0\"}}}",
+   "tech_details": "",
+   "rca_results": "",
+   "detector_rca": {
+    "schema": "laim.detector_rca/1",
+    "agent_id": "CI09774440",
+    "scores": {
+     "p_anomaly": 1.0,
+     "reconstruction_error": 5.72794,
+     "threshold": 0.486423,
+     "branch_z": {
+      "behavior": 36.2364,
+      "semantic": -0.0174233
+     },
+     "flag_share": {
+      "behavior": 0.073093,
+      "semantic": 0.926907
+     },
+     "logit": {
+      "behavior": 6.84727,
+      "semantic": -0.403485,
+      "combined": 14.1759,
+      "bias": 0.0
+     }
+    },
+    "sequence": {
+     "spans": 6,
+     "scored": 6,
+     "truncated": false
+    },
+    "spans": {
+     "70bda6d4c18a79d2": {
+      "name": "OutgoingWebRequest",
+      "kind": "output_request",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "9933b7289d5cb7bc",
+      "http_method": "POST",
+      "http_path": "/dummy_not",
+      "http_status_code": 200,
+      "start_time": "2026-05-20T08:55:52.849Z",
+      "duration_s": 0.145599
+     },
+     "27c6672240026513": {
+      "name": "OutgoingWebRequest",
+      "kind": "output_request",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "9933b7289d5cb7bc",
+      "http_method": "POST",
+      "http_path": "/dummy_not",
+      "http_status_code": 200,
+      "start_time": "2026-05-20T08:55:52.161Z",
+      "duration_s": 0.683393,
+      "output_excerpt": "{\"jsonrpc\":\"2.0\",\"id\":0,\"result\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{\"experimental\":{},\"prompts\":{\"listChanged\":false},\"resources\":{\"subscribe\":false,\"listChanged\":false},\"tools\":{\"listCh…"
+     },
+     "97f4643cdfd76786": {
+      "name": "input_request",
+      "kind": "input_request",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "eb8076500c33514b",
+      "http_method": "GET",
+      "http_path": "/dummy",
+      "http_status_code": 200,
+      "start_time": "2026-05-20T08:55:52.147Z",
+      "duration_s": 0.853182,
+      "output_excerpt": "{\"message\": {\"performative\": \"inform\", \"version\": \"1.4\", \"sender\": \"aigw-ai-account-restr\", \"receiver\": \"VOICEASSISTANT\", \"conversation_id\": \"37b31676-f973-460b-a65d-6131f7332eed\", \"in_reply_to\": \"4f…"
+     },
+     "9933b7289d5cb7bc": {
+      "name": "other",
+      "kind": "other",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "97f4643cdfd76786",
+      "start_time": "2026-05-20T08:55:52.147Z",
+      "duration_s": 0.851724,
+      "input_excerpt": "[\"37b31676-f973-460b-a65d-6131f7332eed\"]",
+      "output_excerpt": "37b31676-f973-460b-a65d-6131f7332eed"
+     },
+     "528c4fef5dee86ae": {
+      "name": "OutgoingWebRequest",
+      "kind": "output_request",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "9933b7289d5cb7bc",
+      "http_method": "POST",
+      "http_path": "/dummy_not",
+      "http_status_code": 200,
+      "start_time": "2026-05-20T08:55:52.848Z",
+      "duration_s": 0.149602
+     },
+     "b270a659a315e22c": {
+      "name": "OutgoingWebRequest",
+      "kind": "output_request",
+      "status": "STATUS_CODE_OK",
+      "parent_span_id": "9933b7289d5cb7bc",
+      "http_method": "POST",
+      "http_path": "/dummy_not",
+      "http_status_code": 200,
+      "start_time": "2026-05-20T08:55:52.847Z",
+      "duration_s": 0.0583211
+     }
+    },
+    "feature_info": {
+     "avg_word_length_sem_q50": {
+      "base": "avg_word_length_sem",
+      "aggregation": "q50",
+      "window": null,
+      "log1p": true,
+      "scope": "sequence"
+     },
+     "avg_word_length_sem_q95": {
+      "base": "avg_word_length_sem",
+      "aggregation": "q95",
+      "window": null,
+      "log1p": true,
+      "scope": "sequence"
+     },
+     "avg_word_length_sem_max": {
+      "base": "avg_word_length_sem",
+      "aggregation": "max",
+      "window": null,
+      "log1p": true,
+      "scope": "sequence"
+     },
+     "action_entropy": {
+      "base": "action_entropy",
+      "aggregation": null,
+      "window": null,
+      "log1p": false,
+      "scope": "sequence"
+     },
+     "avg_word_length_sem_q25": {
+      "base": "avg_word_length_sem",
+      "aggregation": "q25",
+      "window": null,
+      "log1p": true,
+      "scope": "sequence"
+     },
+     "avg_word_length_sem_rolling_q50_w100": {
+      "base": "avg_word_length_sem",
+      "aggregation": "rolling_q50",
+      "window": 100,
+      "log1p": true,
+      "scope": "step"
+     },
+     "avg_word_length_sem_rolling_q50_w10": {
+      "base": "avg_word_length_sem",
+      "aggregation": "rolling_q50",
+      "window": 10,
+      "log1p": true,
+      "scope": "step"
+     },
+     "avg_word_length_sem_rolling_q25_w5": {
+      "base": "avg_word_length_sem",
+      "aggregation": "rolling_q25",
+      "window": 5,
+      "log1p": true,
+      "scope": "step"
+     },
+     "avg_word_length_sem_rolling_min_w100": {
+      "base": "avg_word_length_sem",
+      "aggregation": "rolling_min",
+      "window": 100,
+      "log1p": true,
+      "scope": "step"
+     },
+     "avg_word_length_sem_rolling_q90_w100": {
+      "base": "avg_word_length_sem",
+      "aggregation": "rolling_q90",
+      "window": 100,
+      "log1p": true,
+      "scope": "step"
+     },
+     "avg_word_length_sem_rolling_q95_w100": {
+      "base": "avg_word_length_sem",
+      "aggregation": "rolling_q95",
+      "window": 100,
+      "log1p": true,
+      "scope": "step"
+     },
+     "avg_word_length_sem_rolling_q25_w100": {
+      "base": "avg_word_length_sem",
+      "aggregation": "rolling_q25",
+      "window": 100,
+      "log1p": true,
+      "scope": "step"
+     },
+     "avg_word_length_sem_rolling_q25_w10": {
+      "base": "avg_word_length_sem",
+      "aggregation": "rolling_q25",
+      "window": 10,
+      "log1p": true,
+      "scope": "step"
+     }
+    },
+    "behavior": {
+     "spans": [
+      {
+       "rank": 1,
+       "index": 5,
+       "span_id": "70bda6d4c18a79d2",
+       "error": 3.699,
+       "error_share": 0.1924,
+       "vs_typical": 7.611,
+       "drivers": [
+        {
+         "feature": "avg_word_length_sem_rolling_q50_w100",
+         "direction": "lower",
+         "observed": 1.242,
+         "expected": 2.633,
+         "observed_raw": 2.462,
+         "expected_raw": 12.92,
+         "error": 18.3
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_q50_w10",
+         "direction": "lower",
+         "observed": 1.242,
+         "expected": 2.641,
+         "observed_raw": 2.462,
+         "expected_raw": 13.02,
+         "error": 7.516
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_q25_w5",
+         "direction": "lower",
+         "observed": -6.411e-07,
+         "expected": 2.568,
+         "observed_raw": -6.411e-07,
+         "expected_raw": 12.04,
+         "error": 4.813
+        }
+       ]
+      },
+      {
+       "rank": 2,
+       "index": 2,
+       "span_id": "27c6672240026513",
+       "error": 3.37,
+       "error_share": 0.1753,
+       "vs_typical": 6.934,
+       "drivers": [
+        {
+         "feature": "avg_word_length_sem_rolling_min_w100",
+         "direction": "higher",
+         "observed": 0.2,
+         "expected": 0.0005761,
+         "observed_raw": 0.2214,
+         "expected_raw": 0.0005763,
+         "clipped": true,
+         "error": 19.44
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_q50_w100",
+         "direction": "higher",
+         "observed": 3.611,
+         "expected": 2.633,
+         "observed_raw": 36.0,
+         "expected_raw": 12.92,
+         "error": 12.71
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_q50_w10",
+         "direction": "higher",
+         "observed": 3.611,
+         "expected": 2.64,
+         "observed_raw": 36.0,
+         "expected_raw": 13.02,
+         "error": 5.062
+        }
+       ]
+      },
+      {
+       "rank": 3,
+       "index": 0,
+       "span_id": "97f4643cdfd76786",
+       "error": 3.28,
+       "error_share": 0.1706,
+       "vs_typical": 6.749,
+       "drivers": [
+        {
+         "feature": "avg_word_length_sem_rolling_min_w100",
+         "direction": "higher",
+         "observed": 0.2,
+         "expected": 0.0008161,
+         "observed_raw": 0.2214,
+         "expected_raw": 0.0008164,
+         "clipped": true,
+         "error": 19.42
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_q90_w100",
+         "direction": "lower",
+         "observed": 2.484,
+         "expected": 5.586,
+         "observed_raw": 10.98,
+         "expected_raw": 265.6,
+         "error": 6.255
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_q95_w100",
+         "direction": "lower",
+         "observed": 2.484,
+         "expected": 5.779,
+         "observed_raw": 10.98,
+         "expected_raw": 322.3,
+         "error": 5.438
+        }
+       ]
+      },
+      {
+       "rank": 4,
+       "index": 1,
+       "span_id": "9933b7289d5cb7bc",
+       "error": 3.201,
+       "error_share": 0.1665,
+       "vs_typical": 6.586,
+       "drivers": [
+        {
+         "feature": "avg_word_length_sem_rolling_min_w100",
+         "direction": "higher",
+         "observed": 0.2,
+         "expected": 0.0007545,
+         "observed_raw": 0.2214,
+         "expected_raw": 0.0007548,
+         "clipped": true,
+         "error": 19.42
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_q50_w100",
+         "direction": "higher",
+         "observed": 3.047,
+         "expected": 2.633,
+         "observed_raw": 20.06,
+         "expected_raw": 12.91,
+         "error": 5.099
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_q90_w100",
+         "direction": "lower",
+         "observed": 3.498,
+         "expected": 5.595,
+         "observed_raw": 32.06,
+         "expected_raw": 268.2,
+         "error": 4.066
+        }
+       ]
+      },
+      {
+       "rank": 5,
+       "index": 4,
+       "span_id": "528c4fef5dee86ae",
+       "error": 2.976,
+       "error_share": 0.1548,
+       "vs_typical": 6.123,
+       "drivers": [
+        {
+         "feature": "avg_word_length_sem_rolling_q25_w5",
+         "direction": "lower",
+         "observed": -6.411e-07,
+         "expected": 2.566,
+         "observed_raw": -6.411e-07,
+         "expected_raw": 12.01,
+         "error": 4.808
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_q25_w100",
+         "direction": "lower",
+         "observed": 8.354e-08,
+         "expected": 2.291,
+         "observed_raw": 8.354e-08,
+         "expected_raw": 8.881,
+         "error": 4.59
+        },
+        {
+         "feature": "avg_word_length_sem_rolling_q25_w10",
+         "direction": "lower",
+         "observed": -1.488e-06,
+         "expected": 2.483,
+         "observed_raw": -1.488e-06,
+         "expected_raw": 10.98,
+         "error": 4.354
+        }
+       ]
+      }
+     ],
+     "features": [
+      {
+       "rank": 1,
+       "feature": "avg_word_length_sem_q50",
+       "direction": "lower",
+       "observed": 2.279,
+       "expected": 2.64,
+       "observed_raw": 8.764,
+       "expected_raw": 13.01,
+       "clipped": true,
+       "error": 19.52,
+       "error_share": 0.1353,
+       "vs_typical": 40.16,
+       "peak_span_index": 0,
+       "peak_span_id": "97f4643cdfd76786"
+      },
+      {
+       "rank": 2,
+       "feature": "avg_word_length_sem_q95",
+       "direction": "lower",
+       "observed": 5.929,
+       "expected": 6.129,
+       "observed_raw": 374.8,
+       "expected_raw": 457.9,
+       "clipped": true,
+       "error": 19.47,
+       "error_share": 0.135,
+       "vs_typical": 40.07,
+       "peak_span_index": 5,
+       "peak_span_id": "70bda6d4c18a79d2"
+      },
+      {
+       "rank": 3,
+       "feature": "avg_word_length_sem_max",
+       "direction": "lower",
+       "observed": 9.673,
+       "expected": 9.873,
+       "observed_raw": 15890.0,
+       "expected_raw": 19400.0,
+       "clipped": true,
+       "error": 19.47,
+       "error_share": 0.135,
+       "vs_typical": 40.06,
+       "peak_span_index": 5,
+       "peak_span_id": "70bda6d4c18a79d2"
+      },
+      {
+       "rank": 4,
+       "feature": "action_entropy",
+       "direction": "lower",
+       "observed": 1.458,
+       "expected": 2.011,
+       "observed_raw": 1.458,
+       "expected_raw": 2.011,
+       "clipped": true,
+       "error": 19.43,
+       "error_share": 0.1347,
+       "vs_typical": 39.97,
+       "peak_span_index": 5,
+       "peak_span_id": "70bda6d4c18a79d2"
+      },
+      {
+       "rank": 5,
+       "feature": "avg_word_length_sem_q25",
+       "direction": "lower",
+       "observed": -3.73e-06,
+       "expected": 2.289,
+       "observed_raw": -3.73e-06,
+       "expected_raw": 8.868,
+       "error": 11.62,
+       "error_share": 0.0806,
+       "vs_typical": 23.91,
+       "peak_span_index": 5,
+       "peak_span_id": "70bda6d4c18a79d2"
+      }
+     ]
+    },
+    "semantic": {
+     "spans": [
+      {
+       "rank": 1,
+       "index": 5,
+       "span_id": "70bda6d4c18a79d2",
+       "error": 0.0009228,
+       "error_share": 0.1709,
+       "vs_typical": 0.9968
+      },
+      {
+       "rank": 2,
+       "index": 4,
+       "span_id": "528c4fef5dee86ae",
+       "error": 0.0009159,
+       "error_share": 0.1696,
+       "vs_typical": 0.9894
+      },
+      {
+       "rank": 3,
+       "index": 3,
+       "span_id": "b270a659a315e22c",
+       "error": 0.000907,
+       "error_share": 0.168,
+       "vs_typical": 0.9799
+      },
+      {
+       "rank": 4,
+       "index": 2,
+       "span_id": "27c6672240026513",
+       "error": 0.000896,
+       "error_share": 0.1659,
+       "vs_typical": 0.9679
+      },
+      {
+       "rank": 5,
+       "index": 1,
+       "span_id": "9933b7289d5cb7bc",
+       "error": 0.0008836,
+       "error_share": 0.1637,
+       "vs_typical": 0.9545
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

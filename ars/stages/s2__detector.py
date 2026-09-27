@@ -10,6 +10,10 @@ from    operator                                    import itemgetter
 from    pathlib                                     import PurePath, Path
 from    random                                      import Random
 
+import  json
+import  math
+
+import  numpy                                       as np
 import  polars                                      as pl
 
 import  jax                                         as jx
@@ -723,17 +727,142 @@ def predict_trace(epi_pad: Array, epi_mask: Array, sem_pad: Array, sem_mask: Arr
         is_anomaly              = bool(out.is_anomaly[0]))
 
 
+RCA_DRIVERS         = 3     # features reported per top EPI span
+RCA_ATTRIBUTION_V   = 1     # schema version of the rca_attribution JSON
+
+
+def _finite(value: float, digits: int = 6) -> None | float:
+    '''JSON-safe float: `digits` significant digits, None when non-finite'''
+    value = float(value)
+    return float(f'{value:.{digits}g}') if math.isfinite(value) else None
+
+
+def _attribution_columns(meta: InferenceMeta, models: Models, out, epi_padded: Array, epi_mask: Array,
+                         sem_padded: Array, sem_mask: Array, k: int, lengths: list[int],
+                         span_ids: None | list[list[str]],
+                         feature_names: None | Tuple[str, ...]) -> dict[str, pl.Series]:
+    '''RCA-поверхность (M11). Legacy-списки rca_top_* (спаны без паддинга) и
+    rca_attribution — JSON на трассу в пространстве индексов: ошибки ветвей,
+    разложение логита p_anomaly, доля EPI в комбинированной (флагующей)
+    ошибке, топ EPI-спанов с признаками-драйверами, топ EPI-признаков с
+    наблюдаемым/ожидаемым значением в пике, топ SEM-спанов (смысл текста).
+    Индексы спанов — позиции в последовательности (trace_id, agent_id),
+    span_id — если s1 их пронёс. Драйверы спана выбираются среди признаков
+    шага (feature_names: статические агрегаты одинаковы на всей
+    последовательности и шаг не локализуют); без имён — среди всех.'''
+    from ars.data.features import feature_provenance
+    from ars.models.m2__detector.attribution import combined_epi_share, explain
+    empty = {
+        'rca_top_span_indices':     pl.List(pl.Int64),
+        'rca_top_span_errors':      pl.List(pl.Float64),
+        'rca_top_feature_indices':  pl.List(pl.Int64),
+        'rca_top_feature_errors':   pl.List(pl.Float64),
+        'rca_attribution':          pl.String}
+    if not lengths:
+        return {name: pl.Series(name, [], dtype = dtype) for name, dtype in empty.items()}
+
+    step_features = (np.asarray([feature_provenance(n)['scope'] == 'step' for n in feature_names])
+                     if feature_names is not None and len(feature_names) == epi_padded.shape[-1] else None)
+    if step_features is not None and not step_features.any():
+        step_features = None
+    epi     = explain(models.epi_model, models.epi_state.params, epi_padded, epi_mask, k, k, RCA_DRIVERS,
+                      driver_mask = step_features)
+    sem     = explain(models.sem_model, models.sem_state.params, sem_padded, sem_mask, k)
+    share   = combined_epi_share(models.combined_state, models.combined_model, out.z_epi, out.z_sem)
+    cal     = meta.calibration
+    e_epi, e_sem, e_comb, p_anom = map(np.asarray, (out.e_epi, out.e_sem, out.e_comb, out.p_anomaly))
+    # the exact terms of Predict.from_branches: sigmoid(sum of logits) == p_anomaly
+    z_epi   = (e_epi - cal.epi_median) / (1.4826 * cal.epi_mad + 1e-8)
+    z_sem   = (e_sem - cal.sem_median) / (1.4826 * cal.sem_mad + 1e-8)
+    logits  = {
+        'epi':  cal.w_epi  * (z_epi - cal.aux_z_anomaly),
+        'sem':  cal.w_sem  * (z_sem - cal.aux_z_anomaly),
+        'comb': cal.w_comb * (e_comb - meta.best_threshold) / (cal.comb_temperature + 1e-8)}
+    # per-span/per-feature errors are per-element means, like the branch
+    # error itself, so they compare to the median error of normal training traces
+    typical_epi = max(cal.epi_median, 1e-12)
+    typical_sem = max(cal.sem_median, 1e-12)
+
+    def span_id(r: int, i: int) -> None | str:
+        return span_ids[r][i] if span_ids is not None and i < len(span_ids[r]) else None
+
+    def epi_span(r: int, j: int) -> dict:
+        i = int(epi['span_idx'][r, j])
+        return {
+            'i': i, 'id': span_id(r, i),
+            'err': _finite(epi['span_err'][r, j]), 'share': _finite(epi['span_share'][r, j]),
+            'vs_typical': _finite(epi['span_err'][r, j] / typical_epi),
+            'drivers': [
+                {'f':   int(epi['drv_idx'][r, j, m]),   'err': _finite(epi['drv_err'][r, j, m]),
+                 'obs': _finite(epi['drv_obs'][r, j, m]), 'exp': _finite(epi['drv_exp'][r, j, m])}
+                for m in range(epi['drv_idx'].shape[-1]) if np.isfinite(epi['drv_err'][r, j, m])]}
+
+    def epi_feature(r: int, j: int) -> dict:
+        peak = int(epi['feat_peak'][r, j])
+        return {
+            'f': int(epi['feat_idx'][r, j]),
+            'err': _finite(epi['feat_err'][r, j]), 'share': _finite(epi['feat_share'][r, j]),
+            'vs_typical': _finite(epi['feat_err'][r, j] / typical_epi),
+            'peak': peak, 'peak_id': span_id(r, peak),
+            'obs': _finite(epi['feat_obs'][r, j]), 'exp': _finite(epi['feat_exp'][r, j])}
+
+    def sem_span(r: int, j: int) -> dict:
+        i = int(sem['span_idx'][r, j])
+        return {
+            'i': i, 'id': span_id(r, i),
+            'err': _finite(sem['span_err'][r, j]), 'share': _finite(sem['span_share'][r, j]),
+            'vs_typical': _finite(sem['span_err'][r, j] / typical_sem)}
+
+    rows, top_span_idx, top_span_err = [], [], []
+    for r, length in enumerate(lengths):
+        epi_ok  = np.flatnonzero(np.isfinite(epi['span_err'][r]))
+        sem_ok  = np.flatnonzero(np.isfinite(sem['span_err'][r]))
+        top_span_idx.append(epi['span_idx'][r, epi_ok].tolist())
+        top_span_err.append(epi['span_err'][r, epi_ok].astype(np.float64).tolist())
+        rows.append(json.dumps({
+            'version':      RCA_ATTRIBUTION_V,
+            'n_spans':      int(length),
+            'n_scored':     int(min(length, meta.max_len)),
+            'truncated':    bool(length > meta.max_len),
+            'scores': {
+                'p_anomaly':        _finite(p_anom[r]),
+                'e_comb':           _finite(e_comb[r]),
+                'threshold':        _finite(meta.best_threshold),
+                'e_epi':            _finite(e_epi[r]),
+                'e_sem':            _finite(e_sem[r]),
+                'z_epi':            _finite(z_epi[r]),
+                'z_sem':            _finite(z_sem[r]),
+                'logit':            {**{b: _finite(v[r]) for b, v in logits.items()}, 'bias': _finite(cal.bias)},
+                'comb_share_epi':   _finite(share[r])},
+            'epi_spans':    [epi_span(r, int(j)) for j in epi_ok],
+            'epi_features': [epi_feature(r, j) for j in range(epi['feat_idx'].shape[-1])],
+            'sem_spans':    [sem_span(r, int(j)) for j in sem_ok]},
+            ensure_ascii = False, allow_nan = False))
+
+    columns = {
+        'rca_top_span_indices':     top_span_idx,
+        'rca_top_span_errors':      top_span_err,
+        'rca_top_feature_indices':  epi['feat_idx'].tolist(),
+        'rca_top_feature_errors':   epi['feat_err'].astype(np.float64).tolist(),
+        'rca_attribution':          rows}
+    return {name: pl.Series(name, columns[name], dtype = dtype) for name, dtype in empty.items()}
+
+
 def detect_anomalies(data: pl.LazyFrame, s2_meta: S2Meta, only_anomalies: bool = True,
-                     attribution_top_k: int = 0) -> pl.LazyFrame:
+                     attribution_top_k: int = 0,
+                     feature_names: None | Tuple[str, ...] = None) -> pl.LazyFrame:
     '''инференс детектора. only_anomalies=True — legacy-контракт (только
     аномальные трассы, без колонки is_anomaly); False — полный аудиторский
     след: каждая трасса со всеми оценками и флагами (F-27).
     attribution_top_k > 0 добавляет RCA-поверхность (M11): топ-k спанов по
-    ошибке реконструкции EPI-ветви и топ-k EPI-признаков на трассу.'''
+    ошибке реконструкции EPI-ветви и топ-k EPI-признаков на трассу, плюс
+    JSON rca_attribution (см. _attribution_columns; feature_names =
+    s1_meta.epi_features уточняют выбор драйверов спана).'''
     meta, models            = load_models_for_inference(s2_meta)
     df                      = data.collect()
+    lengths                 = df.get_column('epi_sequence').list.len()
     # F-09: silent truncation of over-length traces is now flagged per trace
-    truncated               = (df.get_column('epi_sequence').list.len() > s2_meta.max_len)
+    truncated               = (lengths > s2_meta.max_len)
     epi_padded, epi_mask    = Pad.split(df, 'epi_sequence',            s2_meta.epi_dim, s2_meta.max_len, s2_meta.seq_pad_chunk)
     sem_padded, sem_mask    = Pad.split(df, 'sem_sequence_sem_vector', s2_meta.sem_dim, s2_meta.max_len, s2_meta.seq_pad_chunk)
     # F-27: one forward pass — Predict.batch already computes normalized latents
@@ -743,21 +872,13 @@ def detect_anomalies(data: pl.LazyFrame, s2_meta: S2Meta, only_anomalies: bool =
         raise FloatingPointError(
             'детектор вернул нечисловые оценки (NaN/Inf) — проверьте нормализацию '
             'латентов и входные данные; инференс прерван')
-    extra_cols = {}
-    if attribution_top_k > 0:
-        from ars.models.m2__detector.attribution import per_feature_errors, per_span_errors, top_k
-        span_err            = per_span_errors(models.epi_model, models.epi_state.params, epi_padded, epi_mask)
-        feat_err            = per_feature_errors(models.epi_model, models.epi_state.params, epi_padded, epi_mask)
-        span_idx, span_val  = top_k(span_err, attribution_top_k)
-        feat_idx, feat_val  = top_k(feat_err, attribution_top_k)
-        extra_cols = {
-            'rca_top_span_indices':     span_idx.tolist(),
-            'rca_top_span_errors':      span_val.tolist(),
-            'rca_top_feature_indices':  feat_idx.tolist(),
-            'rca_top_feature_errors':   feat_val.tolist()}
+    span_ids    = df.get_column('span_ids').to_list() if 'span_ids' in df.columns else None
+    extra_cols  = (_attribution_columns(meta, models, out, epi_padded, epi_mask, sem_padded, sem_mask,
+                                        attribution_top_k, lengths.to_list(), span_ids, feature_names)
+                   if attribution_top_k > 0 else {})
 
     scored = pl.concat((
-                df.drop(('epi_sequence', 'sem_sequence_sem_vector')).lazy(),
+                df.drop('epi_sequence', 'sem_sequence_sem_vector', 'span_ids', strict = False).lazy(),
                 pl.DataFrame({
                     'detector_reconstruction_error':    map(jp.asarray, out.e_comb),
                     'detector_e_epi':                   map(jp.asarray, out.e_epi),

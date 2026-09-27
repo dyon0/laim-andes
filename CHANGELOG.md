@@ -219,6 +219,87 @@ All notable changes on branch `claude/lumimas-anomaly-refactor-7stpda`
   the manifest (`metrics.gpu_topology`); embedding progress logs now end
   with a total-throughput line.
 
+## Added (RCA export for the downstream LAIM RCA node)
+
+- **`detector_rca` in the product contract.** Every flagged record of
+  `test_anomalies` (and the `anomaly_traces` / `detections.parquet` column of
+  the same name) carries a self-describing JSON block, schema
+  `laim.detector_rca/1` (`ars/stages/s4__rca.py::export_detector_rca`). It
+  holds `agent_id`; `p_anomaly` (the legacy `confidence` is max(p, 1−p));
+  the branch z-scores; the behavior/semantic split of the flagging error;
+  the logit decomposition of `p_anomaly`; the worst behavioral (EPI) spans
+  with their step-level driver features; the worst EPI features, each with
+  its observed vs expected value in feature scale and natural units (ns,
+  chars, counts; log1p inverted where meaningful), a clip flag and the peak
+  span; the worst semantic (SEM) spans; a catalog of the referenced spans
+  resolved from the scored spans file (name, kind, status, timing, attributes,
+  200-char input/output excerpts, sentinels dropped); and per-feature
+  provenance. Legacy record fields are unchanged; `attribution_top_k = 0`
+  switches the whole surface off.
+- `attribution.explain` does one jitted pass per branch, chunked over traces.
+  Span errors use the branch's own training loss, so they decompose the
+  detector's `e_epi` / `e_sem` exactly (Huber branches included). Padding can
+  no longer win a top-k slot: the legacy `rca_top_span_*` lists padded short
+  sequences with meaningless index/0.0 pairs. The legacy lists now come from
+  the same pass and hold model-loss errors (identical for MSE branches).
+  `combined_epi_share` attributes the flagging error to the branch latents.
+- `detect_anomalies(..., feature_names=)` adds `rca_attribution`, the
+  index-space JSON behind `detector_rca`, for every scored trace. Its logit
+  terms reproduce `p_anomaly`. Span drivers are chosen among step-level
+  features: static aggregates are constant across a sequence and cannot
+  localize a step. `feature_provenance()` decodes feature names (base,
+  aggregation, window, log1p, scope).
+- s1 carries `span_ids` through the inference sequences (`build_traces(...,
+  carry_span_ids=True)`), so span indices map to span ids exactly instead of
+  by re-sorting the spans file. `detect_anomalies` drops the column from its
+  output.
+- `rca/`: the upgraded LAIM RCA node (a separate SberDS node: its own
+  `descriptor.json`, `main.py`, requirements and tests; it imports nothing
+  from `ars`/`laim`). It consumes `test_anomalies` including `detector_rca`.
+  See `rca/README.md`.
+
+## Fixed (product contract)
+
+- **`confidence` in `test_anomalies` / `anomaly_traces` is now
+  `p_anomaly × 100`.** It was `detector_confidence × 100` =
+  `max(p, 1−p) × 100`, which measures confidence in the detector's own
+  decision, not in the anomaly. A flagged trace with `p_anomaly = 0.3`
+  (flagged by the reconstruction-error threshold while the calibrated
+  probability disagrees) was reported with confidence 70. It is now 30. The
+  `detector_confidence` column is unchanged, because the s3 classifier is
+  trained on it as a feature.
+
+## Added (LAIM RCA node: development report as context)
+
+- `rca/` gets an optional `agent_report` in-port. The agent's development report
+  (.docx, HTML, MHTML, text, or g-aiva-doc-browser output as a fallback) is
+  parsed with the standard library, cleaned of template boilerplate and PII
+  contacts, fitted to `report_max_chars` by dropping validation-only sections
+  first, and given to the LLM as the reference for how the agent should
+  behave. See `rca/README.md` for the reasoning behind choosing the document
+  over doc-browser output.
+
+## Added (LAIM anomaly report node)
+
+- `anomaly_report/`: the final HTML report node, as a separate SberDS node.
+  When s3 (the anomaly-type classifier) did not run, type descriptions, type
+  stats/distribution and type badges are hidden (`anomaly_types = auto |
+  show | hide`). The «Автономный мониторинг ИИ-агентов · Детектор аномалий»
+  header and the "requires owner markup" messages are removed. The RCA node's
+  structured `rca_results` renders as readable text.
+
+## Changed (LAIM RCA: cross-trace analysis, concise RCA)
+
+- `rca/`: related records are found deterministically across the whole input
+  (shared codes and abbreviations, IDF-weighted) and passed to the LLM as
+  `related`. Batches keep linked records together. The prompt asks for
+  cross-trace comparison. `rca` is back to the short «КАТЕГОРИЯ: суть.
+  Возможные причины: 1) 2) 3)» string. The detector signal is brief by
+  default (`evidence_detail`). `rca_results.related_traces` lists the traces
+  the RCA cites.
+- `anomaly_report/`: no «Сигнал детектора» line. trace_ids in the RCA text
+  link to their cards («… (#009)»).
+
 ## Archived to `legacy/` (never deleted without a trace)
 
 - `verification.py` (was `ars/tools/reproducibility/`) — orphan module, zero

@@ -650,7 +650,10 @@ def make_embedder(cfg: S1Config) -> Callable[[tuple[str, ...]], jp.ndarray]:
 
 
 @benchmark('сборка трасс')
-def build_traces(df: pl.DataFrame, sem_vec_names: Tuple[str, ...], cfg: S1Config) -> pl.DataFrame:
+def build_traces(df: pl.DataFrame, sem_vec_names: Tuple[str, ...], cfg: S1Config,
+                 carry_span_ids: bool = False) -> pl.DataFrame:
+    '''carry_span_ids (инференс): список span_id в порядке последовательности —
+    RCA-атрибуция переводит индексы спанов в их идентификаторы'''
     MyColorScheme = cfg.output_color_scheme
     MyColorScheme.print_section('ГРУППИРОВКА В ТРАССЫ')
     
@@ -659,6 +662,9 @@ def build_traces(df: pl.DataFrame, sem_vec_names: Tuple[str, ...], cfg: S1Config
         pl.col(sem_vec_names).name.prefix('sem_sequence_'),
         pl.col(DataObject.is_anomaly).max().alias(DataObject.is_anomaly),
         pl.col(DataObject.sublabel).drop_nulls().first().alias(DataObject.sublabel),
+        # same rows, same order as epi_sequence: index i <-> span_ids[i]
+        *((pl.col(DataObject.span_id).cast(pl.String).alias('span_ids'),)
+          if carry_span_ids and DataObject.span_id in df.columns else ()),
     )
     obj_keys, sort_directions = zip(*FeaturePatterns.objects_order)
     traces = (df
@@ -1286,7 +1292,7 @@ def prepare_test_data(
         spans_epi, cfg_test, text_col = 'sem_text', out_col = 'sem_vector'
     )
     
-    traces              = build_traces(spans_sem, ('sem_vector',), cfg_test).drop(
+    traces              = build_traces(spans_sem, ('sem_vector',), cfg_test, carry_span_ids = True).drop(
         DataObject.is_anomaly, DataObject.sublabel)
 
     norm_params         = s1_meta.epi_normalization

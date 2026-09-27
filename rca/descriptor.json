@@ -1,0 +1,169 @@
+{
+  "id": "c3593da1-a990-4511-bd68-02b8d742c6dd",
+  "name": "LAIM RCA",
+  "description": "Модуль фильтрации и поиска первопричин аномалий",
+  "fullDescription": "Принимает test_anomalies детектора laim (JSON {\"anomalies\": [...]}). Объяснение детектора (detector_rca: какая ветвь сработала, какие шаги и признаки отклонились) превращается в доказательства и передаётся LLM вместе с запросом и ответом агента. LLM выносит по каждой записи вердикт (anomaly / normal / uncertain) и первопричину с локализацией до шага. Выход res — подтверждённые аномалии с заполненным rca_results; rca_audit — решения по всем записям, включая отфильтрованные. Режимы: llm, llm_fallback (при недоступности LLM — RCA по сигналу детектора), detector_only (без LLM). Опциональный порт agent_report: отчёт о разработке агента — критерии корректности, стоп-фразы, границы компетенций, инструменты и штатные заглушки становятся контекстом анализа.",
+  "ui": {
+    "settings": [
+      {
+        "page": "General",
+        "title": "General",
+        "components": [
+          {
+            "type": "form",
+            "label": "",
+            "config": {
+              "components": [
+                {
+                  "parameter": "add_info",
+                  "label": "доп инфо в промпт (домен, правила, формат rca)",
+                  "uiComponent": "textarea",
+                  "type": "string",
+                  "defaultValue": " "
+                },
+                {
+                  "parameter": "model_id",
+                  "label": "model_id",
+                  "uiComponent": "input",
+                  "type": "string",
+                  "defaultValue": "minimax-m2.5"
+                },
+                {
+                  "parameter": "llm_temp",
+                  "label": "llm_temp",
+                  "uiComponent": "input",
+                  "type": "float",
+                  "defaultValue": 0.001
+                },
+                {
+                  "parameter": "max_tokens",
+                  "label": "max_tokens",
+                  "uiComponent": "input",
+                  "type": "integer",
+                  "defaultValue": 8192
+                },
+                {
+                  "parameter": "mode",
+                  "label": "mode — llm: анализ LLM (сбой LLM роняет ноду); llm_fallback: при недоступности LLM — RCA по сигналу детектора; detector_only: без LLM",
+                  "uiComponent": "select",
+                  "placeholder": "Select value",
+                  "defaultValue": "llm",
+                  "allowedValues": [
+                    {
+                      "llm": "llm"
+                    },
+                    {
+                      "llm_fallback": "llm_fallback"
+                    },
+                    {
+                      "detector_only": "detector_only"
+                    }
+                  ]
+                },
+                {
+                  "parameter": "use_detector_evidence",
+                  "label": "use_detector_evidence — передавать LLM объяснение детектора (шаги, признаки, гипотезу)",
+                  "uiComponent": "checkbox",
+                  "type": "boolean",
+                  "defaultValue": true
+                },
+                {
+                  "parameter": "keep_uncertain",
+                  "label": "keep_uncertain — оставлять в выходе записи с вердиктом uncertain и не проверенные LLM",
+                  "uiComponent": "checkbox",
+                  "type": "boolean",
+                  "defaultValue": true
+                },
+                {
+                  "parameter": "report_max_chars",
+                  "label": "report_max_chars — лимит символов отчёта о разработке в промпте (если подан порт agent_report)",
+                  "uiComponent": "input",
+                  "type": "integer",
+                  "defaultValue": 20000
+                },
+                {
+                  "parameter": "evidence_detail",
+                  "label": "evidence_detail — сигнал детектора для LLM: brief (вероятность и подозрительные шаги с фрагментами) или full (ещё признаки, отклонения, гипотеза)",
+                  "uiComponent": "select",
+                  "placeholder": "Select value",
+                  "defaultValue": "brief",
+                  "allowedValues": [
+                    {
+                      "brief": "brief"
+                    },
+                    {
+                      "full": "full"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "result": {
+      "title": "Results",
+      "components": []
+    }
+  },
+  "ports": [
+    {
+      "name": "anom_data",
+      "label": "anom_data",
+      "in": true,
+      "type": "default",
+      "shape": "shape_model",
+      "description": "Аномалии из детектора: test_anomalies (JSON {\"anomalies\": [...]}, записи с detector_rca)",
+      "required": true,
+      "order": 1
+    },
+    {
+      "name": "agent_report",
+      "label": "agent_report",
+      "in": true,
+      "type": "default",
+      "shape": "shape_model",
+      "description": "ОПЦИОНАЛЬНО: отчёт о разработке агента (.docx/HTML: файл или каталог порта, bytes, report_dict коннектора {\"bin\",\"ext\"} в т.ч. pickle/parquet; текст или выход g-aiva-doc-browser) — контекст для анализа",
+      "required": false,
+      "order": 2
+    },
+    {
+      "name": "res",
+      "label": "res",
+      "in": false,
+      "type": "default",
+      "shape": "shape_model",
+      "description": "Результат RCA: JSON {\"anomalies\": [...]} — подтверждённые аномалии с rca_results",
+      "required": true,
+      "order": 3
+    },
+    {
+      "name": "rca_audit",
+      "label": "rca_audit",
+      "in": false,
+      "type": "default",
+      "shape": "shape_model",
+      "description": "Аудит RCA: вердикт и причина по каждой входной записи (включая отфильтрованные), согласие с детектором, статистика LLM",
+      "required": false,
+      "order": 4
+    }
+  ],
+  "script": {
+    "type": "python",
+    "baseImageKey": "py312-simple",
+    "deployType": "docker",
+    "runConfiguration": {
+      "sourceFiles": [
+        "main.py"
+      ],
+      "functionName": "main",
+      "functionParameters": [],
+      "output": {
+        "type": "json",
+        "output": []
+      }
+    }
+  },
+  "shape": "other"
+}

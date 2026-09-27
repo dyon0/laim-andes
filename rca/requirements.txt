@@ -1,0 +1,9 @@
+# SberDS ставит этот файл поверх образа py312-simple. Только то, что
+# импортирует код ноды (проверено: langchain-core 1.6, langchain-gigachat 0.5,
+# gigachat 0.2, httpx 0.28, requests 2.34, python-dotenv 1.2).
+langchain-core
+langchain-gigachat
+gigachat
+httpx
+requests
+python-dotenv
