@@ -94,6 +94,49 @@ def test_epi_feature_selection_pinned(fixture_spans, golden, tmp_path):
     assert list(names) == golden['epi_feature_names']
 
 
+def test_selection_keeps_uncorrelated_column_with_a_null(tmp_path):
+    """F-75 FIXED: a single null made DataFrame.corr() return NaN for the whole
+    column, and NaN.abs() > max_correlation is TRUE in polars — the column was
+    treated as 'strongly correlated' and dropped by the tie-break."""
+    from ars.stages.s1__data import select_features
+    import numpy as np
+    rng = np.random.default_rng(SEED)
+    a = rng.normal(size=200)
+    b = rng.normal(size=200)
+    df = pl.DataFrame({
+        'trace_id': [f't{i // 10}' for i in range(200)],
+        'a_feature': [None, *a[1:].tolist()],      # one null, like *_rolling_std_w*
+        'b_feature': b.tolist(),
+    })
+    kept = select_features(df, _cfg(tmp_path), frozenset({'trace_id'}))
+    assert {'a_feature', 'b_feature'} <= set(kept.columns)
+
+
+def test_selection_still_drops_truly_correlated_columns(tmp_path):
+    """The F-75 fix must not disable de-duplication: an exact copy (up to scale)
+    of a column with a null is still removed."""
+    from ars.stages.s1__data import select_features
+    import numpy as np
+    a = np.random.default_rng(SEED).normal(size=200)
+    df = pl.DataFrame({
+        'trace_id': [f't{i // 10}' for i in range(200)],
+        'a_feature': [None, *a[1:].tolist()],
+        'z_feature': [None, *(a[1:] * 3.0).tolist()],
+    })
+    kept = select_features(df, _cfg(tmp_path), frozenset({'trace_id'}))
+    assert len({'a_feature', 'z_feature'} & set(kept.columns)) == 1
+
+
+def test_epi_selection_is_not_an_alphabet_prefix(fixture_spans, tmp_path):
+    """F-75 FIXED: the selected EPI set used to be 45 names, ALL starting with
+    'a' (avg_word_length_sem_* variants). Timing features must survive."""
+    from ars.stages.s1__data import calculate_features
+    _, names = calculate_features(
+        _with_label_stubs(fixture_spans), _cfg(tmp_path), FeaturePatterns(), RawSchema())
+    assert any(n.startswith(('duration', 'delta_time')) for n in names)
+    assert len({n[0] for n in names}) > 1
+
+
 @pytest.mark.characterization
 def test_injection_labels_pinned(fixture_spans, golden, tmp_path):
     from ars.data.anomalies_injection import InjectionConfig, inject_anomalies

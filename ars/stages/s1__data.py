@@ -179,6 +179,22 @@ def load_spans(cfg: S1Config, raw_schema: RawSchema) -> pl.DataFrame:
     return df #.head(100)
 
 
+def selection_correlation(frame: pl.DataFrame, cols: list[str], fill_value: float | str) -> pl.DataFrame:
+    '''F-75: корреляции для отбора — на тех значениях, которые увидит детектор.
+
+    DataFrame.corr() на столбце хотя бы с одним null даёт NaN во всей его
+    строке и столбце (так у всех *_rolling_std_w*: std окна из одного значения
+    равен null), а в polars NaN.abs() > x истинно — такие пары считались
+    «сильно коррелированными», и разрыв ничьей оставлял только имена с начала
+    алфавита. Поэтому пропуски заполняются тем же значением, что и после отбора
+    (fill_missing_values), а оставшиеся неопределённые корреляции (нулевая
+    дисперсия) считаются нулевыми.'''
+    import numpy as _np
+    filled = frame.select(cols).with_columns(pl.all().fill_null(fill_value))
+    with _np.errstate(invalid = 'ignore', divide = 'ignore'):  # нулевая дисперсия -> NaN -> 0
+        return filled.corr().fill_nan(0.0)
+
+
 @benchmark('отбор признаков')
 def select_features(df: pl.DataFrame, cfg: S1Config, protected: FrozenSet[str],
                     stats_df: None | pl.DataFrame = None) -> pl.DataFrame:
@@ -225,7 +241,7 @@ def select_features(df: pl.DataFrame, cfg: S1Config, protected: FrozenSet[str],
         f'После фильтрации заполненности/статичности: {(n_after := len(cols_after))} (удалено {n_initial - n_after})',
         style_code = MyColorScheme.info)
     
-    corr_df = stats_df.select(cols_after).corr()
+    corr_df = selection_correlation(stats_df, cols_after, cfg.default_fill_value)
 
     _viz_dir = cfg.output_dir / 'visualizations'
     #viz.save_correlation(corr_df, tuple(cols_after), _viz_dir, 'feature_correlation', 'Корреляции отобранных признаков')

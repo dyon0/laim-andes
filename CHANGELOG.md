@@ -3,6 +3,23 @@
 All notable changes on branch `claude/lumimas-anomaly-refactor-7stpda`
 (legacy baseline: commit `e99d74e`). Finding IDs refer to AUDIT_01_findings.md.
 
+## Fixed (AUDIT_05, branch `claude/audit-05-fixes`)
+
+Finding IDs refer to AUDIT_05_findings.md; each fix lands with the test that
+fails before and passes after.
+
+- **F-75 (P0)** EPI feature selection collapsed to an alphabetical prefix:
+  `select_features` correlated columns BEFORE filling nulls, `DataFrame.corr()`
+  returns NaN for any column with a null (every `*_rolling_std_w*`), and in
+  polars `NaN.abs() > max_correlation` is TRUE — so almost every pair counted
+  as "strongly correlated" and the tie-break kept names starting with "a".
+  Correlations are now computed on null-filled columns (the same fill the
+  detector sees) and undefined correlations count as 0. Fixture: 45 features
+  (all `a*`) -> 996 (10 base families incl. duration, delta_time, exec_gap,
+  llm_tokens); 1000-span sample: 979 at the default `max_correlation=0.999`,
+  743 at 0.99, 499 at 0.95. Golden `epi_feature_names`/`epi_dim` and the
+  normalization vectors regenerated (labels and split membership unchanged).
+
 ## Fixed (P0s, each with the test that failed before / passes after)
 
 - **F-36** injector text-noise crashed on ~5% of spans (u64 hash → i64 wrap in
