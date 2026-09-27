@@ -40,6 +40,12 @@ class S1Meta:
     # None only for legacy artifacts predating the field
     embedding_fingerprint : None | str = None
 
+    # F-79: per-class injection coverage (planned / no_victims / labeled /
+    # applied / unapplied — see anomalies_injection.injection_coverage);
+    # unapplied traces are excluded from val/test. None: no injection or a
+    # legacy artifact
+    injection_coverage : None | Dict[str, Dict[str, float]] = None
+
 
 @dataclass(frozen = True)
 class S2Meta:

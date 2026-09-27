@@ -215,6 +215,10 @@ class InjectionConfig:
     binary_col      : str               = 'class'
     severity_out    : str               = 'anomaly_severity'
     role_out        : str               = 'anomaly_role'
+    # F-79: class drawn by the hash BEFORE the victim check, and whether the
+    # trace's spans were actually changed (both trace-level, broadcast to spans)
+    planned_out     : str               = 'anomaly_planned'
+    applied_out     : str               = 'anomaly_applied'
     normal_label    : str               = 'NonAnomaly'
 
     text_col                : None | str        = None
@@ -672,6 +676,48 @@ class Assign:
         return pl.when(compound != pl.lit(cfg.normal_label)).then(compound).otherwise(base).alias(cfg.label_col)
 
     @staticmethod
+    def victims(spec: OperatorSpec, cfg: InjectionConfig) -> pl.Expr:
+        '''F-79: does the trace hold at least one span this class would perturb?
+        apply_class only touches spans of the class roles (every span for
+        session scope) that fall into a PROFILED (kind, agent) cell — one with
+        >= cell_min spans in the frame, exactly the cells Analyze.run fits.
+        Hallucination's text path corrupts every llm span without a profile.
+        Needs the span-level '_profiled' column (see trace_labels).'''
+        in_roles = pl.lit(True) if spec.scope == 'session' else pl.col(cfg.kind_col).is_in(spec.roles)
+        via_text = (spec.AnomClass == 'hallucination' and cfg.text_noise_enabled and cfg.text_col is not None)
+
+        return (in_roles if via_text else in_roles & pl.col('_profiled')).any().alias(f'_victims_{spec.AnomClass}')
+
+    @staticmethod
+    def trace_labels(frame: Frame, cfg: InjectionConfig) -> Frame:
+        '''Per-trace class: the pure hash of (trace_id, plan.seed) as before, but
+        a class is kept only when the trace has victims for it (F-79) — otherwise
+        the trace stays normal. Victims depend only on aef_kind / agent_id cell
+        sizes, so the SAME assignment is computable before features
+        (planned_trace_labels) and inside the injector: plan == fact holds.
+        Columns: trace_col, label_col (final), planned_out (hash class).'''
+        plan        = cfg.plan
+        profiled    = (pl.len().over(cfg.kind_col, cfg.agent_col) >= cfg.cell_min).alias('_profiled')
+        per_trace   = (frame
+            .select(cfg.trace_col, cfg.kind_col, cfg.agent_col)
+            .with_columns(profiled)
+            .group_by(cfg.trace_col)
+            .agg(map(lambda s: Assign.victims(s, cfg), cfg.specs)))
+        hashed      = per_trace.with_columns(Assign.label(plan, cfg).alias(cfg.planned_out))
+        has         = lambda k: pl.col(f'_victims_{k}')
+        pair_ok     = lambda p: has(p[0]) | has(p[1])
+        keep_class  = lambda acc, s: pl.when(pl.col(cfg.planned_out) == s.AnomClass).then(
+                        pl.when(has(s.AnomClass)).then(pl.col(cfg.planned_out)).otherwise(pl.lit(cfg.normal_label))).otherwise(acc)
+        keep_pair   = lambda acc, p: pl.when(pl.col(cfg.planned_out) == p[0] + '+' + p[1]).then(
+                        pl.when(pair_ok(p)).then(pl.col(cfg.planned_out)).otherwise(pl.lit(cfg.normal_label))).otherwise(acc)
+        final       = reduce(keep_pair, plan.compounds, reduce(keep_class, cfg.specs, pl.col(cfg.planned_out)))
+
+        return (hashed
+            .with_columns(final.alias(cfg.label_col))
+            .select(cfg.trace_col, cfg.label_col, cfg.planned_out)
+            .sort(cfg.trace_col))
+
+    @staticmethod
     def severity(plan: Plan, cfg: InjectionConfig) -> pl.Expr:
         s = Assign.u01(pl.col(cfg.trace_col), plan.seed + 1)
 
@@ -694,14 +740,17 @@ class Inject:
 
         tau         = Effect.tau(float(block.select(pl.col(cfg.severity_out).mean()).item() or cfg.plan.severity_low), 0.5, 4.0)
         position    = jp.asarray(block.get_column('_step').to_numpy()).astype(jp.float32)
-        epi         = Operator.epi_block(profile, spec, cell, Analyze.stack(block, cfg.epi_col, cfg.epi_dim), tau) if spec.touch_epi \
-            else Analyze.stack(block, cfg.epi_col, cfg.epi_dim)
-        epi = jp.clip(epi, cell.clip_low[None, :], cell.clip_high[None, :])
+        # F-79: EPI of classes WITHOUT an EPI effect (ipi, hallucination, bias)
+        # stays bit-identical. It used to be clipped to the cell's
+        # [q0.005, q0.995] and round-tripped through float32 — a small EPI
+        # leak for classes that are supposed to be purely semantic.
+        # (Shift.epi already clips what it moves.)
+        rebuilt     = block.with_columns(pl.Series(cfg.epi_col, Operator.epi_block(
+                        profile, spec, cell, Analyze.stack(block, cfg.epi_col, cfg.epi_dim), tau).tolist())) \
+            if spec.touch_epi else block
         sem = dict(map(
             lambda c: (c, Operator.sem_block(profile, spec, c, Analyze.stack(block, c, cfg.vectorizer.dim), tau, position)),
             cfg.sem_cols)) if spec.touch_sem else {}
-
-        rebuilt = block.with_columns(pl.Series(cfg.epi_col, epi.tolist()))
 
         return reduce(lambda f, kv: f.with_columns(pl.Series(kv[0], kv[1].tolist())), sem.items(), rebuilt)
 
@@ -747,14 +796,45 @@ class Inject:
 
     @staticmethod
     def tagged(normal: Frame, cfg: InjectionConfig) -> Frame:
-        step = pl.int_range(0, pl.len()).over(cfg.trace_col).alias('_step')
+        step    = pl.int_range(0, pl.len()).over(cfg.trace_col).alias('_step')
+        labels  = Assign.trace_labels(normal, cfg)
 
         return (normal
+            .drop(cfg.label_col, cfg.planned_out, strict = False)
             .with_row_index('_span_uid')
             .sort(cfg.trace_col, cfg.order_col)
             .with_columns(step)
-            .with_columns(Assign.label(cfg.plan, cfg))
+            .join(labels, on = cfg.trace_col, how = 'left', maintain_order = 'left')
             .with_columns(Assign.severity(cfg.plan, cfg)))
+
+    @staticmethod
+    def applied(before: Frame, after: Frame, cfg: InjectionConfig) -> Frame:
+        '''F-79 diagnostic: per anomalous trace, was ANY span actually changed
+        (EPI, SEM or text)? Vectors are compared with a float32-sized tolerance.
+        Returns (trace_col, applied_out) for traces labeled anomalous.'''
+        import numpy as _np
+        cols    = tuple(filter(lambda c: c in before.columns and c in after.columns,
+                               (cfg.epi_col, *cfg.sem_cols, *((cfg.text_col,) if cfg.text_col else ()))))
+        anom    = after.filter(pl.col(cfg.label_col) != cfg.normal_label)
+        joined  = (anom.select('_span_uid', cfg.trace_col, *cols)
+            .join(before.select('_span_uid', *cols), on = '_span_uid', how = 'left', suffix = '_before'))
+
+        def _changed(col: str) -> pl.Series:
+            new, old = joined.get_column(col), joined.get_column(f'{col}_before')
+            if not isinstance(new.dtype, (pl.List, pl.Array)):
+                return new.cast(pl.String).ne_missing(old.cast(pl.String))
+            dim     = int(max(new.list.len().max() or 0, old.list.len().max() or 0))
+            if dim == 0 or new.list.len().ne_missing(old.list.len()).any():
+                return new.list.len().ne_missing(old.list.len())
+            a, b    = new.list.to_array(dim).to_numpy(), old.list.to_array(dim).to_numpy()
+            return pl.Series(_np.any(_np.abs(a - b) > 1e-6 + 1e-5 * _np.abs(b), axis = 1))
+
+        flags   = reduce(lambda acc, c: acc | _changed(c), cols, pl.Series([False] * joined.height, dtype = pl.Boolean))
+
+        return (joined.select(cfg.trace_col)
+            .with_columns(flags.alias(cfg.applied_out))
+            .group_by(cfg.trace_col)
+            .agg(pl.col(cfg.applied_out).any()))
 
     @staticmethod
     def apply_compound(profile: Profile, pair: tuple[AnomClass, AnomClass], victims: Frame, cfg: InjectionConfig, embedder: None | Callable[[tuple[str, ...]], Array] = None) -> Frame:
@@ -777,8 +857,24 @@ class Inject:
         merged      = pl.concat(chain((kept,), per_class, per_pair), how = 'vertical_relaxed')
         binary      = (pl.col(cfg.label_col) != cfg.normal_label).cast(pl.Int64).alias(cfg.binary_col)
         role        = pl.when(pl.col(cfg.label_col) == cfg.normal_label).then(pl.lit('none')).otherwise(pl.lit('member')).alias(cfg.role_out)
+        applied     = Inject.applied(tagged, merged, cfg)
+        result      = (merged
+            .join(applied, on = cfg.trace_col, how = 'left')
+            .with_columns(binary, role, pl.col(cfg.applied_out).fill_null(False))
+            .drop('_span_uid', '_step')
+            .sort(cfg.trace_col, cfg.order_col))
+        Inject.print_coverage(result, cfg)
 
-        return merged.with_columns(binary, role).drop('_span_uid', '_step').sort(cfg.trace_col, cfg.order_col)
+        return result
+
+    @staticmethod
+    def print_coverage(result: Frame, cfg: InjectionConfig) -> None:
+        mcs = cfg.output_color_scheme
+        mcs.print_subsection('Покрытие инъекции по классам (F-79)')
+        for k, c in injection_coverage(result, cfg).items():
+            mcs.print_metric(k, f'по хешу {c["planned"]}, без жертв -> норма {c["no_victims"]}, '
+                                f'помечено {c["labeled"]}, изменено {c["applied"]}, '
+                                f'пустых {c["unapplied"]} ({c["unapplied_share"] * 100:.1f}%)')
 
 
 @dataclass(frozen = True)
@@ -908,14 +1004,38 @@ def inject(normal: Frame, profile: Profile, cfg: InjectionConfig = InjectionConf
 
 def planned_trace_labels(frame: Frame, cfg: InjectionConfig = InjectionConfig()) -> Frame:
     """Per-trace anomaly class the injector WILL assign — label assignment is a
-    pure hash of (trace_id, plan.seed), so downstream consumers (train/val/test
-    trace split, train-only feature selection — F-11) can know the membership
-    before the expensive injection runs. Returns columns (trace_col, label_col)."""
-    return (frame
-            .select(pl.col(cfg.trace_col))
-            .unique()
-            .sort(cfg.trace_col)
-            .with_columns(Assign.label(cfg.plan, cfg)))
+    pure hash of (trace_id, plan.seed) kept only where the trace has victims
+    for the class (F-79; computable from aef_kind / agent_id alone), so
+    downstream consumers (train/val/test trace split, train-only feature
+    selection — F-11) can know the membership before the expensive injection
+    runs. Returns columns (trace_col, label_col)."""
+    return Assign.trace_labels(frame, cfg).select(cfg.trace_col, cfg.label_col)
+
+
+def injection_coverage(frame: Frame, cfg: InjectionConfig = InjectionConfig()) -> dict[str, dict[str, float]]:
+    """F-79 diagnostic per class, at trace level: `planned` — traces the hash
+    drew for the class; `no_victims` — of those, kept normal because the trace
+    has nothing the class could perturb; `labeled` — traces carrying the class
+    label; `applied` — labeled traces with at least one changed span;
+    `unapplied` / `unapplied_share` — labeled but unchanged ("empty"
+    anomalies: indistinguishable from normal by construction)."""
+    cols    = [cfg.trace_col, cfg.label_col, cfg.planned_out, cfg.applied_out]
+    traces  = frame.select(cols).unique(cfg.trace_col, keep = 'first')
+    classes = tuple(dict.fromkeys(chain(cfg.plan.fractions.keys(), map(lambda p: p[0] + '+' + p[1], cfg.plan.compounds))))
+
+    def _one(k: str) -> tuple[str, dict[str, float]]:
+        planned = traces.filter(pl.col(cfg.planned_out) == k)
+        labeled = traces.filter(pl.col(cfg.label_col) == k)
+        applied = labeled.filter(pl.col(cfg.applied_out)).height
+        return k, {
+            'planned':          planned.height,
+            'no_victims':       planned.filter(pl.col(cfg.label_col) != k).height,
+            'labeled':          labeled.height,
+            'applied':          applied,
+            'unapplied':        labeled.height - applied,
+            'unapplied_share':  round((labeled.height - applied) / labeled.height, 6) if labeled.height else 0.0}
+
+    return dict(map(_one, classes))
 
 
 def inject_anomalies(normal: Frame, cfg: InjectionConfig = InjectionConfig(), embedder: None | Callable[[tuple[str, ...]], Array] = None, examples: None | Frame = None) -> Frame:
@@ -931,12 +1051,14 @@ def write(path: PurePath, injected: Frame) -> None:
 
 def form_report(result: pl.DataFrame, report: dict, cfg: InjectionConfig, embedded: bool = True) -> str:
     semantic    = 'эмбеддер активен' if embedded else 'эмбеддер не загружен: семантические направления вырождены'
+    coverage    = pl.DataFrame([{'class': k, **v} for k, v in injection_coverage(result, cfg).items()])
     blocks      = (
         viz.block_cards('Сводка', (
             ('Спанов',           str(result.height)),
             ('Аномальных',       str(int(result.get_column(cfg.binary_col).sum()))),
             ('Классов аномалий',  str(len(report))))),
         viz.block_table('Распределение меток',                     result.get_column(cfg.label_col).value_counts(sort = True)),
+        viz.block_table('Покрытие инъекции по классам (трассы; unapplied — метка без изменённых спанов)', coverage),
         viz.block_table('Разделимость (AUC под плотностью нормы)', viz.Frames.mapping(report).sort('value', descending = True)))
  
     return viz.Html.doc('Отчёт инъекции аномалий', f'спанов: {result.height} · {semantic}', str().join(blocks))
@@ -1000,7 +1122,8 @@ def main(**params: str) -> dict:
     return {
         'parquet_path'  : PurePath(out_path).as_posix(),
         'report_html'   : form_report(result, full_report, cfg, embedder is not None),
-        'separability'  : full_report}
+        'separability'  : full_report,
+        'coverage'      : injection_coverage(result, cfg)}
 
 
 if __name__ == '__main__':

@@ -237,7 +237,10 @@ def cmd_prepare(cfg: RunConfig, run_dir: Path, manifest: Manifest) -> dict:
         'train_traces': s1_meta.train_samples,
         'val_traces': s1_meta.val_samples,
         'test_traces': s1_meta.test_samples,
-        'anomaly_types': list(s1_meta.anomaly_types)})
+        'anomaly_types': list(s1_meta.anomaly_types),
+        # F-79: labeled-but-unchanged ("empty") anomalies per class; they are
+        # excluded from val/test — read recall against `applied`
+        'injection_coverage': s1_meta.injection_coverage})
     (run_dir / 's1_meta.json').write_text(json.dumps(meta_dict, indent=2))
     return {'s1_meta': s1_meta, 's1_cfg': s1_cfg}
 
@@ -301,7 +304,8 @@ def cmd_eval(cfg: RunConfig, run_dir: Path, manifest: Manifest,
         return epi, epi_m, sem, sem_m
 
     report: dict[str, Any] = {'best_experiment': s2_meta.best_experiment,
-                              'threshold': s2_meta.best_threshold}
+                              'threshold': s2_meta.best_threshold,
+                              'injection_coverage': getattr(s1_meta, 'injection_coverage', None)}
     with StageTimer(manifest, 'eval', log):
         for name in ('val', 'test'):
             df = splits[name]

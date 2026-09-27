@@ -28,7 +28,7 @@ from    ars.tools.performance.perf      import benchmark, inject_color_scheme
 from    ars.tools.tui.tui               import sprint, ColorSchemeDataScience, Progress
 from    ars.tools.tui.tui_data          import ColorSchemeDataScienceSakura
 from    ars.tools.visualisations        import viz
-from    ars.data.anomalies_injection    import inject_anomalies, InjectionConfig
+from    ars.data.anomalies_injection    import inject_anomalies, InjectionConfig, injection_coverage
 from    ars.tools.tui.tui               import redirect_native_stderr
 
 
@@ -665,6 +665,63 @@ def make_embedder(cfg: S1Config) -> Callable[[tuple[str, ...]], jp.ndarray]:
     return embed
 
 
+def injection_config(cfg: S1Config) -> InjectionConfig:
+    """The ONE injection config of s1: planning (planned_trace_labels) and the
+    injection itself must agree, or the plan == fact split check fails."""
+    return InjectionConfig(sem_cols = ('sem_vector',), text_col = 'sem_text')
+
+
+def refresh_text_features(
+    spans               : pl.DataFrame,
+    cfg                 : S1Config,
+    epi_feature_names   : Tuple[str, ...],
+    anomaly_class       : str = 'hallucination',
+) -> pl.DataFrame:
+    """F-79: hallucination corrupts sem_text and re-embeds it (SEM), but the
+    EPI text counters (char/word/digit/... counts and their aggregates) stayed
+    those of the ORIGINAL text. The affected traces get their features
+    recomputed from the corrupted text. Features are computed per (trace,
+    agent), so recomputing a subset of traces is exact. Compound classes are
+    left alone (recomputing would erase their EPI perturbation)."""
+    if not {'output_text', 'sem_text', DataObject.sublabel} <= set(spans.columns):
+        return spans
+    source  = pl.col('output_text').cast(pl.Utf8).fill_null('')
+    changed = (spans
+        .filter((pl.col(DataObject.sublabel) == anomaly_class) & (pl.col('sem_text') != source))
+        .select(DataObject.trace_id)
+        .unique())
+    if changed.height == 0:
+        return spans
+
+    victims     = (spans
+        .join(changed, on = DataObject.trace_id, how = 'semi')
+        .with_columns(pl.col('sem_text').cast(spans.schema['output_text']).alias('output_text')))
+    recomputed  = fill_missing_values(FeaturesSpan().make_features(victims, FeaturePatterns()), cfg)
+    recomputed  = (recomputed
+        .with_columns(pl.concat_list(epi_feature_names).alias('epi_vector'))
+        .select(spans.columns)
+        .cast(dict(spans.schema)))
+    sprint(f'EPI-признаки пересчитаны по искажённому тексту: {changed.height} трасс {anomaly_class}',
+           style_code = cfg.output_color_scheme.info)
+
+    return pl.concat((spans.join(changed, on = DataObject.trace_id, how = 'anti'), recomputed))
+
+
+def drop_unapplied_anomalies(spans: pl.DataFrame, icfg: InjectionConfig, cfg: S1Config) -> pl.DataFrame:
+    """F-79: a trace labeled anomalous whose spans the injector did not change
+    is indistinguishable from normal by construction and would poison recall,
+    per-type metrics, threshold and calibration. Anomalies never enter train,
+    so dropping them touches only val/test (the plan == fact train check is
+    unaffected). Victim-aware labeling makes this rare; the counts are in
+    S1Meta.injection_coverage ('unapplied')."""
+    empty   = (pl.col(icfg.label_col) != icfg.normal_label) & ~pl.col(icfg.applied_out)
+    dropped = spans.filter(empty).select(DataObject.trace_id).n_unique()
+    if dropped:
+        sprint(f'исключены аномальные трассы без изменённых спанов: {dropped}',
+               style_code = cfg.output_color_scheme.warning)
+    return spans.filter(~empty)
+
+
 @benchmark('сборка трасс')
 def build_traces(df: pl.DataFrame, sem_vec_names: Tuple[str, ...], cfg: S1Config,
                  carry_span_ids: bool = False) -> pl.DataFrame:
@@ -992,6 +1049,7 @@ def save_datasets(
     norm_params     : Dict['str', Literal['zscore', 'robust'] | bool | float | Tuple[float, float]],
     cfg             : S1Config,
     run_id          : str,
+    injection_coverage  : None | dict = None,
 ) -> S1Meta:
     MyColorScheme = cfg.output_color_scheme
 
@@ -1074,7 +1132,8 @@ def save_datasets(
         val_normal_count    = val_normal,
         val_anomaly_count   = val_anom,
         test_normal_count   = test_normal,
-        test_anomaly_count  = test_anom)
+        test_anomaly_count  = test_anom,
+        injection_coverage  = injection_coverage)
     
     meta_path = cfg.output_dir / _build_filename('meta.json')
     with open(meta_path, 'w') as f:
@@ -1145,8 +1204,7 @@ def main(
     # restricted to train-normal traces instead of peeking at val/test.
     if cfg.inject_anomalies:
         from ars.data.anomalies_injection import planned_trace_labels
-        planned = planned_trace_labels(
-            spans, InjectionConfig(sem_cols = ('sem_vector',), text_col = 'sem_text'))
+        planned = planned_trace_labels(spans, injection_config(cfg))
         planned = planned.rename({'anomaly_type': DataObject.sublabel}) \
             if DataObject.sublabel != 'anomaly_type' else planned
     else:
@@ -1169,23 +1227,25 @@ def main(
     if cfg.export_features:
         spans.write_parquet((cfg.output_dir / 'spans_features.parquet').as_posix())
     
+    coverage = None
     if cfg.inject_anomalies:
         @benchmark('инъекция аномалий')
-        def _inject(spans_w_features: pl.DataFrame) -> pl.DataFrame:
+        def _inject(spans_w_features: pl.DataFrame) -> Tuple[pl.DataFrame, dict]:
             mcs.print_section(f'ИНЪЕКЦИЯ АНОМАЛИЙ')
 
+            icfg = injection_config(cfg)
             with redirect_native_stderr(PurePath('/tmp/debug.log')):
-                spans_w_anoms = inject_anomalies(
-                    spans_w_features,
-                    InjectionConfig(sem_cols = ('sem_vector',), text_col = 'sem_text'),
-                    embedder = shared_embedder)
+                spans_w_anoms = inject_anomalies(spans_w_features, icfg, embedder = shared_embedder)
+            coverage      = injection_coverage(spans_w_anoms, icfg)
+            spans_w_anoms = refresh_text_features(spans_w_anoms, cfg, epi_feature_names)
+            spans_w_anoms = drop_unapplied_anomalies(spans_w_anoms, icfg, cfg)
             spans_w_anoms = spans_w_anoms.with_columns(
                 (pl.col(DataObject.sublabel) != 'NonAnomaly').cast(pl.Int8).alias(DataObject.is_anomaly))            
             #spans_w_anoms = fill_missing_values(spans_w_anoms, cfg)
 
-            return spans_w_anoms
+            return spans_w_anoms, coverage
 
-        spans = _inject(spans)
+        spans, coverage = _inject(spans)
 
     # инъекция — последний потребитель эмбеддера: освобождаем реплики и VRAM
     # до обучения s2 (иначе 8 копий модели живут в кэше torch весь прогон)
@@ -1210,7 +1270,8 @@ def main(
     (train, val, test), norm_params = normalize_epi_features(train, val, test, cfg)
     
     meta                            = save_datasets(
-        epi_feature_names, train, val, test, norm_params, cfg, run_id)
+        epi_feature_names, train, val, test, norm_params, cfg, run_id,
+        injection_coverage = coverage)
 
     if mcs: mcs.print_section('ДАННЫЕ ПОДГОТОВЛЕНЫ')
     else:   print('ДАННЫЕ ПОДГОТОВЛЕНЫ')

@@ -51,6 +51,12 @@ def test_full_pipeline_on_fixture(standin_embedder, fixture_spans, tmp_path):  #
         assert 'per_anomaly_type' in report[split]
         assert 0 <= report[split]['calibration']['ece'] <= 1
     assert report['latency_per_trace']['p50_ms'] > 0
+    # F-79: per-class injection coverage travels to the eval report
+    cov = report['injection_coverage']
+    assert set(cov) == {'dpi', 'ipi', 'mp', 'hallucination', 'bias'}
+    for c in cov.values():
+        assert c['labeled'] == c['planned'] - c['no_victims']
+        assert c['unapplied'] == c['labeled'] - c['applied']
 
     detections = pl.read_parquet(run_dir / 'detections.parquet')
     assert detections.height == 3                        # audit trail: ALL traces scored

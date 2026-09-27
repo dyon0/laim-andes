@@ -33,6 +33,26 @@ fails before and passes after.
   validation (plus metric/split names) BEFORE s1 in `run.py` and the
   platform train mode. Duplicate codes run once.
 
+- **F-79 (P1)** traces could carry an anomaly label with nothing perturbed:
+  the class came from a pure hash of `trace_id`, but `apply_class` only
+  touches spans of the class roles that fall into a profiled
+  `(aef_kind, agent_id)` cell (>= `cell_min` spans). The label is now kept
+  only where the trace has victims for its class (otherwise the trace stays
+  normal) — computable from `aef_kind`/`agent_id` alone, so
+  `planned_trace_labels` and the injection share one assignment
+  (`Assign.trace_labels`) and plan == fact still holds. The injector flags
+  every trace with `anomaly_applied` (any span actually changed) and reports
+  per-class coverage (`planned / no_victims / labeled / applied /
+  unapplied`) in its TUI, its HTML report, `S1Meta.injection_coverage`, the
+  run manifest and `eval_report.injection_coverage`; s1 drops the residual
+  labeled-but-unchanged traces (they only ever sat in val/test). Related
+  leaks fixed in the same place: EPI of classes without an EPI effect (ipi,
+  hallucination, bias) is left bit-identical (it was clipped to the cell's
+  quantiles and round-tripped through float32), and hallucination traces get
+  their EPI features recomputed from the corrupted text (text counters used
+  to describe the original text). Fixture labels and golden are unchanged
+  (all four fixture anomalies have victims).
+
 ## Fixed (P0s, each with the test that failed before / passes after)
 
 - **F-36** injector text-noise crashed on ~5% of spans (u64 hash → i64 wrap in
