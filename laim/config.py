@@ -66,6 +66,10 @@ class DataConfig:
     anom_val_ratio: float = 0.70
     anom_test_ratio: float = 0.30
     inject_anomalies: bool = True
+    # OQ-8: per-class share of injected traces, e.g. {"hallucination": 0.2};
+    # empty = the default plan (dpi .04, ipi .04, mp .03, hallucination .05,
+    # bias .04); a non-empty dict REPLACES it (unlisted classes: not injected)
+    injection_fractions: dict[str, float] = field(default_factory=dict)
     validation_gate: str = 'warn'         # 'off' | 'warn' | 'strict'  (wired in Phase 5)
     scale_floor: float = 0.0              # 0.0 = legacy behavior (F-05 fix raises it)
 
@@ -149,6 +153,7 @@ class RunConfig:
             'anom_val_ratio': d.anom_val_ratio,
             'anom_test_ratio': d.anom_test_ratio,
             'inject_anomalies': d.inject_anomalies,
+            'injection_fractions': dict(d.injection_fractions) or None,
             'seed_random': r.seed, 'seed_polars': r.seed, 'seed_torch': r.seed,
             'seed_split': r.seed, 'seed_synth': r.seed, 'seed_llm': r.seed,
         }
@@ -184,6 +189,11 @@ def _merge(base: Any, patch: dict) -> Any:
                 else:
                     raise ValueError(
                         f'{f.name} expects a list (e.g. ["a","b"]), got {p!r}')
+            elif isinstance(val, dict):
+                if not isinstance(p, dict):
+                    raise ValueError(
+                        f'{f.name} expects a JSON object (e.g. {{"a": 0.1}}), got {p!r}')
+                kwargs[f.name] = dict(p)
             else:
                 kwargs[f.name] = type(val)(p) if val is not None and not isinstance(p, type(val)) and not dataclasses.is_dataclass(val) else p
         else:

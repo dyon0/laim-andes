@@ -64,6 +64,15 @@ fails before and passes after.
   `XLA_PYTHON_CLIENT_PREALLOCATE=false` like the node, so JAX does not
   starve the encoder sharing its card.
 
+- **F-81 (P2)** the injection seed was the fixed `Plan.seed = 12345`:
+  changing `runtime.seed` reshuffled the split but never the anomalous
+  traces or their classes. s1 builds ONE injection config
+  (`injection_config(cfg)`, used by planning and injection alike) whose plan
+  seed is `seed_synth` (<- `runtime.seed`); the default seed keeps the
+  historical plan, so golden is unchanged. Same place, OQ-8 item 2:
+  `data.injection_fractions` (e.g. `{"hallucination": 0.2}`) replaces the
+  default per-class shares — validated (known classes, >= 0, sum <= 1).
+
 ## Fixed (P0s, each with the test that failed before / passes after)
 
 - **F-36** injector text-noise crashed on ~5% of spans (u64 hash → i64 wrap in

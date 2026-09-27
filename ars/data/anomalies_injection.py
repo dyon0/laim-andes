@@ -200,6 +200,25 @@ class Plan:
     seed                : int                                       = 12345
 
 
+def injection_plan(seed: int = 12345, fractions: None | dict[str, float] = None) -> Plan:
+    '''Validated Plan. seed drives the class hash, severity, cell sampling and
+    text noise (F-81: callers pass runtime.seed). fractions None/empty keeps the
+    default per-class shares; otherwise they REPLACE them — a class that is not
+    listed is not injected (OQ-8: e.g. {"hallucination": 0.2} injects only
+    hallucinations into 20% of traces).'''
+    default = Plan()
+    if not fractions:
+        return replace(default, seed = int(seed))
+    known   = tuple(default.fractions)
+    unknown = sorted(set(fractions) - set(known))
+    if unknown:
+        raise ValueError(f'injection_fractions: неизвестные классы {unknown}; допустимо {list(known)}')
+    shares  = {k: float(v) for k, v in fractions.items()}
+    if any(v < 0.0 for v in shares.values()) or sum(shares.values()) > 1.0:
+        raise ValueError(f'injection_fractions: доли должны быть >= 0 и в сумме <= 1, получено {shares}')
+    return replace(default, seed = int(seed), fractions = shares)
+
+
 @dataclass(frozen = True)
 class InjectionConfig:
     trace_col       : str               = 'trace_id'

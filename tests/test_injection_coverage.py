@@ -158,3 +158,69 @@ def test_hallucination_refreshes_epi_text_features(fixture_spans, tmp_path):
     assert all(a[idx] > b[idx] for a, b in zip(moved['epi_vector'], moved['epi0']))
     others = j.filter(pl.col('trace_id') != target)
     assert (others['epi_vector'] == others['epi0']).all()
+
+
+# ---------- injection plan: seed (F-81) and class fractions (OQ-8) ----------
+
+def _s1_cfg_from(tmp_path, *overrides) -> S1Config:
+    from laim.config import load_config
+    run_cfg = load_config(None, list(overrides))
+    return S1Config(input_parquet_files=(), output_dir=tmp_path, output_prefix='plan',
+                    **run_cfg.to_s1_overrides())
+
+
+def test_injection_seed_follows_runtime_seed(sample_spans, tmp_path):
+    """F-81 FIXED: the plan seed was the fixed Plan.seed = 12345, so changing
+    runtime.seed reshuffled the split but never the anomalous traces."""
+    from ars.stages.s1__data import injection_config
+    frame = _stub_labels(sample_spans)
+    plans = {}
+    for seed in (1, 2):
+        icfg = injection_config(_s1_cfg_from(tmp_path, f'runtime.seed={seed}'))
+        assert icfg.plan.seed == seed
+        plans[seed] = dict(planned_trace_labels(frame, icfg).iter_rows())
+    anomalous = {s: {t for t, k in p.items() if k != 'NonAnomaly'} for s, p in plans.items()}
+    assert anomalous[1] and anomalous[2] and anomalous[1] != anomalous[2]
+    # the default seed keeps the historical plan (golden unchanged)
+    assert injection_config(_s1_cfg_from(tmp_path)).plan.seed == 12345
+
+
+@pytest.mark.parametrize('seed', [1, 2])
+def test_plan_equals_fact_for_any_seed(sample_spans, tmp_path, seed):
+    """The s1 hard check (planned train split == actual train split) holds for
+    a non-default seed: planning and injection share injection_config(cfg)."""
+    from ars.stages.s1__data import (
+        build_traces, calculate_features, injection_config, split_trace_ids, stratified_split)
+    cfg = _s1_cfg_from(tmp_path, f'runtime.seed={seed}')
+    icfg = replace(injection_config(cfg), text_col=None)       # no embedder in this test
+    spans = _stub_labels(sample_spans)
+    planned = planned_trace_labels(spans, icfg)
+    planned_train = set(split_trace_ids(planned, 'anomaly_type', cfg)[0]['trace_id'])
+
+    feats, _ = calculate_features(spans, cfg, FeaturePatterns(), RawSchema())
+    v = np.random.default_rng(seed).normal(size=(feats.height, icfg.vectorizer.dim))
+    feats = feats.with_columns(pl.Series('sem_vector', (v / np.linalg.norm(v, axis=1, keepdims=True)).tolist()))
+    injected = inject_anomalies(feats, icfg, embedder=None).with_columns(
+        (pl.col('anomaly_type') != 'NonAnomaly').cast(pl.Int8).alias(DataObject.is_anomaly))
+    assert _trace_labels(injected) == dict(planned.iter_rows())
+    train, _, _ = stratified_split(build_traces(injected, ('sem_vector',), cfg), 'anomaly_type', cfg)
+    assert set(train['trace_id']) == planned_train
+
+
+def test_injection_fractions_replace_the_default_plan(sample_spans, tmp_path):
+    from ars.stages.s1__data import injection_config
+    cfg = _s1_cfg_from(tmp_path, 'data.injection_fractions={"hallucination": 0.5}')
+    plan = planned_trace_labels(_stub_labels(sample_spans), injection_config(cfg))
+    classes = set(plan['anomaly_type'].unique())
+    assert classes == {'NonAnomaly', 'hallucination'}
+
+
+@pytest.mark.parametrize('fractions, match', [
+    ({'halucination': 0.1}, 'неизвестные классы'),
+    ({'dpi': 0.7, 'ipi': 0.7}, 'в сумме'),
+    ({'dpi': -0.1}, '>= 0'),
+])
+def test_invalid_injection_fractions_are_rejected(fractions, match):
+    from ars.data.anomalies_injection import injection_plan
+    with pytest.raises(ValueError, match=match):
+        injection_plan(1, fractions)

@@ -28,7 +28,7 @@ from    ars.tools.performance.perf      import benchmark, inject_color_scheme
 from    ars.tools.tui.tui               import sprint, ColorSchemeDataScience, Progress
 from    ars.tools.tui.tui_data          import ColorSchemeDataScienceSakura
 from    ars.tools.visualisations        import viz
-from    ars.data.anomalies_injection    import inject_anomalies, InjectionConfig, injection_coverage
+from    ars.data.anomalies_injection    import inject_anomalies, InjectionConfig, injection_coverage, injection_plan
 from    ars.tools.tui.tui               import redirect_native_stderr
 
 
@@ -667,8 +667,14 @@ def make_embedder(cfg: S1Config) -> Callable[[tuple[str, ...]], jp.ndarray]:
 
 def injection_config(cfg: S1Config) -> InjectionConfig:
     """The ONE injection config of s1: planning (planned_trace_labels) and the
-    injection itself must agree, or the plan == fact split check fails."""
-    return InjectionConfig(sem_cols = ('sem_vector',), text_col = 'sem_text')
+    injection itself must agree, or the plan == fact split check fails.
+    F-81: the plan seed is the run seed (seed_synth <- runtime.seed) — it used
+    to be the fixed Plan.seed, so changing runtime.seed reshuffled the split
+    but never the set of anomalous traces or their classes."""
+    return InjectionConfig(
+        sem_cols    = ('sem_vector',),
+        text_col    = 'sem_text',
+        plan        = injection_plan(cfg.seed_synth, cfg.injection_fractions))
 
 
 def refresh_text_features(

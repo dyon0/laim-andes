@@ -59,6 +59,9 @@ class S1Config:
 
     export_features             : bool                                  = True
     inject_anomalies            : bool                                  = True
+    # OQ-8: per-class trace shares of the injection plan; None = Plan defaults,
+    # otherwise they REPLACE the defaults (unlisted classes are not injected)
+    injection_fractions         : None | dict[str, float]               = None
 
     norm_train_ratio            : float                                 = 0.70
     norm_val_ratio              : float                                 = 0.15
