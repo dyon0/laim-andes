@@ -172,7 +172,7 @@ footer p{max-width:100ch}
 <header class="wrap hero">
   <p class="eyebrow">LAIM · детектор аномалий мультиагентных систем · LumiMAS</p>
   <h1>Обзор архитектуры LAIM</h1>
-  <p class="lede">Как AEF-трасса проходит через систему. Узел <code>laim-detector</code> обучает детектор и оценивает новые трассы, узел LAIM&nbsp;RCA проверяет каждое срабатывание с помощью LLM, узел LAIM anomaly report формирует HTML-отчёт. Это сокращённая версия: слои моделей, форматы данных и параметры узлов показаны в подробной схеме.</p>
+  <p class="lede">Как AEF-трейс проходит через систему. Узел <code>laim-detector</code> обучает детектор и оценивает новые трейсы, узел LAIM&nbsp;RCA проверяет каждое срабатывание с помощью LLM, узел LAIM anomaly report формирует HTML-отчёт. Это сокращённая версия: слои моделей, форматы данных и параметры узлов показаны в подробной схеме.</p>
   <ul class="facts">
     <li><b>46</b>полей спана, 13 обязательных</li>
     <li><b>1024</b>измерения эмбеддинга USER-bge-m3</li>
@@ -197,7 +197,7 @@ footer p{max-width:100ch}
     </div>
     <div class="scroll">
     <svg id="ov" class="dg" viewBox="0 0 1400 800" style="--minw:1080px" role="group" aria-labelledby="ov-title">
-      <title id="ov-title">Обзорная схема LAIM: обучение детектора и пакет модели, оценка новых трасс, проверка срабатываний в узле RCA и HTML-отчёт.</title>
+      <title id="ov-title">Обзорная схема LAIM: обучение детектора и пакет модели, оценка новых трейсов, проверка срабатываний в узле RCA и HTML-отчёт.</title>
       <defs>
         <marker id="ov-a" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah" d="M0 1.5 L9 5 L0 8.5 Z"/></marker>
         <marker id="ov-p" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah-plat" d="M0 1.5 L9 5 L0 8.5 Z"/></marker>
@@ -215,7 +215,7 @@ footer p{max-width:100ch}
       <!-- inputs -->
       <g class="fx m-train">
         <rect class="bx b-src" x="16" y="84" width="170" height="68" rx="6"/>
-        <text class="t" x="28" y="104">Трассы (обучение)</text>
+        <text class="t" x="28" y="104">Трейсы (обучение)</text>
         <text class="m" x="28" y="120">path_traces_train</text>
         <text class="dim" x="28" y="136">AEF-спаны, 46 полей</text>
         <circle class="pin" cx="186" cy="121" r="4"/>
@@ -233,7 +233,7 @@ footer p{max-width:100ch}
       </g>
       <g class="fx m-infer">
         <rect class="bx b-src" x="16" y="332" width="170" height="68" rx="6"/>
-        <text class="t" x="28" y="352">Трассы (инференс)</text>
+        <text class="t" x="28" y="352">Трейсы (инференс)</text>
         <text class="m" x="28" y="368">path_traces_infer</text>
         <text class="dim" x="28" y="384">AEF-спаны, 46 полей</text>
         <circle class="pin" cx="186" cy="365" r="4"/>
@@ -296,7 +296,7 @@ footer p{max-width:100ch}
       <!-- inference -->
       <g class="fx m-infer">
         <text class="lane-t" x="230" y="278">laim-detector · mode=inference</text>
-        <text class="lane-s" x="478" y="278">оценка новых трасс</text>
+        <text class="lane-s" x="478" y="278">оценка новых трейсов</text>
         <rect class="bx b-data" x="230" y="292" width="242" height="98" rx="6"/>
         <text class="t c-data" x="244" y="314">s1 · признаки и эмбеддинги</text>
         <text x="244" y="334">те же признаки и нормализация</text>
@@ -304,10 +304,10 @@ footer p{max-width:100ch}
         <text x="244" y="366">эмбеддинг на устройстве узла</text>
         <path class="w" d="M472 341 H527" marker-end="url(#ov-a)"/>
         <rect class="bx b-det" x="528" y="292" width="242" height="98" rx="6"/>
-        <text class="t c-det" x="542" y="314">s2 · оценка трасс</text>
+        <text class="t c-det" x="542" y="314">s2 · оценка трейсов</text>
         <text x="542" y="334">e_comb &gt; порог → is_anomaly</text>
         <text x="542" y="350">p_anomaly: калибровка ошибок</text>
-        <text x="542" y="366">все трассы → detections</text>
+        <text x="542" y="366">все трейсы → detections</text>
         <path class="w" d="M770 341 H825" marker-end="url(#ov-a)"/>
         <rect class="bx b-rca" x="826" y="292" width="242" height="98" rx="6"/>
         <text class="t c-rca" x="840" y="314">s4 · атрибуция</text>
@@ -317,7 +317,7 @@ footer p{max-width:100ch}
         <path class="w" d="M1068 341 H1123" marker-end="url(#ov-a)"/>
         <rect class="bx b-plat" x="1124" y="292" width="242" height="98" rx="6"/>
         <text class="t" x="1138" y="314">Продуктовый контракт</text>
-        <text x="1138" y="334">только помеченные трассы</text>
+        <text x="1138" y="334">только помеченные трейсы</text>
         <text x="1138" y="350"><tspan class="c-cls" font-weight="600">s3</tspan> → anomaly_type</text>
         <text x="1138" y="366">confidence = round(p·100)</text>
         <text class="m b c-anom" x="1245" y="382" text-anchor="middle">test_anomalies</text>
@@ -326,7 +326,7 @@ footer p{max-width:100ch}
 
       <g class="fx m-infer m-rca">
         <path class="w w-anom" d="M1245 394 V424 H200 V506 H229" marker-end="url(#ov-n)"/>
-        <text class="lbl c-anom" x="720" y="418" text-anchor="middle">test_anomalies: помеченные трассы, 11 полей + detector_rca</text>
+        <text class="lbl c-anom" x="720" y="418" text-anchor="middle">test_anomalies: помеченные трейсы, 11 полей + detector_rca</text>
       </g>
 
       <!-- RCA -->
@@ -337,7 +337,7 @@ footer p{max-width:100ch}
         <text class="t c-rca" x="244" y="502">Сигнал и связи</text>
         <text x="244" y="522">сигнал детектора: ветвь, сила,</text>
         <text x="244" y="538">подозрительные спаны</text>
-        <text x="244" y="554">связанные трассы (без LLM)</text>
+        <text x="244" y="554">связанные трейсы (без LLM)</text>
         <path class="w" d="M472 531 H527" marker-end="url(#ov-a)"/>
         <rect class="bx b-rca" x="528" y="480" width="242" height="102" rx="6"/>
         <text class="t c-rca" x="542" y="502">Промпт</text>
@@ -419,10 +419,10 @@ footer p{max-width:100ch}
     <article class="card">
       <h3><i style="--c:var(--data)"></i>Данные <small>s1 · ars/stages/s1__data.py</small></h3>
       <ul>
-        <li><b>Контракт:</b> 46 полей спана, 13 обязательных; трасса с невалидным обязательным полем отбрасывается целиком (гейт <code>off | warn | strict</code>).</li>
-        <li><b>EPI:</b> около 2 900 кандидатов из 39 признаков спана и 11 признаков трассы; отбор по заполненности, доле моды и корреляции на нормальных трассах TRAIN.</li>
+        <li><b>Контракт:</b> 46 полей спана, 13 обязательных; трейс с невалидным обязательным полем отбрасывается целиком (гейт <code>off | warn | strict</code>).</li>
+        <li><b>EPI:</b> около 2 900 кандидатов из 39 признаков спана и 11 признаков трейса; отбор по заполненности, доле моды и корреляции на нормальных трейсах TRAIN.</li>
         <li><b>SEM:</b> эмбеддинг <code>output_text</code> моделью deepvk/USER-bge-m3, 1024 измерения; на GPU — по реплике модели на каждую карту.</li>
-        <li><b>Синтетические аномалии:</b> dpi, ipi, mp, hallucination, bias, по умолчанию 20 % трасс; класс выбирается хешем <code>trace_id</code> и назначается, только если в трассе есть спаны-мишени.</li>
+        <li><b>Синтетические аномалии:</b> dpi, ipi, mp, hallucination, bias, по умолчанию 20 % трейсов; класс выбирается хешем <code>trace_id</code> и назначается, только если в трейсе есть спаны-мишени.</li>
         <li><b>Разбиение</b> по <code>trace_id</code>: норма 70/15/15, аномалии 0/70/30; EPI нормализуется медианой и IQR по TRAIN.</li>
       </ul>
       <a class="go" href="laim_e2e.html#data">подробнее: s1 →</a>
@@ -433,7 +433,7 @@ footer p{max-width:100ch}
         <li><b>EPI-AE и SEM-AE</b> (LSTM) сжимают последовательность спанов в латентные векторы 128 и 768.</li>
         <li><b>FMLP-AE</b> восстанавливает их конкатенацию (896); ошибка <code>e_comb</code> выше порога даёт <code>is_anomaly = 1</code>.</li>
         <li><b>p_anomaly</b> — отдельная логистическая калибровка трёх ошибок; порог, веса калибровки и выбор эксперимента подбираются на VAL.</li>
-        <li><b>s3</b> (стекинг) присваивает помеченным трассам один из пяти типов аномалий.</li>
+        <li><b>s3</b> (стекинг) присваивает помеченным трейсам один из пяти типов аномалий.</li>
         <li><b>s4</b> раскладывает ошибку по спанам и признакам и формирует блок <code>detector_rca</code>.</li>
       </ul>
       <a class="go" href="laim_e2e.html#detector">подробнее: s2 →</a>
@@ -442,7 +442,7 @@ footer p{max-width:100ch}
       <h3><i style="--c:var(--rca)"></i>Узел RCA <small>rca/ · отдельный узел</small></h3>
       <ul>
         <li><b>Вход</b> — <code>test_anomalies</code>: 11 полей записи и <code>detector_rca</code>. Узел не импортирует <code>ars</code> и <code>laim</code>.</li>
-        <li><b>Без LLM</b> строятся сигнал детектора (ветвь, сила, подозрительные спаны) и связи между трассами по общим кодам и терминам.</li>
+        <li><b>Без LLM</b> строятся сигнал детектора (ветвь, сила, подозрительные спаны) и связи между трейсами по общим кодам и терминам.</li>
         <li><b>Отчёт о разработке агента</b>, если подан, становится главным контекстом промпта.</li>
         <li><b>LLM возвращает вердикт:</b> <code>anomaly</code> и <code>uncertain</code> остаются, <code>normal</code> исключается как ложное срабатывание; RCA — текст до 600 символов без категорий.</li>
         <li><b>Режимы</b> <code>llm</code>, <code>llm_fallback</code>, <code>detector_only</code>; все решения пишутся в <code>rca_audit</code>.</li>
@@ -473,8 +473,8 @@ footer p{max-width:100ch}
       <thead><tr><th>Артефакт</th><th>Откуда</th><th>Содержимое</th></tr></thead>
       <tbody>
         <tr><td><code>model_out</code></td><td>laim-detector, train</td><td>пакет модели: <code>s1_meta</code>, веса трёх автоэнкодеров, порог и калибровка, классификатор s3, манифест, <code>eval_report</code></td></tr>
-        <tr><td><code>detections.parquet</code></td><td>laim-detector, inference; <code>run.py infer</code></td><td>все трассы: ошибки ветвей, <code>p_anomaly</code>, <code>is_anomaly</code>, индексная атрибуция <code>rca_attribution</code></td></tr>
-        <tr><td><code>test_anomalies</code></td><td>laim-detector, inference</td><td>помеченные трассы: 11 полей записи и блок <code>detector_rca</code></td></tr>
+        <tr><td><code>detections.parquet</code></td><td>laim-detector, inference; <code>run.py infer</code></td><td>все трейсы: ошибки ветвей, <code>p_anomaly</code>, <code>is_anomaly</code>, индексная атрибуция <code>rca_attribution</code></td></tr>
+        <tr><td><code>test_anomalies</code></td><td>laim-detector, inference</td><td>помеченные трейсы: 11 полей записи и блок <code>detector_rca</code></td></tr>
         <tr><td><code>res</code> · <code>rca_audit</code></td><td>LAIM RCA</td><td>записи, кроме признанных ложными срабатываниями (вердикт <code>normal</code>), с объектом <code>rca_results</code> · журнал решений по каждой входной записи</td></tr>
         <tr><td><code>anomaly_report</code> · <code>all_results</code></td><td>LAIM anomaly report</td><td>HTML-отчёт для панели · сводка по типам и светофор</td></tr>
       </tbody>

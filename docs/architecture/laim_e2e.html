@@ -216,7 +216,7 @@ footer p{max-width:100ch}
   <div>
     <p class="eyebrow">LAIM · детектор аномалий мультиагентных систем · LumiMAS</p>
     <h1>Архитектура LAIM</h1>
-    <p class="lede">Путь AEF-трассы через систему: контракт данных, стадии s1–s4, узел <code>laim-detector</code> в режимах train и inference, узел LAIM&nbsp;RCA, где LLM отфильтровывает ложные срабатывания, и узел отчёта. Схемы соответствуют коду ветки <code>claude/audit-05-fixes</code>, коммит <code>283eb7b</code>.</p>
+    <p class="lede">Путь AEF-трейса через систему: контракт данных, стадии s1–s4, узел <code>laim-detector</code> в режимах train и inference, узел LAIM&nbsp;RCA, где LLM отфильтровывает ложные срабатывания, и узел отчёта. Схемы соответствуют коду ветки <code>claude/audit-05-fixes</code>, коммит <code>283eb7b</code>.</p>
     <ul class="facts">
       <li><b>46</b>полей спана, 13 обязательных</li>
       <li><b>1024</b>измерения эмбеддинга USER-bge-m3</li>
@@ -227,8 +227,8 @@ footer p{max-width:100ch}
     <a class="more" href="laim_overview.html">Обзорная версия <span>→</span></a>
   </div>
   <figure class="hero-fig">
-    <svg class="dg" viewBox="0 0 440 214" role="img" aria-label="Иллюстрация: трасса из семи спанов на шкале времени и ошибка реконструкции каждого спана; у пятого спана, llm, ошибка максимальна, он выделен как первый кандидат в причину.">
-      <text class="hd" x="0" y="12">AEF-ТРАССА · 7 СПАНОВ</text>
+    <svg class="dg" viewBox="0 0 440 214" role="img" aria-label="Иллюстрация: трейс из семи спанов на шкале времени и ошибка реконструкции каждого спана; у пятого спана, llm, ошибка максимальна, он выделен как первый кандидат в причину.">
+      <text class="hd" x="0" y="12">AEF-ТРЕЙС · 7 СПАНОВ</text>
       <text class="hd" x="440" y="12" text-anchor="end">ОШИБКА РЕКОНСТРУКЦИИ</text>
       <rect class="hotband" x="0" y="117" width="440" height="22" rx="3"/>
       <text class="m" x="0" y="44">start_agent</text>
@@ -256,7 +256,7 @@ footer p{max-width:100ch}
       <text class="faint" x="108" y="204">время →</text>
       <text class="faint" x="350" y="204">EPI-ветвь</text>
     </svg>
-    <figcaption>Иллюстрация. Трасса — последовательность спанов, упорядоченных по <code>start_time_ns</code>. Детектор восстанавливает её целиком, а атрибуция распределяет ошибку реконструкции по спанам: спан с наибольшей ошибкой первым попадает в <code>rca_top_span_indices</code> и в <code>detector_rca</code>.</figcaption>
+    <figcaption>Иллюстрация. Трейс — последовательность спанов, упорядоченных по <code>start_time_ns</code>. Детектор восстанавливает его целиком, а атрибуция распределяет ошибку реконструкции по спанам: спан с наибольшей ошибкой первым попадает в <code>rca_top_span_indices</code> и в <code>detector_rca</code>.</figcaption>
   </figure>
 </header>
 
@@ -282,7 +282,7 @@ footer p{max-width:100ch}
   <div class="sec-head">
     <p class="sec-k"><i></i>Карта</p>
     <h2>Сквозная схема</h2>
-    <p>На схеме четыре запуска. Узел <code>laim-detector</code> в режиме train обучает детектор и собирает пакет модели. Тот же узел в режиме inference получает пакет через <code>model_in</code> и оценивает новые трассы. Узел LAIM&nbsp;RCA проверяет каждое срабатывание с помощью LLM, узел LAIM anomaly report формирует HTML-отчёт. Блоки детектора, выровненные по вертикали, выполняют один и тот же код: при обучении он оценивает параметры, при инференсе применяет их.</p>
+    <p>На схеме четыре запуска. Узел <code>laim-detector</code> в режиме train обучает детектор и собирает пакет модели. Тот же узел в режиме inference получает пакет через <code>model_in</code> и оценивает новые трейсы. Узел LAIM&nbsp;RCA проверяет каждое срабатывание с помощью LLM, узел LAIM anomaly report формирует HTML-отчёт. Блоки детектора, выровненные по вертикали, выполняют один и тот же код: при обучении он оценивает параметры, при инференсе применяет их.</p>
   </div>
 
   <figure class="fig">
@@ -317,7 +317,7 @@ footer p{max-width:100ch}
       <!-- inputs -->
       <g class="fx m-train">
         <rect class="bx b-src" x="16" y="80" width="170" height="80" rx="6"/>
-        <text class="t" x="28" y="100">Трассы (обучение)</text>
+        <text class="t" x="28" y="100">Трейсы (обучение)</text>
         <text class="m" x="28" y="116">path_traces_train</text>
         <text class="dim" x="28" y="132">AEF-спаны, 46 полей</text>
         <text class="dim" x="28" y="147">порт dataframe</text>
@@ -338,7 +338,7 @@ footer p{max-width:100ch}
       </g>
       <g class="fx m-infer">
         <rect class="bx b-src" x="16" y="456" width="170" height="80" rx="6"/>
-        <text class="t" x="28" y="476">Трассы (инференс)</text>
+        <text class="t" x="28" y="476">Трейсы (инференс)</text>
         <text class="m" x="28" y="492">path_traces_infer</text>
         <text class="dim" x="28" y="508">AEF-спаны, 46 полей</text>
         <text class="dim" x="28" y="523">порт dataframe</text>
@@ -492,7 +492,7 @@ footer p{max-width:100ch}
           <text x="672" y="443">p_anomaly: калибровка ошибок</text>
           <text x="672" y="459">атрибуция: top-5 спанов</text>
           <text x="672" y="475">и признаков (drivers)</text>
-          <text x="672" y="495">все трассы → detections</text>
+          <text x="672" y="495">все трейсы → detections</text>
         </a>
 
         <path class="w" d="M872 454 H931" marker-end="url(#f1-a)"/>
@@ -557,9 +557,9 @@ footer p{max-width:100ch}
           <text class="m" x="408" y="672">evidence.parse · без LLM</text>
           <text x="408" y="689">ветвь, сила по p, ≤ 3 спана</text>
         </a>
-        <a href="#rca" aria-label="Узел RCA: связанные трассы">
+        <a href="#rca" aria-label="Узел RCA: связанные трейсы">
           <rect class="bx b-rca" x="396" y="708" width="204" height="68" rx="6"/>
-          <text class="t c-rca" x="408" y="725">Связанные трассы</text>
+          <text class="t c-rca" x="408" y="725">Связанные трейсы</text>
           <text class="m" x="408" y="739">related.py · без LLM</text>
           <text x="408" y="754">общие коды и термины, IDF</text>
           <text x="408" y="768">≤ 3 связанных на запись</text>
@@ -707,17 +707,17 @@ footer p{max-width:100ch}
   <div class="sec-head">
     <p class="sec-k"><i style="--c:var(--data)"></i>s1 · ars/stages/s1__data.py · ars/data</p>
     <h2>Подготовка данных: от спанов к последовательностям</h2>
-    <p>Класс аномалии определяется хешем <code>trace_id</code> с seed запуска и составом спанов трассы, поэтому план разбиения известен ещё до расчёта признаков. Благодаря этому отбор признаков и нормализация используют только нормальные трассы TRAIN, хотя сами аномалии внедряются позже, в пространстве признаков и эмбеддингов. Числовая дорожка (EPI) и текстовая (SEM) сходятся в одну строку на пару <code>(trace_id, agent_id)</code>.</p>
+    <p>Класс аномалии определяется хешем <code>trace_id</code> с seed запуска и составом спанов трейса, поэтому план разбиения известен ещё до расчёта признаков. Благодаря этому отбор признаков и нормализация используют только нормальные трейсы TRAIN, хотя сами аномалии внедряются позже, в пространстве признаков и эмбеддингов. Числовая дорожка (EPI) и текстовая (SEM) сходятся в одну строку на пару <code>(trace_id, agent_id)</code>.</p>
   </div>
 
   <div class="stack">
     <div class="prose">
-      <p><b>Контракт данных</b> (<code>ars/specification/spec.py</code>, ТЗ v1.9.2): 46 полей в 11 группах — id (6), время (2), статус (2), классификация (2), текст (2), LLM (11), HTTP (5), Kafka (4), LangGraph (7), сервис (3), meta (2). NULL запрещён: неприменимые значения кодируются сентинелами (<code>-1</code>, <code>-1.0</code>, <code>false</code>, <code>''</code>, <code>root</code>, <code>outside</code>, <code>NONE</code>, <code>STATUS_CODE_UNSET</code>). Обязательны 13 полей: все идентификаторы, оба времени, <code>aef_kind</code>, <code>input_text</code>, <code>output_text</code> и два логических поля сессии. Одно невалидное обязательное поле исключает всю трассу. Проверка (<code>validation_gate</code>) выполняется в <code>laim/pipeline.py</code> перед s1 и только для обучающих спанов: <code>strict</code> оставляет валидные трассы в <code>train_spans_validated.parquet</code>, <code>warn</code> только записывает нарушения в журнал.</p>
+      <p><b>Контракт данных</b> (<code>ars/specification/spec.py</code>, ТЗ v1.9.2): 46 полей в 11 группах — id (6), время (2), статус (2), классификация (2), текст (2), LLM (11), HTTP (5), Kafka (4), LangGraph (7), сервис (3), meta (2). NULL запрещён: неприменимые значения кодируются сентинелами (<code>-1</code>, <code>-1.0</code>, <code>false</code>, <code>''</code>, <code>root</code>, <code>outside</code>, <code>NONE</code>, <code>STATUS_CODE_UNSET</code>). Обязательны 13 полей: все идентификаторы, оба времени, <code>aef_kind</code>, <code>input_text</code>, <code>output_text</code> и два логических поля сессии. Одно невалидное обязательное поле исключает весь трейс. Проверка (<code>validation_gate</code>) выполняется в <code>laim/pipeline.py</code> перед s1 и только для обучающих спанов: <code>strict</code> оставляет валидные трейсы в <code>train_spans_validated.parquet</code>, <code>warn</code> только записывает нарушения в журнал.</p>
     </div>
 
     <figure class="fig">
       <div class="scroll">
-      <svg class="dg" viewBox="0 0 1280 470" style="--minw:1040px" role="img" aria-label="Конвейер s1: план меток вычисляется из trace_id и состава спанов до расчёта признаков и определяет отбор, внедрение аномалий, разбиение и нормализацию; числовая дорожка EPI и текстовая SEM сходятся при сборке трасс.">
+      <svg class="dg" viewBox="0 0 1280 470" style="--minw:1040px" role="img" aria-label="Конвейер s1: план меток вычисляется из trace_id и состава спанов до расчёта признаков и определяет отбор, внедрение аномалий, разбиение и нормализацию; числовая дорожка EPI и текстовая SEM сходятся при сборке трейсов.">
         <defs>
           <marker id="f2-a" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah" d="M0 1.5 L9 5 L0 8.5 Z"/></marker>
           <marker id="f2-n" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah-anom" d="M0 1.5 L9 5 L0 8.5 Z"/></marker>
@@ -729,14 +729,14 @@ footer p{max-width:100ch}
         <!-- label plan row -->
         <rect class="bx b-src" x="20" y="40" width="166" height="52" rx="6"/>
         <text class="m t" x="32" y="62">trace_id</text>
-        <text class="dim" x="32" y="80">одна метка на трассу</text>
+        <text class="dim" x="32" y="80">одна метка на трейс</text>
         <path class="w" d="M186 66 H213" marker-end="url(#f2-a)"/>
         <rect class="bx b-src" x="214" y="40" width="180" height="52" rx="6"/>
         <text class="m" x="226" y="61">hash(trace_id, seed)</text>
         <text class="m" x="226" y="78">mod 10⁶ / 10⁶ → u ∈ [0; 1)</text>
         <path class="w" d="M394 66 H421" marker-end="url(#f2-a)"/>
         <rect class="bx b-anom" x="422" y="40" width="838" height="52" rx="6"/>
-        <text class="t" x="438" y="61">Класс по интервалу u, если в трассе есть спаны-мишени класса; иначе норма</text>
+        <text class="t" x="438" y="61">Класс по интервалу u, если в трейсе есть спаны-мишени класса; иначе норма</text>
         <text class="m" x="438" y="79">dpi [0; .04) · ipi [.04; .08) · mp [.08; .11) · hallucination [.11; .16) · bias [.16; .20) · доли: data.injection_fractions</text>
 
         <path class="w w-anom w-dash" style="stroke-width:1.4" d="M517 93 V145" marker-end="url(#f2-n)"/>
@@ -763,7 +763,7 @@ footer p{max-width:100ch}
         <text class="m" x="226" y="182">make_features</text>
         <text x="226" y="200">39 признаков спана</text>
         <text x="226" y="216">× агрегаты, окна 3…1000</text>
-        <text x="226" y="232">+ 11 признаков трассы</text>
+        <text x="226" y="232">+ 11 признаков трейса</text>
         <text x="226" y="248">≈ 2 900 кандидатов</text>
         <path class="w" d="M394 204 H421" marker-end="url(#f2-a)"/>
 
@@ -855,13 +855,13 @@ footer p{max-width:100ch}
         <text class="dim" x="182" y="442">laim_s&lt;seed&gt;_{train,val,test}.parquet · s1_meta.json: epi_features, epi_normalization, embedding_fingerprint, injection_coverage · spans_features.parquet · data_report.html</text>
       </svg>
       </div>
-      <figcaption><b>Пунктиром показан план меток.</b> Он вычисляется из <code>trace_id</code>, seed запуска и состава спанов ещё до признаков и определяет отбор признаков, внедрение аномалий, разбиение и нормализацию. В конце s1 проверяет, что фактический TRAIN совпал с плановым (иначе <code>RuntimeError</code>). Корреляции для отбора считаются по значениям с заполненными пропусками; на тестовом наборе из 20 трасс остаётся 996 признаков. На инференсе (<code>prepare_test_data</code>) нет гейта, отбора, внедрения и разбиения: признаки пересчитываются и выбираются по именам из <code>S1Meta.epi_features</code>, нормализация берётся из обучения, <code>span_ids</code> сохраняются для атрибуции.</figcaption>
+      <figcaption><b>Пунктиром показан план меток.</b> Он вычисляется из <code>trace_id</code>, seed запуска и состава спанов ещё до признаков и определяет отбор признаков, внедрение аномалий, разбиение и нормализацию. В конце s1 проверяет, что фактический TRAIN совпал с плановым (иначе <code>RuntimeError</code>). Корреляции для отбора считаются по значениям с заполненными пропусками; на тестовом наборе из 20 трейсов остаётся 996 признаков. На инференсе (<code>prepare_test_data</code>) нет гейта, отбора, внедрения и разбиения: признаки пересчитываются и выбираются по именам из <code>S1Meta.epi_features</code>, нормализация берётся из обучения, <code>span_ids</code> сохраняются для атрибуции.</figcaption>
     </figure>
 
     <div class="two">
       <figure class="fig">
-        <svg class="dg" viewBox="0 0 600 214" role="img" aria-label="Состав выборок в масштабе при доле аномалий 20 процентов: TRAIN — 56 процентов трасс, только норма; VAL — 26 процентов, из них около 54 процентов аномалий; TEST — 18 процентов, около 33 процентов аномалий.">
-          <text class="hd" x="0" y="14">ДОЛЯ ТРАСС ПРИ 20 % АНОМАЛИЙ · В МАСШТАБЕ</text>
+        <svg class="dg" viewBox="0 0 600 214" role="img" aria-label="Состав выборок в масштабе при доле аномалий 20 процентов: TRAIN — 56 процентов трейсов, только норма; VAL — 26 процентов, из них около 54 процентов аномалий; TEST — 18 процентов, около 33 процентов аномалий.">
+          <text class="hd" x="0" y="14">ДОЛЯ ТРЕЙСОВ ПРИ 20 % АНОМАЛИЙ · В МАСШТАБЕ</text>
           <line class="gridl" x1="70" y1="26" x2="70" y2="138"/>
           <line class="gridl" x1="190" y1="26" x2="190" y2="138"/>
           <line class="gridl" x1="310" y1="26" x2="310" y2="138"/>
@@ -887,18 +887,18 @@ footer p{max-width:100ch}
           <text class="dim" x="170" y="187">внедрённая аномалия</text>
           <text class="faint" x="70" y="208">в s2: норма из VAL — ранняя остановка; весь VAL — порог, калибровка, выбор</text>
         </svg>
-        <figcaption>По умолчанию хеш выбирает класс для 20&nbsp;% трасс. Трасса без спанов-мишеней своего класса остаётся нормальной, поэтому фактическая доля аномалий может быть меньше. Нормальные трассы делятся 70/15/15, аномальные — 0/70/30 по каждому классу, поэтому в VAL аномалий больше половины. Seed плана равен <code>runtime.seed</code>, доли классов задаёт <code>data.injection_fractions</code>.</figcaption>
+        <figcaption>По умолчанию хеш выбирает класс для 20&nbsp;% трейсов. Трейс без спанов-мишеней своего класса остаётся нормальным, поэтому фактическая доля аномалий может быть меньше. Нормальные трейсы делятся 70/15/15, аномальные — 0/70/30 по каждому классу, поэтому в VAL аномалий больше половины. Seed плана равен <code>runtime.seed</code>, доли классов задаёт <code>data.injection_fractions</code>.</figcaption>
       </figure>
 
       <div>
-        <p class="tcap">Классы внедряемых аномалий (<code>ars/data/anomalies_injection.py</code>). Класс присваивается, только если в трассе есть спаны-мишени в ячейке <code>(aef_kind, agent_id)</code> размером не меньше 64 спанов; для hallucination достаточно llm-спана. Трассы с меткой, но без изменённых спанов исключаются из VAL и TEST; счётчики по классам — <code>injection_coverage</code> в S1Meta, манифесте и <code>eval_report</code>.</p>
+        <p class="tcap">Классы внедряемых аномалий (<code>ars/data/anomalies_injection.py</code>). Класс присваивается, только если в трейсе есть спаны-мишени в ячейке <code>(aef_kind, agent_id)</code> размером не меньше 64 спанов; для hallucination достаточно llm-спана. Трейсы с меткой, но без изменённых спанов исключаются из VAL и TEST; счётчики по классам — <code>injection_coverage</code> в S1Meta, манифесте и <code>eval_report</code>.</p>
         <div class="tbl">
           <table>
             <thead><tr><th>Класс</th><th>Доля</th><th>Спаны-мишени</th><th>EPI</th><th>SEM</th></tr></thead>
             <tbody>
               <tr><td><code>dpi</code></td><td class="num">4 %</td><td>llm, start_agent</td><td>сдвиг в копуле вдоль первого собственного вектора ячейки</td><td>смещение с PCA-многообразия к якорю класса</td></tr>
               <tr><td><code>ipi</code></td><td class="num">4 %</td><td>tool, retriever, output_request</td><td>не меняется</td><td>смещение к якорю</td></tr>
-              <tr><td><code>mp</code></td><td class="num">3 %</td><td>все спаны трассы</td><td>сдвиг в копуле</td><td>дрейф, растущий с номером шага</td></tr>
+              <tr><td><code>mp</code></td><td class="num">3 %</td><td>все спаны трейса</td><td>сдвиг в копуле</td><td>дрейф, растущий с номером шага</td></tr>
               <tr><td><code>hallucination</code></td><td class="num">5 %</td><td>llm</td><td>признаки пересчитываются по искажённому тексту</td><td>искажение текста (символы, повтор, чужой язык, моджибейк) и повторный эмбеддинг</td></tr>
               <tr><td><code>bias</code></td><td class="num">4 %</td><td>llm</td><td>не меняется</td><td>смещение к якорю</td></tr>
             </tbody>
@@ -908,7 +908,7 @@ footer p{max-width:100ch}
     </div>
 
     <div>
-      <p class="tcap">Признаки EPI (<code>ars/data/features.py</code>): 39 признаков спана и 11 признаков уровня трассы. Спановые признаки считаются после знакового log1p; агрегаты по <code>(trace_id, agent_id)</code> — статические (max, min, mean, std, sum, q25…q95) и скользящие с окнами 3, 5, 10, 30, 50, 100, 500, 1000.</p>
+      <p class="tcap">Признаки EPI (<code>ars/data/features.py</code>): 39 признаков спана и 11 признаков уровня трейса. Спановые признаки считаются после знакового log1p; агрегаты по <code>(trace_id, agent_id)</code> — статические (max, min, mean, std, sum, q25…q95) и скользящие с окнами 3, 5, 10, 30, 50, 100, 500, 1000.</p>
       <div class="tbl">
         <table>
           <thead><tr><th>Группа</th><th>Признаки</th></tr></thead>
@@ -919,7 +919,7 @@ footer p{max-width:100ch}
             <tr><td>Тип спана</td><td><code>is_llm</code>, <code>is_tool</code>, <code>is_chain</code>, <code>is_repeat</code></td></tr>
             <tr><td>Текст ответа</td><td>7 счётчиков (символы, слова, предложения, пунктуация, заглавные, цифры, спецсимволы), <code>avg_word_length_sem</code>, <code>error_flag</code>; те же 7 счётчиков как <code>exec_out_*</code></td></tr>
             <tr><td>Текст запроса</td><td>7 счётчиков <code>prompt_*</code> по <code>input_text</code></td></tr>
-            <tr><td>Уровень трассы</td><td><code>final_output_length</code>, <code>unique_agents</code>, <code>actions_per_agent</code>, <code>unique_tools_global</code>, <code>action_entropy</code>, <code>time_gap_variance</code>, <code>iteration_duration_variance</code>, <code>repetitive_actions</code>, <code>processing_time_variance</code>, <code>cv_duration</code>, <code>cv_delta</code></td></tr>
+            <tr><td>Уровень трейса</td><td><code>final_output_length</code>, <code>unique_agents</code>, <code>actions_per_agent</code>, <code>unique_tools_global</code>, <code>action_entropy</code>, <code>time_gap_variance</code>, <code>iteration_duration_variance</code>, <code>repetitive_actions</code>, <code>processing_time_variance</code>, <code>cv_duration</code>, <code>cv_delta</code></td></tr>
           </tbody>
         </table>
       </div>
@@ -932,7 +932,7 @@ footer p{max-width:100ch}
   <div class="sec-head">
     <p class="sec-k"><i style="--c:var(--det)"></i>s2 · ars/stages/s2__detector.py · ars/models/m2__detector</p>
     <h2>Детектор: два LSTM-автоэнкодера и автоэнкодер латентных векторов</h2>
-    <p>Ветви обучаются по очереди: EPI-AE, SEM-AE, затем FMLP-AE на зафиксированных нормализованных латентных векторах. Метку аномалии ставит только ошибка FMLP-AE (<code>e_comb</code>) при сравнении с порогом. Ошибки ветвей в метке не участвуют, но входят в калибровку <code>p_anomaly</code>, поэтому у помеченной трассы возможно <code>p_anomaly &lt; 0,5</code>.</p>
+    <p>Ветви обучаются по очереди: EPI-AE, SEM-AE, затем FMLP-AE на зафиксированных нормализованных латентных векторах. Метку аномалии ставит только ошибка FMLP-AE (<code>e_comb</code>) при сравнении с порогом. Ошибки ветвей в метке не участвуют, но входят в калибровку <code>p_anomaly</code>, поэтому у помеченного трейса возможно <code>p_anomaly &lt; 0,5</code>.</p>
   </div>
 
   <div class="stack">
@@ -1058,12 +1058,12 @@ footer p{max-width:100ch}
         <text class="m" x="1072" y="372">MSE</text>
       </svg>
       </div>
-      <figcaption><b>Поэтапное обучение.</b> Оптимизатор AdamW: lr 1e-4 с экспоненциальным затуханием до lr/4, weight decay 1e-6, ограничение нормы градиента 1,0. Ранняя остановка выполняется по потере на нормальных трассах VAL с восстановлением лучших весов. FMLP-AE — каскад двух блоков «кодер–декодер» (896→128→32→64→896 и 896→64→32→128→896) с BatchNorm, активациями ReLU и tanh и dropout 0,2. Ошибка ветви — поэлементное среднее её функции потерь по валидным шагам: Huber для EPI, MSE для SEM. Эпохи и patience: 10/50 в <code>laim</code> и <code>default.toml</code>, 100/20 в форме узла SberDS.</figcaption>
+      <figcaption><b>Поэтапное обучение.</b> Оптимизатор AdamW: lr 1e-4 с экспоненциальным затуханием до lr/4, weight decay 1e-6, ограничение нормы градиента 1,0. Ранняя остановка выполняется по потере на нормальных трейсах VAL с восстановлением лучших весов. FMLP-AE — каскад двух блоков «кодер–декодер» (896→128→32→64→896 и 896→64→32→128→896) с BatchNorm, активациями ReLU и tanh и dropout 0,2. Ошибка ветви — поэлементное среднее её функции потерь по валидным шагам: Huber для EPI, MSE для SEM. Эпохи и patience: 10/50 в <code>laim</code> и <code>default.toml</code>, 100/20 в форме узла SberDS.</figcaption>
     </figure>
 
     <figure class="fig">
       <div class="scroll">
-      <svg class="dg" viewBox="0 0 1200 280" style="--minw:960px" role="img" aria-label="Оценка трассы: метку is_anomaly ставит только сравнение e_comb с порогом; p_anomaly — отдельная логистическая калибровка трёх логитов, построенных из e_epi, e_sem и e_comb.">
+      <svg class="dg" viewBox="0 0 1200 280" style="--minw:960px" role="img" aria-label="Оценка трейса: метку is_anomaly ставит только сравнение e_comb с порогом; p_anomaly — отдельная логистическая калибровка трёх логитов, построенных из e_epi, e_sem и e_comb.">
         <defs>
           <marker id="f3b-a" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah" d="M0 1.5 L9 5 L0 8.5 Z"/></marker>
           <marker id="f3b-n" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah-anom" d="M0 1.5 L9 5 L0 8.5 Z"/></marker>
@@ -1123,7 +1123,7 @@ footer p{max-width:100ch}
         <text class="dim" x="800" y="60">раздельно: возможна метка при p &lt; 0,5</text>
       </svg>
       </div>
-      <figcaption><b>Какие данные что настраивают.</b> Нормальные трассы TRAIN задают веса трёх автоэнкодеров, median/MAD ошибок и mean/std латентных векторов. Нормальные трассы VAL используются только для ранней остановки. Весь VAL (норма и аномалии) задаёт порог, температуру T, веса калибровки и выбор эксперимента. TEST используется только в <code>eval_report.json</code>. <code>detector_confidence</code> в <code>detections.parquet</code> равен max(p, 1 − p), а в продуктовом контракте <code>confidence</code> = round(p · 100).</figcaption>
+      <figcaption><b>Какие данные что настраивают.</b> Нормальные трейсы TRAIN задают веса трёх автоэнкодеров, median/MAD ошибок и mean/std латентных векторов. Нормальные трейсы VAL используются только для ранней остановки. Весь VAL (норма и аномалии) задаёт порог, температуру T, веса калибровки и выбор эксперимента. TEST используется только в <code>eval_report.json</code>. <code>detector_confidence</code> в <code>detections.parquet</code> равен max(p, 1 − p), а в продуктовом контракте <code>confidence</code> = round(p · 100).</figcaption>
     </figure>
 
     <div>
@@ -1146,7 +1146,7 @@ footer p{max-width:100ch}
   <div class="sec-head">
     <p class="sec-k"><i style="--c:var(--cls)"></i>s3 · ars/stages/s3__classifier.py · ars/models/m3__classifier</p>
     <h2>Классификатор типа аномалии</h2>
-    <p>Стекинг-ансамбль на JAX, обучение с учителем. Он обучается на внедрённых аномалиях из VAL ∪ TEST, а на инференсе размечает только помеченные трассы внутри <code>build_product_contract</code>. Класса «норма» нет: ложному срабатыванию детектора тоже будет присвоен один из пяти типов. Ложные срабатывания отфильтровывает узел RCA.</p>
+    <p>Стекинг-ансамбль на JAX, обучение с учителем. Он обучается на внедрённых аномалиях из VAL ∪ TEST, а на инференсе размечает только помеченные трейсы внутри <code>build_product_contract</code>. Класса «норма» нет: ложному срабатыванию детектора тоже будет присвоен один из пяти типов. Ложные срабатывания отфильтровывает узел RCA.</p>
   </div>
   <figure class="fig">
     <div class="scroll">
@@ -1222,12 +1222,12 @@ footer p{max-width:100ch}
   <div class="sec-head">
     <p class="sec-k"><i style="--c:var(--rca)"></i>s4 · m2__detector/attribution.py · ars/stages/s4__rca.py</p>
     <h2>Атрибуция ошибки реконструкции</h2>
-    <p>Поэлементная ошибка ветви вычисляется в её функции потерь. Среднее по признакам даёт ошибку спана, среднее по валидным шагам — ошибку признака. Для каждой трассы результат хранится в индексном JSON <code>rca_attribution</code>. Для помеченных трасс <code>export_detector_rca</code> добавляет имена, каталог спанов и значения в исходных единицах — блок <code>laim.detector_rca/1</code>.</p>
+    <p>Поэлементная ошибка ветви вычисляется в её функции потерь. Среднее по признакам даёт ошибку спана, среднее по валидным шагам — ошибку признака. Для каждого трейса результат хранится в индексном JSON <code>rca_attribution</code>. Для помеченных трейсов <code>export_detector_rca</code> добавляет имена, каталог спанов и значения в исходных единицах — блок <code>laim.detector_rca/1</code>.</p>
   </div>
 
   <div class="two-wide">
     <figure class="fig">
-      <svg class="dg" viewBox="0 0 780 446" role="img" aria-label="Иллюстрация атрибуции: матрица ошибок «спаны × признаки»; средние по строкам дают ранжирование спанов, средние по столбцам — ранжирование признаков; пиковый спан признака — спан с максимальной ошибкой; индексы попадают в rca_attribution, а для помеченных трасс — в detector_rca.">
+      <svg class="dg" viewBox="0 0 780 446" role="img" aria-label="Иллюстрация атрибуции: матрица ошибок «спаны × признаки»; средние по строкам дают ранжирование спанов, средние по столбцам — ранжирование признаков; пиковый спан признака — спан с максимальной ошибкой; индексы попадают в rca_attribution, а для помеченных трейсов — в detector_rca.">
         <defs>
           <marker id="f5-a" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah" d="M0 1.5 L9 5 L0 8.5 Z"/></marker>
         </defs>
@@ -1313,7 +1313,7 @@ footer p{max-width:100ch}
         <text class="faint" x="0" y="416">SEM: та же схема по [T × 1024], но только спаны — измерения эмбеддинга не именуются.</text>
         <text class="faint" x="0" y="434">comb_share_epi — доля ошибки FMLP-AE, приходящаяся на EPI-часть латентного вектора (flag_share).</text>
       </svg>
-      <figcaption>Иллюстрация на условных числах: 7 спанов × 12 признаков; средние по строкам и столбцам рассчитаны по этим клеткам. В реальной трассе признаков F, а спанов не больше T (длина самой длинной обучающей последовательности). Более длинные трассы усекаются и получают <code>detector_truncated</code>.</figcaption>
+      <figcaption>Иллюстрация на условных числах: 7 спанов × 12 признаков; средние по строкам и столбцам рассчитаны по этим клеткам. В реальном трейсе признаков F, а спанов не больше T (длина самой длинной обучающей последовательности). Более длинные трейсы усекаются и получают <code>detector_truncated</code>.</figcaption>
     </figure>
 
     <div class="stack">
@@ -1348,7 +1348,7 @@ footer p{max-width:100ch}
                           error_share, vs_typical } ] } }</pre>
       </div>
       <div class="prose">
-        <p><b>Как вычисляются значения.</b> <code>observed</code> и <code>expected</code> = z · scale + shift, то есть значения в шкале самого признака (для лог-признаков — после log1p). <code>*_raw</code> обращает log1p только там, где это корректно (max, min, mean, квантили); для std и sum исходных значений нет. <code>clipped</code> ставится, если |z| достиг ограничения <code>norm_z_clip</code> (20). <code>vs_typical</code> — ошибка, делённая на медиану ошибки нормальных обучающих трасс.</p>
+        <p><b>Как вычисляются значения.</b> <code>observed</code> и <code>expected</code> = z · scale + shift, то есть значения в шкале самого признака (для лог-признаков — после log1p). <code>*_raw</code> обращает log1p только там, где это корректно (max, min, mean, квантили); для std и sum исходных значений нет. <code>clipped</code> ставится, если |z| достиг ограничения <code>norm_z_clip</code> (20). <code>vs_typical</code> — ошибка, делённая на медиану ошибки нормальных обучающих трейсов.</p>
         <p><b>Похожие имена.</b> Колонки <code>detector_z_epi</code> и <code>detector_z_sem</code> в <code>detections.parquet</code> — нормализованные латентные векторы (128 и 768), вход s3. Robust z-оценки ошибок есть только внутри <code>rca_attribution</code> и <code>detector_rca</code> (<code>branch_z</code>).</p>
       </div>
     </div>
@@ -1360,13 +1360,13 @@ footer p{max-width:100ch}
   <div class="sec-head">
     <p class="sec-k"><i style="--c:var(--rca)"></i>rca/ · отдельный узел SberDS · main.py::main</p>
     <h2>Узел RCA: проверка срабатывания и анализ первопричины</h2>
-    <p>Узел не импортирует <code>ars</code> и <code>laim</code>; с детектором его связывает только JSON <code>test_anomalies</code>. Сигнал детектора (<code>detector_rca</code>) и связи между трассами строятся детерминированно, без LLM. Отчёт о разработке агента, если подан, становится главным контекстом промпта. LLM возвращает вердикт и краткое описание первопричины без категорий; записи с вердиктом <code>normal</code> исключаются как ложные срабатывания.</p>
+    <p>Узел не импортирует <code>ars</code> и <code>laim</code>; с детектором его связывает только JSON <code>test_anomalies</code>. Сигнал детектора (<code>detector_rca</code>) и связи между трейсами строятся детерминированно, без LLM. Отчёт о разработке агента, если подан, становится главным контекстом промпта. LLM возвращает вердикт и краткое описание первопричины без категорий; записи с вердиктом <code>normal</code> исключаются как ложные срабатывания.</p>
   </div>
 
   <div class="stack">
     <figure class="fig">
       <div class="scroll">
-      <svg class="dg" viewBox="0 0 1280 430" style="--minw:1040px" role="img" aria-label="Конвейер узла RCA: разбор записей, детерминированный сигнал детектора и связи между трассами, отчёт агента, промпт, группы запросов к внешнему LLM, разбор ответов и решение оставить или исключить запись; в режиме detector_only LLM не вызывается.">
+      <svg class="dg" viewBox="0 0 1280 430" style="--minw:1040px" role="img" aria-label="Конвейер узла RCA: разбор записей, детерминированный сигнал детектора и связи между трейсами, отчёт агента, промпт, группы запросов к внешнему LLM, разбор ответов и решение оставить или исключить запись; в режиме detector_only LLM не вызывается.">
         <defs>
           <marker id="f6-a" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah" d="M0 1.5 L9 5 L0 8.5 Z"/></marker>
           <marker id="f6-r" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah-rca" d="M0 1.5 L9 5 L0 8.5 Z"/></marker>
@@ -1380,7 +1380,7 @@ footer p{max-width:100ch}
         <text class="m t" x="32" y="68">anom_data</text>
         <text class="dim" x="32" y="85">= test_anomalies детектора</text>
         <text class="m" x="32" y="101">{"anomalies": [...]}</text>
-        <text class="dim" x="32" y="118">запись = трасса × агент</text>
+        <text class="dim" x="32" y="118">запись = трейс × агент</text>
         <text class="dim" x="32" y="134">11 полей + detector_rca</text>
         <rect class="bx b-src" x="20" y="320" width="180" height="80" rx="6"/>
         <text class="m t" x="32" y="340">agent_report</text>
@@ -1401,7 +1401,7 @@ footer p{max-width:100ch}
 
         <path class="w" d="M200 130 H220 V252 H239" marker-end="url(#f6-a)"/>
         <rect class="bx b-rca" x="240" y="214" width="230" height="76" rx="6"/>
-        <text class="t c-rca" x="252" y="234">Связанные трассы</text>
+        <text class="t c-rca" x="252" y="234">Связанные трейсы</text>
         <text class="dim" x="252" y="250">related.py, по всему входу</text>
         <text x="252" y="267">общий код или ≥ 2 редких</text>
         <text x="252" y="282">слова (IDF) → до 3 related</text>
@@ -1445,7 +1445,7 @@ footer p{max-width:100ch}
         <rect class="bx b-rca" x="760" y="48" width="200" height="192" rx="6"/>
         <text class="t c-rca" x="772" y="68">Группы запросов</text>
         <text x="772" y="88">связанные записи — подряд</text>
-        <text x="772" y="104">записи трассы — вместе</text>
+        <text x="772" y="104">записи трейса — вместе</text>
         <text x="772" y="122">≤ 8 записей и ≤ 32 КБ</text>
         <text x="772" y="140">сбой → группа пополам,</text>
         <text x="772" y="155">3 успеха подряд → ×2</text>
@@ -1492,7 +1492,7 @@ footer p{max-width:100ch}
         <text class="dim" x="1082" y="408">журнал всех решений</text>
       </svg>
       </div>
-      <figcaption><b>Здесь отфильтровываются ложные срабатывания.</b> Детектор ставит метку по порогу, s3 всегда выбирает тип, и только LLM может вернуть <code>normal</code>. Самые сильные доказательства модель получает из связанных трасс: <code>related.py</code> находит записи с тем же кодом или термином по всему входу, а группы запросов формируются так, чтобы связанные записи шли вместе. В режиме <code>llm</code> недоступность LLM завершает узел с ошибкой; <code>llm_fallback</code> в этом случае использует сигнал детектора, а <code>detector_only</code> вообще не вызывает LLM и оставляет все записи с вердиктом <code>unverified</code>.</figcaption>
+      <figcaption><b>Здесь отфильтровываются ложные срабатывания.</b> Детектор ставит метку по порогу, s3 всегда выбирает тип, и только LLM может вернуть <code>normal</code>. Самые сильные доказательства модель получает из связанных трейсов: <code>related.py</code> находит записи с тем же кодом или термином по всему входу, а группы запросов формируются так, чтобы связанные записи шли вместе. В режиме <code>llm</code> недоступность LLM завершает узел с ошибкой; <code>llm_fallback</code> в этом случае использует сигнал детектора, а <code>detector_only</code> вообще не вызывает LLM и оставляет все записи с вердиктом <code>unverified</code>.</figcaption>
     </figure>
 
     <div class="two">
@@ -1563,7 +1563,7 @@ footer p{max-width:100ch}
       <table>
         <thead><tr><th>Шаг</th><th>Что происходит</th></tr></thead>
         <tbody>
-          <tr><td>Фильтр</td><td>остаются записи с <code>confidence ≥ min_confidence</code> (по умолчанию 75). Детектор записывает туда round(p_anomaly · 100), узел RCA это поле не меняет, поэтому в отчёт попадают трассы с p_anomaly ≥ 0,75. Записи дрифт-тестов и деградации качества исключаются, остальные сортируются по confidence</td></tr>
+          <tr><td>Фильтр</td><td>остаются записи с <code>confidence ≥ min_confidence</code> (по умолчанию 75). Детектор записывает туда round(p_anomaly · 100), узел RCA это поле не меняет, поэтому в отчёт попадают трейсы с p_anomaly ≥ 0,75. Записи дрифт-тестов и деградации качества исключаются, остальные сортируются по confidence</td></tr>
           <tr><td>Типы</td><td><code>anomaly_types = auto</code>: блоки о типах показываются, только если s3 заполнил <code>anomaly_type</code> хотя бы у одной записи; <code>show</code> и <code>hide</code> включают и выключают их принудительно</td></tr>
           <tr><td>HTML</td><td>«Описание показателей» (типы и шкала confidence), «Сводка», «Перечень аномалий»: карточки с trace_id, временем, типом, confidence, запросом, ответом и RCA. trace_id в тексте RCA становятся ссылками на карточки; категории и служебные метки удаляются</td></tr>
           <tr><td>Светофор</td><td><code>amber</code>, если показана хотя бы одна аномалия, иначе <code>green</code>; отдельного порога по числу аномалий нет</td></tr>
@@ -1599,8 +1599,8 @@ footer p{max-width:100ch}
         <table>
           <thead><tr><th>Команда</th><th>Что выполняет</th><th>Результат</th></tr></thead>
           <tbody>
-            <tr><td><code>synth</code></td><td>детерминированный генератор (seed = <code>synth.seed</code>): 3 агента, 6 сценариев, ≈ 7 % трасс с нарушениями контракта</td><td><code>synthetic_spans.parquet</code></td></tr>
-            <tr><td><code>validate</code></td><td><code>recast</code> → <code>validation.Quality</code>: вердикт и число отклонённых трасс</td><td>метрики в <code>manifest.json</code></td></tr>
+            <tr><td><code>synth</code></td><td>детерминированный генератор (seed = <code>synth.seed</code>): 3 агента, 6 сценариев, ≈ 7 % трейсов с нарушениями контракта</td><td><code>synthetic_spans.parquet</code></td></tr>
+            <tr><td><code>validate</code></td><td><code>recast</code> → <code>validation.Quality</code>: вердикт и число отклонённых трейсов</td><td>метрики в <code>manifest.json</code></td></tr>
             <tr><td><code>prepare</code></td><td>проверка конфигурации → гейт контракта → s1 <code>process_train_data</code></td><td><code>traces_train/</code>, <code>s1_meta.json</code></td></tr>
             <tr><td><code>train</code></td><td><code>prepare</code> + s2 <code>train_detector</code> + s3 <code>train_classifier</code> (если включён; ошибка s3 записывается в манифест)</td><td><code>s2_meta.json</code>, <code>s3_meta.json</code>, модели</td></tr>
             <tr><td><code>eval</code></td><td><code>train</code> (всегда заново) + прогноз на VAL и TEST → <code>laim.evaluation</code></td><td><code>eval_report.json</code>, включая <code>injection_coverage</code></td></tr>
@@ -1623,7 +1623,7 @@ footer p{max-width:100ch}
             <tr><td><code>model_in</code></td><td>вход, модель</td><td>пакет модели: JSON-payload, zip, каталог или текст пути</td></tr>
             <tr><td><code>model_out</code></td><td>выход</td><td><code>{bundle_format: laim-bundle-b64/1, sha256, size_bytes, bundle_b64}</code></td></tr>
             <tr><td><code>test_anomalies</code></td><td>выход</td><td>JSON-строка <code>{"anomalies": [...]}</code> → узел RCA</td></tr>
-            <tr><td><code>anomaly_traces</code></td><td>выход, dataframe</td><td>помеченные трассы с дополнительными полями</td></tr>
+            <tr><td><code>anomaly_traces</code></td><td>выход, dataframe</td><td>помеченные трейсы с дополнительными полями</td></tr>
             <tr><td><code>eval_report</code></td><td>выход</td><td>полный отчёт (train) или счётчики <code>n_traces_scored / n_detected / n_truncated</code> (inference)</td></tr>
             <tr><td><code>detector_metrics_holdout</code></td><td>выход</td><td>метрики TEST, порог, лучший эксперимент</td></tr>
             <tr><td><code>classifier_metrics_holdout</code></td><td>выход</td><td>метрики s3</td></tr>
@@ -1680,7 +1680,7 @@ footer p{max-width:100ch}
 </main>
 
 <footer class="wrap">
-  <p>Источники: <code>ars/stages/s1–s5</code>, <code>ars/models/m2__detector</code>, <code>ars/models/m3__classifier</code>, <code>ars/data</code>, <code>laim/*.py</code>, <code>descriptor.json</code>, <code>rca/</code>, <code>anomaly_report/</code>, <code>deploy/README.md</code>. Схемы соответствуют коду ветки <code>claude/audit-05-fixes</code>, коммит <code>283eb7b</code> (27.09.2026). Числа на иллюстрациях трассы и атрибуции условные; доли выборок и размерности рассчитаны по коду. Сокращённая версия: <a href="laim_overview.html">«Обзор архитектуры LAIM»</a>.</p>
+  <p>Источники: <code>ars/stages/s1–s5</code>, <code>ars/models/m2__detector</code>, <code>ars/models/m3__classifier</code>, <code>ars/data</code>, <code>laim/*.py</code>, <code>descriptor.json</code>, <code>rca/</code>, <code>anomaly_report/</code>, <code>deploy/README.md</code>. Схемы соответствуют коду ветки <code>claude/audit-05-fixes</code>, коммит <code>283eb7b</code> (27.09.2026). Числа на иллюстрациях трейса и атрибуции условные; доли выборок и размерности рассчитаны по коду. Сокращённая версия: <a href="laim_overview.html">«Обзор архитектуры LAIM»</a>.</p>
 </footer>
 
 <script>
