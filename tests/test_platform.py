@@ -694,3 +694,49 @@ def test_inference_requires_model():
     with pytest.raises(ValueError, match='model_in'):
         run_module.main(mode='inference', path_traces_infer='/tmp/x.parquet',
                         path_embedder='/tmp/emb')
+
+
+# ------------------------------------------------ AUDIT_05 minor leads
+
+def test_model_out_echo_follows_a_raw_path_pointer(tmp_path):
+    """A model_in delivered as a raw path text used to be echoed as the path
+    of the LOCAL port file — a pointer that dies with this container."""
+    import base64
+    bundle = platform.create_bundle(_fake_run_dir(tmp_path), tmp_path / 'store')
+    pointer = tmp_path / 'unstructured_data'
+    pointer.write_text(str(bundle))
+    echoed = platform.model_out_echo(pointer)
+    assert isinstance(echoed, dict)
+    assert base64.b64decode(echoed['bundle_b64']) == bundle.read_bytes()
+    shared_dir = tmp_path / 'shared_bundle'
+    shared_dir.mkdir()
+    pointer.write_text(str(shared_dir) + '\n')
+    assert platform.model_out_echo(pointer) == str(shared_dir)
+
+
+def test_early_node_logs_reach_run_log(tmp_path):
+    """run_node logs (thread alignment, GPU topology, port staging) happen
+    before the run directory exists; they used to be dropped (no handler yet,
+    and the last-resort handler prints WARNING+ only)."""
+    import logging
+    from laim.runlog import early_logging, setup_logging
+    root = logging.getLogger()
+    saved, saved_level = list(root.handlers), root.level
+    for h in saved:
+        root.removeHandler(h)
+    try:
+        early_logging('INFO')
+        logging.getLogger('laim.platform').info('gpu 0: early topology line')
+        setup_logging(tmp_path / 'run', 'INFO')
+        logging.getLogger('laim').info('after setup')
+        for h in root.handlers:
+            h.flush()
+        text = (tmp_path / 'run' / 'run.log').read_text()
+        assert 'early topology line' in text and 'after setup' in text
+    finally:
+        for h in list(root.handlers):
+            root.removeHandler(h)
+            h.close()
+        for h in saved:
+            root.addHandler(h)
+        root.setLevel(saved_level)

@@ -46,6 +46,11 @@ class S1Config:
     max_static_rate             : float                                 = 0.950
     max_correlation             : float                                 = 0.999
 
+    # INERT (AUDIT_05 minor lead): use_meta_sem, meta_sem_template, llm_sem_*,
+    # eps_divide, default_agent_id, data_object and feature_params are read by
+    # nothing in the pipeline (text-feature regexes come from FeatureParams
+    # class attributes via FeaturePatterns). They stay because the legacy
+    # ars/main.py UI contract still passes some of them to S1Config.
     use_meta_sem                : bool                                  = False
     meta_sem_template           : str                                   = 'Агент {agent_id} выполнил {kind} длительностью {duration:.2f} сек. Характеристики: {details}'
     use_llm_sem                 : bool                                  = False

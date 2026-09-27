@@ -62,8 +62,15 @@ class Agent:
     versions    : tuple[str, ...]
 
 
+DEFAULT_SEED = 20_250_601
+
+
 @dataclass(frozen = True)
 class Salt:
+    '''hash salts of the independent random streams. Salt.of mixes in
+    GenConfig.seed (it used to be ignored: every seed produced the same corpus);
+    the historical default seed maps every salt onto itself, so the default
+    corpus is byte-identical to the pre-fix one.'''
     scenario    : ClassVar[int] = 101
     version     : ClassVar[int] = 102
     day         : ClassVar[int] = 103
@@ -90,6 +97,10 @@ class Salt:
     code        : ClassVar[int] = 124
     session     : ClassVar[int] = 125
     results     : ClassVar[int] = 126
+
+    @staticmethod
+    def of(config: 'GenConfig', salt: int) -> int:
+        return (salt + (config.seed - DEFAULT_SEED) * 1_000) % (1 << 63)
 
 
 @dataclass(frozen = True)
@@ -151,7 +162,7 @@ class Catalog:
 
 @dataclass(frozen = True)
 class GenConfig:
-    seed            : int           = 20_250_601
+    seed            : int           = DEFAULT_SEED
     target_spans    : None | int    = 1000000
     base_ns         : int           = field(default_factory = Catalog.epoch_ns)
     day_ns          : int           = 86_400_000_000_000
@@ -256,12 +267,12 @@ class Build:
         names           = tuple(map(lambda s: s.name, config.scenarios))
         sizes           = tuple(map(lambda s: 1 + len(s.steps), config.scenarios))
         edges           = Build.scenario_edges(config)
-        u_scn           = Rand.u01(uid, Salt.scenario)
+        u_scn           = Rand.u01(uid, Salt.of(config, Salt.scenario))
         s_idx           = reduce(add, map(lambda e: (u_scn >= e).cast(pl.Int64), edges), pl.lit(0, dtype = pl.Int64))
-        u_day           = Rand.u01(uid, Salt.day).pow(1.0 / (1.0 + agent.trend))
+        u_day           = Rand.u01(uid, Salt.of(config, Salt.day)).pow(1.0 / (1.0 + agent.trend))
         defect_names    = tuple(map(lambda d: d.name, config.defects))
         defect_edges    = tuple(accumulate(map(lambda d: d.weight / sum(map(lambda x: x.weight, config.defects)), config.defects)))[:-1]
-        u_def           = Rand.u01(uid, Salt.pick)
+        u_def           = Rand.u01(uid, Salt.of(config, Salt.pick))
         d_idx           = reduce(add, map(lambda e: (u_def >= e).cast(pl.Int64), defect_edges), pl.lit(0, dtype = pl.Int64))
         session_ordinal = (uid // config.traces_per_session)
 
@@ -271,20 +282,20 @@ class Build:
                 pl.lit(agent.id).alias('agent_id'),
                 pl.lit(agent.name).alias('service_name'),
                 pl.lit(agent.versions[0]).alias('service_version'),
-                Rand.pick(uid, Salt.version, agent.versions, pl.String).alias('nexus_distrib_ver'),
+                Rand.pick(uid, Salt.of(config, Salt.version), agent.versions, pl.String).alias('nexus_distrib_ver'),
                 s_idx.replace_strict(list(range(len(names))), list(names), return_dtype = pl.String).alias('scenario'),
                 s_idx.replace_strict(list(range(len(sizes))), list(sizes), return_dtype = pl.Int64).alias('length'),
                 Rand.b64(session_ordinal, config.id_length, config.alphabet).alias('session_id'),
-                (Rand.u01(uid, Salt.session) < 0.6).alias('session_id_derived'),
-                ((Rand.u01(uid, Salt.session) >= 0.6) & (Rand.u01(uid, Salt.session) < 0.8)).alias('session_id_generated'),
+                (Rand.u01(uid, Salt.of(config, Salt.session)) < 0.6).alias('session_id_derived'),
+                ((Rand.u01(uid, Salt.of(config, Salt.session)) >= 0.6) & (Rand.u01(uid, Salt.of(config, Salt.session)) < 0.8)).alias('session_id_generated'),
                 (pl.lit(config.base_ns)
                     + (u_day * config.window_days).floor().cast(pl.Int64) * config.day_ns
-                    + Rand.randint(uid, Salt.intra, 0, 64_800) * 1_000_000_000).alias('trace_start_ns'),
-                pl.when(Rand.u01(uid, Salt.defect) < config.corrupt_rate * agent.corrupt)
+                    + Rand.randint(uid, Salt.of(config, Salt.intra), 0, 64_800) * 1_000_000_000).alias('trace_start_ns'),
+                pl.when(Rand.u01(uid, Salt.of(config, Salt.defect)) < config.corrupt_rate * agent.corrupt)
                   .then(d_idx.replace_strict(list(range(len(defect_names))), list(defect_names), return_dtype = pl.String))
                   .otherwise(pl.lit('none')).alias('defect'))
             .with_columns(
-                (uid.hash(seed = Salt.victim) % pl.col('length')).cast(pl.Int64).alias('victim_step')))
+                (uid.hash(seed = Salt.of(config, Salt.victim)) % pl.col('length')).cast(pl.Int64).alias('victim_step')))
 
     @staticmethod
     def avg_spans(config: GenConfig) -> float:
@@ -328,12 +339,12 @@ class Build:
         http        = ('output_request',)
         kafka       = ('kafka_produce', 'kafka_consume')
         lg          = ('llm', 'chain', 'tool', 'retriever')
-        p_raw       = Rand.randint(span, Salt.ptok, config.tokens_min, config.tokens_max)
-        c_raw       = Rand.randint(span, Salt.ctok, 50, 1500)
-        task        = Rand.pick(span, Salt.task, config.tasks, pl.String)
-        dur         = Rand.randint(span, Salt.dur, config.dur_min_ns, config.dur_max_ns)
-        gap         = pl.when(pl.col('step') == 0).then(0).otherwise(Rand.randint(span, Salt.gap, 0, config.gap_max_ns))
-        u_status    = Rand.u01(span, Salt.status)
+        p_raw       = Rand.randint(span, Salt.of(config, Salt.ptok), config.tokens_min, config.tokens_max)
+        c_raw       = Rand.randint(span, Salt.of(config, Salt.ctok), 50, 1500)
+        task        = Rand.pick(span, Salt.of(config, Salt.task), config.tasks, pl.String)
+        dur         = Rand.randint(span, Salt.of(config, Salt.dur), config.dur_min_ns, config.dur_max_ns)
+        gap         = pl.when(pl.col('step') == 0).then(0).otherwise(Rand.randint(span, Salt.of(config, Salt.gap), 0, config.gap_max_ns))
+        u_status    = Rand.u01(span, Salt.of(config, Salt.status))
 
         exploded = (traces
             .with_columns(pl.int_ranges(0, pl.col('length')).alias('step'))
@@ -361,20 +372,20 @@ class Build:
               .otherwise(pl.lit('STATUS_CODE_OK')).alias('status_code'))
 
         return classified.with_columns(
-            Build.kind(llm, Rand.pick(span, Salt.maxtok, config.models, pl.String), '').alias('llm_model'),
+            Build.kind(llm, Rand.pick(span, Salt.of(config, Salt.maxtok), config.models, pl.String), '').alias('llm_model'),
             Build.kind(llm, p_raw, -1).alias('llm_prompt_tokens'),
             Build.kind(llm, c_raw, -1).alias('llm_completion_tokens'),
             Build.kind(llm, p_raw + c_raw, -1).alias('llm_total_tokens'),
-            Build.kind(llm, Rand.randint(span, Salt.precache, 0, 200), -1).alias('llm_precached_prompt_tokens'),
-            Build.kind(llm, Rand.u01(span, Salt.temp).round(3), -1.0).alias('llm_temperature'),
-            Build.kind(llm, (0.85 + Rand.u01(span, Salt.topp) * 0.15).round(3), -1.0).alias('llm_top_p'),
-            Build.kind(llm, Rand.pick(span, Salt.maxtok, (512, 1024, 2048, 4096), pl.Int64), -1).alias('llm_max_tokens'),
-            Build.kind(llm, (1.0 + Rand.u01(span, Salt.rep) * 0.3).round(3), -1.0).alias('llm_repetition_penalty'),
-            Build.kind(llm, Rand.u01(span, Salt.prof) < 0.6, False).alias('llm_profanity_check'),
-            Build.kind(llm, Rand.u01(span, Salt.stream) < 0.5, False).alias('llm_stream'),
-            Build.kind(http, Rand.pick(span, Salt.method, ('GET', 'POST', 'PUT'), pl.String), 'NONE').alias('http_method'),
-            Build.kind(http, Rand.pick(span, Salt.path, config.paths, pl.String), '').alias('http_path'),
-            Build.kind(http, Rand.pick(span, Salt.code, config.http_codes, pl.Int64), -1).alias('http_status_code'),
+            Build.kind(llm, Rand.randint(span, Salt.of(config, Salt.precache), 0, 200), -1).alias('llm_precached_prompt_tokens'),
+            Build.kind(llm, Rand.u01(span, Salt.of(config, Salt.temp)).round(3), -1.0).alias('llm_temperature'),
+            Build.kind(llm, (0.85 + Rand.u01(span, Salt.of(config, Salt.topp)) * 0.15).round(3), -1.0).alias('llm_top_p'),
+            Build.kind(llm, Rand.pick(span, Salt.of(config, Salt.maxtok), (512, 1024, 2048, 4096), pl.Int64), -1).alias('llm_max_tokens'),
+            Build.kind(llm, (1.0 + Rand.u01(span, Salt.of(config, Salt.rep)) * 0.3).round(3), -1.0).alias('llm_repetition_penalty'),
+            Build.kind(llm, Rand.u01(span, Salt.of(config, Salt.prof)) < 0.6, False).alias('llm_profanity_check'),
+            Build.kind(llm, Rand.u01(span, Salt.of(config, Salt.stream)) < 0.5, False).alias('llm_stream'),
+            Build.kind(http, Rand.pick(span, Salt.of(config, Salt.method), ('GET', 'POST', 'PUT'), pl.String), 'NONE').alias('http_method'),
+            Build.kind(http, Rand.pick(span, Salt.of(config, Salt.path), config.paths, pl.String), '').alias('http_path'),
+            Build.kind(http, Rand.pick(span, Salt.of(config, Salt.code), config.http_codes, pl.Int64), -1).alias('http_status_code'),
             Build.kind(http, pl.lit(config.headers_json), '').alias('request_headers'),
             Build.kind(http, pl.lit(config.headers_json), '').alias('response_headers'),
             Build.kind(kafka, pl.lit('itineraries'), '').alias('kafka_topic'),
@@ -393,7 +404,7 @@ class Build:
                .when(pl.col('aef_kind').is_in(('tool', 'retriever')))
                .then(pl.concat_str((pl.lit('{"query": "'), pl.col('span_name'), pl.lit('"}'))))
                .when(pl.col('aef_kind').is_in(http))
-               .then(pl.concat_str((pl.lit('{"path": "'), Rand.pick(span, Salt.path, config.paths, pl.String), pl.lit('"}'))))
+               .then(pl.concat_str((pl.lit('{"path": "'), Rand.pick(span, Salt.of(config, Salt.path), config.paths, pl.String), pl.lit('"}'))))
                .when(pl.col('aef_kind').is_in(kafka))
                .then(pl.concat_str((pl.lit('{"event": "'), pl.col('span_name'), pl.lit('"}'))))
                .when(pl.col('aef_kind') == 'start_agent')
@@ -401,12 +412,12 @@ class Build:
                .otherwise(pl.lit(''))).alias('input_text'),
             (pl.when(pl.col('aef_kind') == 'llm').then(pl.lit('Here is the plan with flights and hotels.'))
                .when(pl.col('aef_kind') == 'tool')
-               .then(pl.concat_str((pl.lit('{"results": '), Rand.randint(span, Salt.results, 0, 25).cast(pl.String), pl.lit('}'))))
+               .then(pl.concat_str((pl.lit('{"results": '), Rand.randint(span, Salt.of(config, Salt.results), 0, 25).cast(pl.String), pl.lit('}'))))
                .when(pl.col('aef_kind') == 'guard').then(pl.lit('passed'))
                .when(pl.col('aef_kind') == 'start_agent').then(pl.lit('Final itinerary delivered to the user.'))
                .otherwise(pl.lit(''))).alias('output_text'),
             pl.when(pl.col('status_code') == 'STATUS_CODE_ERROR')
-              .then(Rand.pick(span, Salt.message, config.messages, pl.String))
+              .then(Rand.pick(span, Salt.of(config, Salt.message), config.messages, pl.String))
               .otherwise(pl.lit('')).alias('status_message'))
 
     @staticmethod

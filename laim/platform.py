@@ -464,13 +464,32 @@ def model_out_echo(source: str | Path):
         if p.is_file():
             if zipfile.is_zipfile(p):
                 return bundle_payload(p)          # model_path pointed at a zip
-            payload = json.loads(p.read_bytes().decode('utf-8'))
+            raw = p.read_bytes()
+            target = _raw_path_text(raw)
+            if target is not None:
+                # model_in arrived as a raw path pointer: echo what it points
+                # at, never the local port file (it dies with this container)
+                t = Path(target)
+                return bundle_payload(t) if t.is_file() and zipfile.is_zipfile(t) else target
+            payload = json.loads(raw.decode('utf-8'))
             if isinstance(payload, dict) and payload.get('bundle_b64'):
                 return payload                    # pass the port payload through
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         pass
     # a directory or an unusable source: the path is all there is to echo
     return str(source)
+
+
+def _raw_path_text(raw: bytes) -> str | None:
+    """A model port file whose whole content is an unquoted absolute or
+    ./relative path (observed 2026-09-17), else None."""
+    try:
+        text = raw.decode('utf-8').strip()
+    except UnicodeDecodeError:
+        return None
+    if text and len(text) < 4096 and '\n' not in text and text.startswith(('/', './')):
+        return text
+    return None
 
 
 def _bundle_root(source: Path, workdir: Path) -> Path:
@@ -497,12 +516,7 @@ def _bundle_root(source: Path, workdir: Path) -> Path:
         # not JSON — a RAW path text is a known delivery form (observed
         # 2026-09-17: model_in arrived as `unstructured_data` whose content
         # was an unquoted /tmp/... path — a pointer into another container)
-        try:
-            text = raw.decode('utf-8').strip()
-        except UnicodeDecodeError:
-            text = ''
-        if text and len(text) < 4096 and '\n' not in text and text.startswith(('/', './')):
-            payload = text
+        payload = _raw_path_text(raw)
     if payload is None:
         preview = raw[:48]
         raise ValueError(
@@ -756,6 +770,8 @@ def run_inference(cfg, params: dict[str, Any]) -> dict:
 
 def run_node(**params: Any) -> dict:
     """Entry point called by the platform via run.py::main(**params)."""
+    from laim.runlog import early_logging
+    early_logging(str(params.get('log_level') or 'INFO'))  # before the first log line
     _align_thread_env()               # must run before the first polars import
     _quarantine_broken_torchaudio()   # must run before the first transformers import
     # HOME=/ on the platform: the default HF cache (~/.cache/huggingface) is

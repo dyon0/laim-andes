@@ -74,8 +74,10 @@ authoritative: 46 fields, sentinels instead of NULL (-1 / -1.0 / False / '' /
 
 - Python ≥3.12 (PEP 695 `type` aliases). No `pip` module inside the uv venv —
   use `uv pip …`.
-- Determinism: everything flows from `runtime.seed`; same seed + hardware is
-  bit-identical (verified across processes). Never use unseeded RNG.
+- Determinism: everything flows from `runtime.seed` (including the injection
+  plan since F-81 and `synth.seed` for the generator); same seed + hardware is
+  bit-identical on CPU (verified across processes). GPU runs are NOT verified
+  bit-reproducible: no deterministic-XLA flags are set. Never use unseeded RNG.
 - The embedding model is fingerprint-pinned (`S1Meta.embedding_fingerprint`);
   serving with a different model directory raises. The real model is
   `deepvk/USER-bge-m3` (1024-dim) and serves on SberDS via the

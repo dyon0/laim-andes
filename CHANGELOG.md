@@ -104,6 +104,16 @@ fails before and passes after.
   From the audit's minor leads: EXPERIMENTS.md now lists the combined-FMLP
   widths the deep/wide builders actually produce.
 
+- AUDIT_05 minor leads (verified before fixing): `GenConfig.seed` was never
+  read — every `synth.seed` produced the same corpus; salts now mix the seed
+  in (`Salt.of`), the historical default seed reproduces the old corpus byte
+  for byte. `model_out_echo` follows a raw path pointer on `model_in` (it
+  echoed the local port file). `run_node`'s early INFO lines (thread
+  alignment, GPU topology, port staging) reach stderr and `run.log`
+  (`early_logging`; they were dropped). Inert `S1Config` fields are marked
+  (kept for the legacy `ars/main.py` UI contract); CLAUDE.md states that GPU
+  runs are not verified bit-reproducible.
+
 ## Fixed (P0s, each with the test that failed before / passes after)
 
 - **F-36** injector text-noise crashed on ~5% of spans (u64 hash → i64 wrap in

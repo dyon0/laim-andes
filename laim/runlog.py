@@ -20,11 +20,43 @@ from pathlib import Path
 from typing import Any
 
 
+_LOG_FORMAT = '%(asctime)s %(levelname)s %(name)s: %(message)s'
+
+
+class _EarlyBuffer(logging.Handler):
+    """Keeps records logged before the run directory exists (setup_logging
+    replays them into run.log)."""
+    def __init__(self) -> None:
+        super().__init__()
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
+
+
+def early_logging(level: str = 'INFO') -> None:
+    """Logging for the part of a run BEFORE the run directory exists (the
+    platform's run_node: thread alignment, GPU topology, port staging...).
+    Without it those INFO records went nowhere — the root logger had no
+    handler yet, and Python's last-resort handler prints WARNING+ only.
+    Records go to stderr now and are replayed into run.log by setup_logging.
+    Idempotent; a process that already configured logging is left alone."""
+    root = logging.getLogger()
+    if root.handlers:
+        return
+    root.setLevel(level.upper())
+    sh = logging.StreamHandler(sys.stderr)
+    sh.setFormatter(logging.Formatter(_LOG_FORMAT))
+    root.addHandler(sh)
+    root.addHandler(_EarlyBuffer())
+
+
 def setup_logging(run_dir: Path, level: str = 'INFO') -> logging.Logger:
     run_dir.mkdir(parents=True, exist_ok=True)
     root = logging.getLogger()
     root.setLevel(level.upper())
-    fmt = logging.Formatter('%(asctime)s %(levelname)s %(name)s: %(message)s')
+    fmt = logging.Formatter(_LOG_FORMAT)
+    early = [r for h in root.handlers if isinstance(h, _EarlyBuffer) for r in h.records]
     for h in list(root.handlers):
         root.removeHandler(h)
     fh = logging.FileHandler(run_dir / 'run.log', encoding='utf-8')
@@ -33,6 +65,9 @@ def setup_logging(run_dir: Path, level: str = 'INFO') -> logging.Logger:
     sh.setFormatter(fmt)
     root.addHandler(fh)
     root.addHandler(sh)
+    for record in early:            # already on stderr; the file gets them too
+        if record.levelno >= root.level:
+            fh.handle(record)
     return logging.getLogger('laim')
 
 
