@@ -53,6 +53,17 @@ fails before and passes after.
   to describe the original text). Fixture labels and golden are unchanged
   (all four fixture anomalies have victims).
 
+- **F-76 (P1)** inference embedded on CPU even with `device=gpu`:
+  `cmd_infer` built its `S1Config` without `device` (default `'cpu'`), so
+  `run.py infer`, `run.py all` with `infer_spans`, the platform inference
+  mode and the in-run scoring of `path_traces_infer` all encoded on CPU
+  while training encoded on every GPU. `RunConfig.s1_device()` is now the
+  one `gpu -> cuda` mapping, carried by `to_s1_overrides()` into every s1
+  entry; platform inference keeps the instance's own `embedding_gpus` /
+  `embedding_pool_chunk`; local GPU runs default
+  `XLA_PYTHON_CLIENT_PREALLOCATE=false` like the node, so JAX does not
+  starve the encoder sharing its card.
+
 ## Fixed (P0s, each with the test that failed before / passes after)
 
 - **F-36** injector text-noise crashed on ~5% of spans (u64 hash → i64 wrap in

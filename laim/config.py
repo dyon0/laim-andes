@@ -125,9 +125,16 @@ class RunConfig:
 
     # --- legacy stage mappings (behavior-preserving) ---
 
+    def s1_device(self) -> str:
+        """torch device of the s1 embedder: 'gpu' -> 'cuda'. The ONE mapping
+        used by every s1 entry (prepare, infer, in-run scoring) — F-76: infer
+        used to omit it and embed on CPU while training embedded on GPUs."""
+        return 'cuda' if self.runtime.device == 'gpu' else self.runtime.device
+
     def to_s1_overrides(self) -> dict:
         d, r = self.data, self.runtime
         return {
+            'device': self.s1_device(),
             'embedding_batch_size': d.embedding_batch_size,
             'embedding_max_length': d.embedding_max_length,
             'embedding_gpus': d.embedding_gpus,

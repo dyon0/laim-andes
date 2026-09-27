@@ -89,6 +89,12 @@ def check_detector_config(cfg: RunConfig) -> None:
 
 
 def _apply_runtime(cfg: RunConfig) -> None:
+    if cfg.runtime.device == 'gpu':
+        # the torch embedder and JAX share the GPU in prepare AND infer (F-76);
+        # JAX's default 80% preallocation would starve the encoder. Same policy
+        # as the platform node; an operator value in the environment wins.
+        import os
+        os.environ.setdefault('XLA_PYTHON_CLIENT_PREALLOCATE', 'false')
     import ars.configuration.c0__env_setup  # noqa: F401  (env side effects, legacy)
     from ars.configuration.c0__device import Device
     from ars.configuration.c0__env_setup import Runtime
@@ -227,8 +233,7 @@ def cmd_prepare(cfg: RunConfig, run_dir: Path, manifest: Manifest) -> dict:
             PurePath(cfg.paths.embedder),
             PurePath(run_dir), 'laim', run_id,
             recast=cfg.runtime.recast,
-            overrides={**cfg.to_s1_overrides(), 'device': cfg.runtime.device
-                       if cfg.runtime.device != 'gpu' else 'cuda'})
+            overrides=cfg.to_s1_overrides())
     from dataclasses import asdict
     meta_dict = asdict(s1_meta)
     manifest.record_artifact('s1_output_dir', s1_meta.output_dir)

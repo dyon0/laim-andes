@@ -76,9 +76,14 @@ the bundle's manifest so inference vectors match training vectors.
 ### GPU / CPU
 
 `script.baseImageKey` is `py312-gpu`; the actual device is the `device` UI
-select (`cpu`/`gpu`), applied to the JAX detector and the embedder alike.
-CPU works everywhere (validated); GPU is the production target for the real
-`deepvk/USER-bge-m3` embedder.
+select (`cpu`/`gpu`), applied to the JAX detector and the embedder alike — in
+BOTH modes and in the in-run scoring of `path_traces_infer` (until AUDIT_05
+F-76 the scoring paths embedded on CPU regardless of `device`). The inference
+instance's own `embedding_gpus` / `embedding_pool_chunk` apply to its
+encoding; the embedding shape parameters (`embedding_batch_size`,
+`embedding_max_length`) still come from the bundle. CPU works everywhere
+(validated); GPU is the production target for the real `deepvk/USER-bge-m3`
+embedder.
 
 ### Multi-GPU
 

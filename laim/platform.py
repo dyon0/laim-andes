@@ -728,6 +728,10 @@ def run_inference(cfg, params: dict[str, Any]) -> dict:
         f'runtime.seed={cfg.runtime.seed}',
         f'runtime.recast={cfg.runtime.recast}',
         f'eval.attribution_top_k={cfg.eval.attribution_top_k}',
+        # F-76: how many GPUs encode is a property of THIS instance, not of
+        # the training run — the form value is honored (0 = all visible)
+        f'data.embedding_gpus={cfg.data.embedding_gpus}',
+        f'data.embedding_pool_chunk={cfg.data.embedding_pool_chunk}',
     ] + [f'data.{k}={trained_data_cfg[k]}'
          for k in ('embedding_batch_size', 'embedding_max_length')
          if k in trained_data_cfg])
