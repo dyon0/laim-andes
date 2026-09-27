@@ -20,6 +20,19 @@ fails before and passes after.
   743 at 0.99, 499 at 0.95. Golden `epi_feature_names`/`epi_dim` and the
   normalization vectors regenerated (labels and split membership unchanged).
 
+- **F-77 (P1)** `detector.threshold_metric` had no effect: `build_grid`
+  cycled youden/precision/recall/f1 by list position and the per-experiment
+  metric always won (`hub_mse_hub_32_4_deep` thresholded by precision and
+  was then ranked by youden). Experiments now carry no metric unless one is
+  passed explicitly (`build_grid(codes, metrics={code: metric})`);
+  `results.json` records the `threshold_metric` actually used.
+- **F-78 (P1)** experiment codes outside `CODES` were dropped silently
+  (PLAN's `hub_mse_hub_16_4` would not have run). The grid is built from the
+  requested codes (`resolve_grid`); `parse_code` rejects malformed codes with
+  a `ValueError` naming the format, and `check_detector_config` runs that
+  validation (plus metric/split names) BEFORE s1 in `run.py` and the
+  platform train mode. Duplicate codes run once.
+
 ## Fixed (P0s, each with the test that failed before / passes after)
 
 - **F-36** injector text-noise crashed on ~5% of spans (u64 hash → i64 wrap in

@@ -68,6 +68,26 @@ def make_run_dir(cfg: RunConfig, kind: str) -> Path:
     return run_dir
 
 
+def check_detector_config(cfg: RunConfig) -> None:
+    """Fail BEFORE s1 — embedding a real corpus takes hours — on detector
+    settings s2 would only reject after it: malformed experiment codes (F-78)
+    and unknown metric / split names."""
+    from typing import get_args
+    from ars.configuration.experiments.e2__detector import CODE_FORMAT, parse_code
+    from ars.models.metrics import MetricName
+    det = cfg.detector
+    if not det.experiments:
+        raise ValueError(f'detector.experiments пуст. Формат кода: {CODE_FORMAT}')
+    for code in det.experiments:
+        parse_code(code)
+    allowed = get_args(MetricName.__value__)
+    for key in ('threshold_metric', 'select_metric'):
+        if getattr(det, key) not in allowed:
+            raise ValueError(f'detector.{key}={getattr(det, key)!r}: допустимо {", ".join(allowed)}')
+    if det.select_on not in ('val', 'test'):
+        raise ValueError(f'detector.select_on={det.select_on!r}: допустимо val | test')
+
+
 def _apply_runtime(cfg: RunConfig) -> None:
     import ars.configuration.c0__env_setup  # noqa: F401  (env side effects, legacy)
     from ars.configuration.c0__device import Device
@@ -409,6 +429,8 @@ def run(cfg: RunConfig, command: str, spans: str | None = None,
                 **cmd_infer(cfg, run_dir, manifest, Path(model_dir),
                             spans or cfg.paths.infer_spans)}
     if command in ('prepare', 'train', 'eval', 'all'):
+        if command != 'prepare':
+            check_detector_config(cfg)
         prep = cmd_prepare(cfg, run_dir, manifest)
         if command == 'prepare':
             return {'run_dir': str(run_dir)}

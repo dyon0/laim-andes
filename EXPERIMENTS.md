@@ -9,7 +9,9 @@ each knob means, and what to pick. Source of truth for the grid:
 ## The experiment code format
 
 An experiment is named by a code the grid PARSES — you are not limited to
-the catalogue below; any well-formed code works:
+the catalogue below; any well-formed code works (the grid is built from the
+requested codes; a malformed code fails the run BEFORE data preparation with
+a `ValueError` that names this format — AUDIT_05 F-78):
 
 ```
 {epi}_{sem}_{comb}_{batch}_{lr}[_{arch}]
@@ -63,14 +65,16 @@ Semantic-branch losses are `mse` throughout the catalogue: embeddings are
 L2-normalized (bounded), so Huber's outlier resistance buys little there —
 that is also why custom codes rarely need `hub` in the middle position.
 
-## Selection metrics — set them explicitly
+## Selection metrics
 
 Each experiment picks its detection threshold and the grid picks its winner
-by a metric. **Warning (documented in CLAUDE.md):** if you do not set them,
-`build_grid` cycles `('youden', 'precision', 'recall', 'f1')` across
-experiments BY POSITION in the list — experiment #1 gets `youden`,
-#2 `precision`, and so on. That looks intentional but is historically
-accidental. Always set both in the config/UI:
+by a metric. Both come from the config/UI and apply to EVERY experiment in
+the list. (Until AUDIT_05 F-77, `build_grid` cycled
+`('youden', 'precision', 'recall', 'f1')` across experiments BY POSITION and
+that silently overrode `threshold_metric` — the deep experiment always
+thresholded by precision. A per-experiment metric is now only an explicit
+override: `build_grid(codes, metrics={code: metric})`.) Each experiment's
+`results.json` records the `threshold_metric` it actually used.
 
 | Parameter | Meaning | Recommendation |
 |---|---|---|
@@ -99,7 +103,8 @@ accidental. Always set both in the config/UI:
    stopping does the right thing from there.
 5. **Custom codes** beyond the catalogue are legal and parsed on the fly
    (e.g. `hub_mse_mse_64_4` for batch 64 on a big corpus). Architectures
-   are limited to the three named ones.
+   are limited to the three named ones. Duplicate codes in the list run
+   once.
 6. **Distrust pre-refactor numbers**: old reports' "~1200 MSE" figures used
    a different (timestep-normalized, unfloored) loss scale, and the deep
    experiment's old "youden 0.40" was an untrained network (F-40). Only

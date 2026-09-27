@@ -33,7 +33,7 @@ from    ars.models.m2__detector.architecture        import (
     Branch, Calibration, Models, InferenceMeta, PreparedData, Array, Params)
 from    ars.models.m2__detector.train               import Trainer
 from    ars.models.m2__detector.confidence          import Calibrate, Predict
-from    ars.configuration.experiments.e2__detector  import EXPERIMENTS, Experiment
+from    ars.configuration.experiments.e2__detector  import Experiment, resolve_grid
 from    ars.tools.utilities.miscellaneous           import FileIO
 from    ars.tools.performance.perf                  import benchmark, inject_color_scheme
 from    ars.tools.tui.tui                           import sprint, print_table, ColorSchemeDataScience, capture_epoch_progress, print_summary_table, print_config_table, print_best_summary, Progress
@@ -525,11 +525,13 @@ def run_experiment(exp_cls: type[Experiment], data: PreparedData, cfg: S2Config)
         'combined_loss': f'{comb_loss_type}, huber_delta={comb_huber}',
         'target_losses': list(target_losses) if target_losses is not None else None,
         'epochs':        exp_cfg.epochs,
-        'patience':      exp_cfg.patience}
+        'patience':      exp_cfg.patience,
+        'threshold_metric': threshold_metric}
 
     results = {
         'experiment':               experiment_name,
         'best_threshold':           float(best_threshold),
+        'threshold_metric':         threshold_metric,
         'test_metrics':             asdict(test_metrics),
         'val_metrics':              asdict(best_val_metrics),
         'epi_losses':               epi_losses,
@@ -574,10 +576,10 @@ def train_experiments(cfg: S2Config) -> Tuple[PreparedData, Tuple[dict, ...]]:
     mcs                         = cfg.output_color_scheme
     train_df, val_df, test_df   = load_prepared_data(cfg)
     data                        = prepare_arrays(train_df, val_df, test_df, cfg.s1_meta, cfg)
-    grid                        = (EXPERIMENTS if cfg.experiments is None
-                                   else tuple(filter(lambda e: e().name in cfg.experiments, EXPERIMENTS)))
-    if not grid:
-        raise ValueError(f'ни один эксперимент не совпал с фильтром: {cfg.experiments}')
+    # F-78: the grid is built from the requested codes (codes outside CODES
+    # used to be dropped silently); a malformed code raises with the format
+    grid                        = resolve_grid(cfg.experiments)
+    mcs.print_metric('Эксперименты', ', '.join(map(lambda e: e().name, grid)))
     all_results                 = tuple(map(lambda exp_cls: run_experiment(exp_cls, data, cfg), grid))
     print_summary_table(mcs, all_results)
     print_config_table (mcs, all_results)

@@ -1,7 +1,6 @@
-from    typing                                  import Tuple, Callable, Literal
+from    typing                                  import Tuple, Callable, Literal, Mapping, Sequence
 from    dataclasses                             import dataclass, make_dataclass
 from    functools                               import reduce
-from    itertools                               import starmap
 
 from    ars.models.metrics                      import MetricName, LossKind
 from    ars.models.m2__detector.architecture    import Direction, Activation, LayersArch
@@ -163,10 +162,37 @@ def _loss_code(code: str) -> LossKind:
         case _:     raise ValueError(f'неизвестный код потерь: {code}')
 
 
-def _experiment_from_code(code: str, metric: MetricName) -> type[Experiment]:
-    parts                                                   = code.split('_')
-    epi, sem, comb, batch, lr                               = parts[0], parts[1], parts[2], parts[3], parts[4]
-    arch                                                    = '_'.join(parts[5:]) if len(parts) > 5 else 'default'
+CODE_FORMAT = ('{epi}_{sem}_{comb}_{batch}_{lr}[_{arch}], где epi/sem/comb ∈ {mse, hub}, '
+               'batch — целое > 0, lr — показатель степени (4 -> 1e-4), '
+               'arch ∈ {default, deep, wide}; пример: hub_mse_mse_08_4, hub_mse_hub_32_4_deep')
+
+
+def parse_code(code: str) -> Tuple[str, str, str, int, int, str]:
+    '''F-78: разбор кода эксперимента с понятной ошибкой вместо IndexError /
+    голого int(); годится любой корректный код, не только перечисленные в CODES'''
+    def _bad(reason: str) -> ValueError:
+        return ValueError(f'некорректный код эксперимента {code!r}: {reason}. Формат: {CODE_FORMAT}')
+
+    parts = str(code).strip().split('_')
+    if len(parts) < 5:
+        raise _bad(f'ожидается не меньше 5 частей через "_", получено {len(parts)}')
+    epi, sem, comb, batch, lr = parts[:5]
+    arch = '_'.join(parts[5:]) or 'default'
+    if (bad := next(filter(lambda c: c not in ('mse', 'hub'), (epi, sem, comb)), None)) is not None:
+        raise _bad(f'неизвестный код потерь {bad!r}')
+    if not batch.isdigit() or int(batch) <= 0:
+        raise _bad(f'batch {batch!r} не целое положительное число')
+    if not lr.isdigit():
+        raise _bad(f'показатель learning rate {lr!r} не целое неотрицательное число')
+    if arch not in ('default', 'deep', 'wide'):
+        raise _bad(f'неизвестная архитектура {arch!r}')
+    return epi, sem, comb, int(batch), int(lr), arch
+
+
+def _experiment_from_code(code: str, metric: None | MetricName = None) -> type[Experiment]:
+    # F-77: metric=None keeps detector.threshold_metric / select_metric from the
+    # config in force; a per-experiment metric is an explicit override only
+    epi, sem, comb, batch, lr, arch                         = parse_code(code)
     epi_arch, sem_arch, comb_arch, epi_latent, sem_latent   = _arch_builder(arch)
     overrides                                               = (
         ('name',                 str,                code),
@@ -178,16 +204,33 @@ def _experiment_from_code(code: str, metric: MetricName) -> type[Experiment]:
         ('epi_loss_type',        LossOpt,            _loss_code(epi)),
         ('sem_loss_type',        LossOpt,            _loss_code(sem)),
         ('combined_loss_type',   LossOpt,            _loss_code(comb)),
-        ('batch_size',           int,                int(batch)),
-        ('learning_rate',        float,              10.0 ** (-int(lr))),
+        ('batch_size',           int,                batch),
+        ('learning_rate',        float,              10.0 ** (-lr)),
         ('threshold_metric',     None | MetricName,  metric),
         ('select_metric',        None | MetricName,  metric))
     return make_dataclass(code, overrides, bases = (Experiment,), frozen = True)
 
 
-def build_grid(codes: Tuple[str, ...], metrics: Tuple[MetricName, ...] = ('youden',)) -> Tuple[type[Experiment], ...]:
-    assign = lambda i, code: _experiment_from_code(code, metrics[i % len(metrics)])
-    return tuple(starmap(assign, enumerate(codes)))
+def build_grid(codes: Tuple[str, ...], metrics: None | Mapping[str, MetricName] = None) -> Tuple[type[Experiment], ...]:
+    '''F-77: experiments carry NO metric unless `metrics` names one for their
+    code explicitly (the old per-position cycling youden/precision/recall/f1
+    silently overrode detector.threshold_metric). Duplicate codes collapse to
+    one experiment (same name = same output directory).'''
+    explicit = dict(metrics or {})
+    unique   = tuple(dict.fromkeys(map(lambda c: str(c).strip(), codes)))
+    return tuple(map(lambda code: _experiment_from_code(code, explicit.get(code)), unique))
+
+
+def resolve_grid(experiments: None | Sequence[str]) -> Tuple[type[Experiment], ...]:
+    '''F-78: the grid is built FROM the requested codes (any well-formed code,
+    not only the ones listed in CODES); None keeps the compiled default grid.
+    Malformed codes raise ValueError naming the expected format.'''
+    if experiments is None:
+        return EXPERIMENTS
+    grid = build_grid(tuple(experiments))
+    if not grid:
+        raise ValueError(f'список экспериментов пуст. Формат кода: {CODE_FORMAT}')
+    return grid
 
 
 @dataclass(frozen = True)
@@ -221,8 +264,7 @@ CODES   : Tuple[str, ...]   = (
     # 'hub_mse_hub_32_4_wide',
 )
 
-EXPERIMENTS : Tuple[type[Experiment], ...]  = build_grid(
-    CODES, metrics = ('youden', 'precision', 'recall', 'f1'))
+EXPERIMENTS : Tuple[type[Experiment], ...]  = build_grid(CODES)
 
 STACK   : StackSpec = StackSpec(enabled = True, meta_solver = 'logreg', n_folds = 5)
 

@@ -86,10 +86,11 @@ authoritative: 46 fields, sentinels instead of NULL (-1 / -1.0 / False / '' /
   injector's label assignment, s1 has a hard runtime consistency check that
   will fail loudly.
 - The experiment grid lives in `ars/configuration/experiments/e2__detector.py`;
-  `detector.experiments/epochs/patience` in config override it. Metric cycling
-  in `build_grid` assigns different threshold metrics per experiment index —
-  intentional-looking but historically accidental; set explicitly.
-  Full catalogue with recommendations: `EXPERIMENTS.md`.
+  `detector.experiments/epochs/patience` in config override it. The grid is
+  BUILT from the requested codes (any well-formed code, not only `CODES`;
+  malformed codes fail before s1 — F-78), and every experiment uses
+  `detector.threshold_metric` (the old per-position metric cycling in
+  `build_grid` is gone — F-77). Full catalogue: `EXPERIMENTS.md`.
 - `ars/main.py` is the deploy-platform adapter (legacy contract). Don't break
   its signature; it is not the way to run things locally.
 - TUI prints are Russian; logs from `laim` are English. Chart rendering is
