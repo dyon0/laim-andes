@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Обзор архитектуры LAIM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Unbounded:wght@600;700&display=swap">
+<style>
+:root{
+  color-scheme: light;
+  --paper:#F1F3F6; --surface:#FFFFFF; --lane:#F5F7FA;
+  --ink:#131A23; --ink-2:#435063; --ink-3:#6C798C;
+  --line:#D5DBE3; --line-2:#B3BDCA;
+  --data:#07756E; --data-bg:#E0F2EF;
+  --det:#2A4FC4;  --det-bg:#E5EBFC;
+  --cls:#6F42BC;  --cls-bg:#EFE8FA;
+  --rca:#9A5200;  --rca-bg:#FBEEDB;
+  --plat:#4A566A; --plat-bg:#E9EDF2;
+  --anom:#BE1E45; --anom-bg:#FCE4EA; --on-anom:#FFFFFF;
+  --f-display:"Unbounded","Golos Text",system-ui,sans-serif;
+  --f-body:"Golos Text","Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --paper:#0C1016; --surface:#121820; --lane:#161D27;
+    --ink:#E3E8EF; --ink-2:#A3AEBD; --ink-3:#7A879A;
+    --line:#263040; --line-2:#3A4658;
+    --data:#48CFC1; --data-bg:#0E2B29;
+    --det:#88A2FF;  --det-bg:#16213F;
+    --cls:#B89BFF;  --cls-bg:#231A3B;
+    --rca:#F2A94B;  --rca-bg:#2E210F;
+    --plat:#A0ABBA; --plat-bg:#1A222D;
+    --anom:#FF6F8F; --anom-bg:#3A1520; --on-anom:#1A0A0F;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --paper:#0C1016; --surface:#121820; --lane:#161D27;
+  --ink:#E3E8EF; --ink-2:#A3AEBD; --ink-3:#7A879A;
+  --line:#263040; --line-2:#3A4658;
+  --data:#48CFC1; --data-bg:#0E2B29;
+  --det:#88A2FF;  --det-bg:#16213F;
+  --cls:#B89BFF;  --cls-bg:#231A3B;
+  --rca:#F2A94B;  --rca-bg:#2E210F;
+  --plat:#A0ABBA; --plat-bg:#1A222D;
+  --anom:#FF6F8F; --anom-bg:#3A1520; --on-anom:#1A0A0F;
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.6 var(--f-body);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1440px;margin:0 auto;padding-inline:24px}
+@media (max-width:640px){.wrap{padding-inline:16px}}
+a{color:inherit;text-underline-offset:2px}
+code,.mono{font-family:var(--f-mono);font-size:.86em}
+p{margin:0}
+
+.hero{padding-block:48px 28px;display:grid;gap:0}
+.eyebrow{font:500 11.5px/1.5 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:14px}
+h1{font:700 clamp(32px,5vw,56px)/1.04 var(--f-display);letter-spacing:-.015em;margin:0 0 18px;text-wrap:balance}
+.lede{font-size:17px;line-height:1.55;max-width:70ch;color:var(--ink-2);margin-bottom:22px}
+.facts{display:flex;flex-wrap:wrap;gap:8px 26px;list-style:none;padding:0;margin:0 0 22px}
+.facts li{font-size:13px;color:var(--ink-2)}
+.facts b{font:700 13.5px var(--f-mono);color:var(--ink);margin-right:5px}
+.more{display:inline-flex;align-items:center;gap:8px;font:600 13px var(--f-body);color:var(--ink);text-decoration:none;border:1px solid var(--line-2);border-radius:6px;padding:7px 12px;background:var(--surface);justify-self:start}
+.more:hover,.more:focus-visible{border-color:var(--ink);outline:none}
+.more span{font-family:var(--f-mono)}
+
+section{padding-block:44px 4px}
+.sec-head{display:grid;gap:8px;margin-bottom:20px;max-width:80ch}
+.sec-k{font:600 11.5px var(--f-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3)}
+h2{font:700 clamp(22px,2.4vw,28px)/1.18 var(--f-display);margin:0;letter-spacing:-.01em;text-wrap:balance}
+.sec-head p{color:var(--ink-2);max-width:74ch}
+
+figure{margin:0}
+.fig{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px 16px 14px}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.scroll>svg{min-width:var(--minw,960px)}
+figcaption{font-size:13.5px;line-height:1.55;color:var(--ink-2);margin-top:12px;max-width:100ch}
+figcaption b{color:var(--ink);font-weight:600}
+.fig-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;margin-bottom:12px}
+.seg{display:inline-flex;border:1px solid var(--line-2);border-radius:6px;overflow:hidden}
+.seg button{font:500 12.5px var(--f-body);color:var(--ink-2);background:transparent;border:0;padding:6px 13px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line-2)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.seg button:focus-visible{outline:2px solid var(--det);outline-offset:-2px}
+.hint{font-size:12.5px;color:var(--ink-3)}
+.legend{display:flex;flex-wrap:wrap;gap:8px 20px;list-style:none;margin:12px 0 0;padding:12px 0 0;border-top:1px solid var(--line);font-size:12.5px;color:var(--ink-2)}
+.legend li{display:inline-flex;align-items:center;gap:7px}
+.sw{display:inline-block;width:16px;height:11px;border-radius:2px;border:1.25px solid}
+.sw-data{background:var(--data-bg);border-color:var(--data)}
+.sw-det{background:var(--det-bg);border-color:var(--det)}
+.sw-cls{background:var(--cls-bg);border-color:var(--cls)}
+.sw-rca{background:var(--rca-bg);border-color:var(--rca)}
+.sw-plat{background:var(--plat-bg);border-color:var(--plat)}
+.legend svg{width:34px;height:12px;flex:none}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr));gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px 20px 16px;display:grid;gap:10px;align-content:start}
+.card h3{font:600 16px/1.3 var(--f-body);margin:0;display:flex;align-items:center;gap:9px}
+.card h3 i{display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--c,var(--ink-3));flex:none}
+.card h3 small{font:500 11.5px var(--f-mono);color:var(--ink-3);letter-spacing:.03em}
+.card ul{margin:0;padding:0;list-style:none;display:grid;gap:7px}
+.card li{position:relative;padding-left:16px;color:var(--ink-2);font-size:14px;line-height:1.5}
+.card li::before{content:"";position:absolute;left:2px;top:.62em;width:6px;height:6px;border-radius:1px;background:var(--line-2)}
+.card li b{color:var(--ink);font-weight:600}
+.card a.go{font:500 12.5px var(--f-mono);color:var(--ink-3);text-decoration:none;justify-self:start}
+.card a.go:hover,.card a.go:focus-visible{color:var(--ink);text-decoration:underline}
+
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:13.5px;line-height:1.5}
+th,td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid var(--line)}
+th{font:600 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);background:var(--lane);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td code{font-size:12.5px;white-space:nowrap}
+
+footer{padding-block:44px 56px;color:var(--ink-3);font-size:13px}
+footer p{max-width:100ch}
+
+.dg{display:block;width:100%;height:auto}
+.dg text{font-family:var(--f-body);font-size:11px;fill:var(--ink)}
+.dg .t{font-size:12.5px;font-weight:600}
+.dg .m{font-family:var(--f-mono);font-size:10px;fill:var(--ink-2)}
+.dg .m.t{font-size:11.5px;font-weight:700;fill:var(--ink)}
+.dg .b{font-weight:700;fill:var(--ink)}
+.dg .dim{fill:var(--ink-2)}
+.dg .lbl{font-family:var(--f-mono);font-size:10px;fill:var(--ink-2)}
+.dg .hd{font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;fill:var(--ink-3)}
+.dg .lane{fill:var(--lane);stroke:var(--line);stroke-width:1}
+.dg .lane-t{font-family:var(--f-mono);font-size:12px;font-weight:700;fill:var(--ink)}
+.dg .lane-s{font-family:var(--f-mono);font-size:10.5px;fill:var(--ink-3)}
+.dg .bx{stroke-width:1.25}
+.dg .b-data{fill:var(--data-bg);stroke:var(--data)}
+.dg .b-det{fill:var(--det-bg);stroke:var(--det)}
+.dg .b-cls{fill:var(--cls-bg);stroke:var(--cls)}
+.dg .b-rca{fill:var(--rca-bg);stroke:var(--rca)}
+.dg .b-plat{fill:var(--plat-bg);stroke:var(--plat)}
+.dg .b-src{fill:var(--surface);stroke:var(--line-2)}
+.dg .strong{stroke-width:2.2}
+.dg .rail{fill:var(--plat-bg);stroke:var(--plat);stroke-width:1.25;stroke-dasharray:6 4}
+.dg .c-data{fill:var(--data)}
+.dg .c-det{fill:var(--det)}
+.dg .c-cls{fill:var(--cls)}
+.dg .c-rca{fill:var(--rca)}
+.dg .c-anom{fill:var(--anom)}
+.dg .w{fill:none;stroke:var(--ink-3);stroke-width:1.4}
+.dg .w-dash{stroke-dasharray:5 4}
+.dg .w-plat{stroke:var(--plat)}
+.dg .w-anom{stroke:var(--anom);stroke-width:2}
+.dg .ah{fill:var(--ink-3)}
+.dg .ah-plat{fill:var(--plat)}
+.dg .ah-anom{fill:var(--anom)}
+.dg .pin{fill:var(--surface);stroke:var(--ink-2);stroke-width:1.4}
+.dg .pin-an{fill:var(--surface);stroke:var(--anom);stroke-width:1.8}
+.dg .dot{fill:var(--ink-3)}
+.dg a{cursor:pointer}
+.dg a:hover .bx{stroke-width:2.4}
+.dg a:focus{outline:none}
+.dg a:focus-visible .bx{stroke-width:3.2}
+.fx{transition:opacity .2s ease}
+#ov[data-focus="train"] .fx:not(.m-train),
+#ov[data-focus="infer"] .fx:not(.m-infer),
+#ov[data-focus="rca"] .fx:not(.m-rca){opacity:.14}
+@media (prefers-reduced-motion:reduce){.fx{transition:none}}
+</style>
+</head>
+<body>
+
+<header class="wrap hero">
+  <p class="eyebrow">LAIM · детектор аномалий мультиагентных систем · LumiMAS</p>
+  <h1>Обзор архитектуры LAIM</h1>
+  <p class="lede">Как AEF-трасса проходит через систему. Узел <code>laim-detector</code> обучает детектор и оценивает новые трассы, узел LAIM&nbsp;RCA проверяет каждое срабатывание с помощью LLM, узел LAIM anomaly report формирует HTML-отчёт. Это сокращённая версия: слои моделей, форматы данных и параметры узлов показаны в подробной схеме.</p>
+  <ul class="facts">
+    <li><b>46</b>полей спана, 13 обязательных</li>
+    <li><b>1024</b>измерения эмбеддинга USER-bge-m3</li>
+    <li><b>128 + 768</b>латентные векторы двух LSTM-автоэнкодеров</li>
+    <li><b>5</b>классов синтетических аномалий</li>
+    <li><b>3</b>узла SberDS и внешний LLM</li>
+  </ul>
+  <a class="more" href="laim_e2e.html">Подробная схема <span>→</span></a>
+</header>
+
+<main class="wrap">
+<section id="flow" style="padding-top:8px">
+  <figure class="fig">
+    <div class="fig-bar">
+      <div class="seg" role="group" aria-label="Подсветить режим">
+        <button type="button" data-focus-btn="all" aria-pressed="true">Всё</button>
+        <button type="button" data-focus-btn="train" aria-pressed="false">Обучение</button>
+        <button type="button" data-focus-btn="infer" aria-pressed="false">Инференс</button>
+        <button type="button" data-focus-btn="rca" aria-pressed="false">RCA и отчёт</button>
+      </div>
+      <p class="hint">На узком экране схему можно прокручивать вбок.</p>
+    </div>
+    <div class="scroll">
+    <svg id="ov" class="dg" viewBox="0 0 1400 800" style="--minw:1080px" role="group" aria-labelledby="ov-title">
+      <title id="ov-title">Обзорная схема LAIM: обучение детектора и пакет модели, оценка новых трасс, проверка срабатываний в узле RCA и HTML-отчёт.</title>
+      <defs>
+        <marker id="ov-a" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah" d="M0 1.5 L9 5 L0 8.5 Z"/></marker>
+        <marker id="ov-p" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah-plat" d="M0 1.5 L9 5 L0 8.5 Z"/></marker>
+        <marker id="ov-n" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto-start-reverse"><path class="ah-anom" d="M0 1.5 L9 5 L0 8.5 Z"/></marker>
+      </defs>
+
+      <text class="hd" x="16" y="24">ВНЕШНИЕ ВХОДЫ</text>
+      <text class="hd" x="214" y="24">УЗЛЫ SberDS</text>
+
+      <g class="fx m-train"><rect class="lane" x="214" y="36" width="1170" height="150" rx="10"/></g>
+      <g class="fx m-infer"><rect class="lane" x="214" y="256" width="1170" height="150" rx="10"/></g>
+      <g class="fx m-rca"><rect class="lane" x="214" y="444" width="1170" height="176" rx="10"/></g>
+      <g class="fx m-rca"><rect class="lane" x="214" y="656" width="1170" height="130" rx="10"/></g>
+
+      <!-- inputs -->
+      <g class="fx m-train">
+        <rect class="bx b-src" x="16" y="84" width="170" height="68" rx="6"/>
+        <text class="t" x="28" y="104">Трассы (обучение)</text>
+        <text class="m" x="28" y="120">path_traces_train</text>
+        <text class="dim" x="28" y="136">AEF-спаны, 46 полей</text>
+        <circle class="pin" cx="186" cy="121" r="4"/>
+        <path class="w" d="M190 121 H229" marker-end="url(#ov-a)"/>
+      </g>
+      <g class="fx m-train m-infer">
+        <rect class="bx b-src" x="16" y="194" width="170" height="64" rx="6"/>
+        <text class="t" x="28" y="214" style="font-size:12px">Модель эмбеддингов</text>
+        <text class="m" x="28" y="230">deepvk/USER-bge-m3</text>
+        <text class="dim" x="28" y="246">1024 измерения</text>
+        <circle class="pin" cx="186" cy="226" r="4"/>
+        <path class="w" d="M190 226 H200 V150 H229" marker-end="url(#ov-a)"/>
+        <path class="w" d="M200 226 V312 H229" marker-end="url(#ov-a)"/>
+        <circle class="dot" cx="200" cy="226" r="2.6"/>
+      </g>
+      <g class="fx m-infer">
+        <rect class="bx b-src" x="16" y="332" width="170" height="68" rx="6"/>
+        <text class="t" x="28" y="352">Трассы (инференс)</text>
+        <text class="m" x="28" y="368">path_traces_infer</text>
+        <text class="dim" x="28" y="384">AEF-спаны, 46 полей</text>
+        <circle class="pin" cx="186" cy="365" r="4"/>
+        <path class="w" d="M190 365 H229" marker-end="url(#ov-a)"/>
+      </g>
+      <g class="fx m-rca">
+        <rect class="bx b-src" x="16" y="556" width="170" height="64" rx="6"/>
+        <text class="t" x="28" y="576">Отчёт о разработке</text>
+        <text class="m" x="28" y="592">agent_report · опц.</text>
+        <text class="dim" x="28" y="608">.docx, HTML, txt</text>
+        <circle class="pin" cx="186" cy="604" r="4"/>
+        <path class="w" d="M190 604 H649 V583" marker-end="url(#ov-a)"/>
+        <text class="lbl" x="236" y="598">главный контекст промпта</text>
+      </g>
+
+      <!-- train -->
+      <g class="fx m-train">
+        <text class="lane-t" x="230" y="58">laim-detector · mode=train</text>
+        <text class="lane-s" x="432" y="58">обучение детектора и сборка пакета модели</text>
+        <rect class="bx b-data" x="230" y="72" width="242" height="98" rx="6"/>
+        <text class="t c-data" x="244" y="94">s1 · подготовка данных</text>
+        <text x="244" y="114">контракт, признаки EPI, эмбеддинги</text>
+        <text x="244" y="130">внедрение 5 классов аномалий</text>
+        <text x="244" y="146">разбиение и нормализация</text>
+        <path class="w" d="M472 121 H527" marker-end="url(#ov-a)"/>
+        <rect class="bx b-det" x="528" y="72" width="242" height="98" rx="6"/>
+        <text class="t c-det" x="542" y="94">s2 · детектор</text>
+        <text x="542" y="114">LSTM-автоэнкодеры EPI и SEM</text>
+        <text x="542" y="130">FMLP-AE по латентным векторам</text>
+        <text x="542" y="146">порог и калибровка по VAL</text>
+        <path class="w" d="M770 121 H825" marker-end="url(#ov-a)"/>
+        <rect class="bx b-cls" x="826" y="72" width="242" height="98" rx="6"/>
+        <text class="t c-cls" x="840" y="94">s3 · тип аномалии</text>
+        <text x="840" y="114">стекинг трёх моделей</text>
+        <text x="840" y="130">5 классов, без класса «норма»</text>
+        <text x="840" y="146">обучение на внедрённых аномалиях</text>
+        <path class="w" d="M1068 121 H1123" marker-end="url(#ov-a)"/>
+        <rect class="bx b-plat" x="1124" y="72" width="242" height="98" rx="6"/>
+        <text class="t" x="1138" y="94">Оценка и пакет модели</text>
+        <text x="1138" y="114">eval_report: VAL и TEST</text>
+        <text x="1138" y="130">метрики и HTML-отчёты</text>
+        <text class="m b" x="1245" y="162" text-anchor="middle">model_out</text>
+        <circle class="pin" cx="1245" cy="170" r="4"/>
+      </g>
+
+      <!-- bundle -->
+      <g class="fx m-train m-infer">
+        <path class="w w-plat w-dash" d="M400 171 V203" marker-end="url(#ov-p)"/>
+        <path class="w w-plat w-dash" d="M650 171 V203" marker-end="url(#ov-p)"/>
+        <path class="w w-plat w-dash" d="M948 171 V203" marker-end="url(#ov-p)"/>
+        <path class="w w-plat" d="M1245 174 V203" marker-end="url(#ov-p)"/>
+        <rect class="rail" x="300" y="204" width="1066" height="32" rx="16"/>
+        <text class="m b" x="318" y="224">model_out → model_in</text>
+        <text class="dim" x="460" y="224">пакет модели (zip в JSON, sha256): признаки и нормализация, веса трёх AE, порог, калибровка, классификатор s3</text>
+        <path class="w w-plat w-dash" d="M460 237 V291" marker-end="url(#ov-p)"/>
+        <path class="w w-plat w-dash" d="M650 237 V291" marker-end="url(#ov-p)"/>
+        <path class="w w-plat w-dash" d="M1300 237 V291" marker-end="url(#ov-p)"/>
+      </g>
+
+      <!-- inference -->
+      <g class="fx m-infer">
+        <text class="lane-t" x="230" y="278">laim-detector · mode=inference</text>
+        <text class="lane-s" x="478" y="278">оценка новых трасс</text>
+        <rect class="bx b-data" x="230" y="292" width="242" height="98" rx="6"/>
+        <text class="t c-data" x="244" y="314">s1 · признаки и эмбеддинги</text>
+        <text x="244" y="334">те же признаки и нормализация</text>
+        <text x="244" y="350">проверка отпечатка модели</text>
+        <text x="244" y="366">эмбеддинг на устройстве узла</text>
+        <path class="w" d="M472 341 H527" marker-end="url(#ov-a)"/>
+        <rect class="bx b-det" x="528" y="292" width="242" height="98" rx="6"/>
+        <text class="t c-det" x="542" y="314">s2 · оценка трасс</text>
+        <text x="542" y="334">e_comb &gt; порог → is_anomaly</text>
+        <text x="542" y="350">p_anomaly: калибровка ошибок</text>
+        <text x="542" y="366">все трассы → detections</text>
+        <path class="w" d="M770 341 H825" marker-end="url(#ov-a)"/>
+        <rect class="bx b-rca" x="826" y="292" width="242" height="98" rx="6"/>
+        <text class="t c-rca" x="840" y="314">s4 · атрибуция</text>
+        <text x="840" y="334">вклад спанов и признаков</text>
+        <text x="840" y="350">в ошибку реконструкции</text>
+        <text x="840" y="366">блок detector_rca</text>
+        <path class="w" d="M1068 341 H1123" marker-end="url(#ov-a)"/>
+        <rect class="bx b-plat" x="1124" y="292" width="242" height="98" rx="6"/>
+        <text class="t" x="1138" y="314">Продуктовый контракт</text>
+        <text x="1138" y="334">только помеченные трассы</text>
+        <text x="1138" y="350"><tspan class="c-cls" font-weight="600">s3</tspan> → anomaly_type</text>
+        <text x="1138" y="366">confidence = round(p·100)</text>
+        <text class="m b c-anom" x="1245" y="382" text-anchor="middle">test_anomalies</text>
+        <circle class="pin-an" cx="1245" cy="390" r="4"/>
+      </g>
+
+      <g class="fx m-infer m-rca">
+        <path class="w w-anom" d="M1245 394 V424 H200 V506 H229" marker-end="url(#ov-n)"/>
+        <text class="lbl c-anom" x="720" y="418" text-anchor="middle">test_anomalies: помеченные трассы, 11 полей + detector_rca</text>
+      </g>
+
+      <!-- RCA -->
+      <g class="fx m-rca">
+        <text class="lane-t" x="230" y="466">LAIM RCA · rca/main.py::main</text>
+        <text class="lane-s" x="448" y="466">проверка срабатываний с помощью LLM</text>
+        <rect class="bx b-rca" x="230" y="480" width="242" height="102" rx="6"/>
+        <text class="t c-rca" x="244" y="502">Сигнал и связи</text>
+        <text x="244" y="522">сигнал детектора: ветвь, сила,</text>
+        <text x="244" y="538">подозрительные спаны</text>
+        <text x="244" y="554">связанные трассы (без LLM)</text>
+        <path class="w" d="M472 531 H527" marker-end="url(#ov-a)"/>
+        <rect class="bx b-rca" x="528" y="480" width="242" height="102" rx="6"/>
+        <text class="t c-rca" x="542" y="502">Промпт</text>
+        <text x="542" y="522">отчёт о разработке — главный</text>
+        <text x="542" y="538">контекст, если подан</text>
+        <text x="542" y="554">записи, сигнал, related</text>
+        <path class="w" d="M770 531 H825" marker-end="url(#ov-a)"/>
+        <rect class="bx b-rca" x="826" y="480" width="242" height="102" rx="6"/>
+        <text class="t c-rca" x="840" y="502">Анализ LLM</text>
+        <text x="840" y="522">группы до 8 записей</text>
+        <text x="840" y="538">повторы при сбоях и 429/503</text>
+        <text x="840" y="554">внешний LLM: GigaChat или SDS</text>
+        <path class="w" d="M1068 531 H1123" marker-end="url(#ov-a)"/>
+        <rect class="bx b-rca strong" x="1124" y="480" width="242" height="102" rx="6"/>
+        <text class="t c-rca" x="1138" y="502">Вердикт</text>
+        <text x="1138" y="522">anomaly, uncertain → res</text>
+        <text x="1138" y="538">normal → исключается</text>
+        <text x="1138" y="554">RCA: текст до 600 символов</text>
+        <text class="m" x="1356" y="574" text-anchor="end">rca_audit</text>
+        <circle class="pin" cx="1366" cy="570.5" r="3.2"/>
+        <text class="m b c-anom" x="1245" y="574" text-anchor="middle">res</text>
+        <circle class="pin-an" cx="1245" cy="582" r="4"/>
+      </g>
+
+      <g class="fx m-rca">
+        <path class="w w-anom" d="M1245 586 V640 H200 V716 H229" marker-end="url(#ov-n)"/>
+        <text class="lbl c-anom" x="720" y="634" text-anchor="middle">res: записи без вердикта normal, с rca_results</text>
+      </g>
+
+      <!-- report -->
+      <g class="fx m-rca">
+        <text class="lane-t" x="230" y="678">LAIM anomaly report · anomaly_report/main.py::main</text>
+        <text class="lane-s" x="606" y="678">HTML-отчёт по аномалиям</text>
+        <rect class="bx b-plat" x="230" y="692" width="242" height="78" rx="6"/>
+        <text class="t" x="244" y="714">Фильтр</text>
+        <text x="244" y="734">confidence ≥ 75</text>
+        <text x="244" y="750">(p_anomaly ≥ 0,75)</text>
+        <path class="w" d="M472 731 H527" marker-end="url(#ov-a)"/>
+        <rect class="bx b-plat" x="528" y="692" width="242" height="78" rx="6"/>
+        <text class="t" x="542" y="714">Типы аномалий</text>
+        <text x="542" y="734">показываются, если работал s3</text>
+        <path class="w" d="M770 731 H825" marker-end="url(#ov-a)"/>
+        <rect class="bx b-plat" x="826" y="692" width="242" height="78" rx="6"/>
+        <text class="t" x="840" y="714">HTML-отчёт</text>
+        <text x="840" y="734">сводка и карточки</text>
+        <text x="840" y="750">с запросом, ответом и RCA</text>
+        <path class="w" d="M1068 731 H1123" marker-end="url(#ov-a)"/>
+        <rect class="bx b-plat" x="1124" y="692" width="242" height="78" rx="6"/>
+        <text class="t" x="1138" y="714">Статус и выходы</text>
+        <text x="1138" y="732">светофор: amber или green</text>
+        <text class="m" x="1356" y="750" text-anchor="end">anomaly_report → панель</text>
+        <text class="m" x="1356" y="763" text-anchor="end">all_results</text>
+        <circle class="pin" cx="1366" cy="746.5" r="3.2"/>
+        <circle class="pin" cx="1366" cy="759.5" r="3.2"/>
+      </g>
+    </svg>
+    </div>
+    <ul class="legend" aria-label="Легенда">
+      <li><span class="sw sw-data"></span>s1 · данные</li>
+      <li><span class="sw sw-det"></span>s2 · детектор</li>
+      <li><span class="sw sw-cls"></span>s3 · классификатор</li>
+      <li><span class="sw sw-rca"></span>s4 и RCA</li>
+      <li><span class="sw sw-plat"></span>laim, платформа, артефакты</li>
+      <li><svg class="dg" viewBox="0 0 34 12" aria-hidden="true"><line class="w" x1="1" y1="6" x2="33" y2="6"/></svg>данные</li>
+      <li><svg class="dg" viewBox="0 0 34 12" aria-hidden="true"><line class="w w-plat w-dash" x1="1" y1="6" x2="33" y2="6"/></svg>обученные параметры из пакета модели</li>
+      <li><svg class="dg" viewBox="0 0 34 12" aria-hidden="true"><line class="w w-anom" x1="1" y1="6" x2="33" y2="6"/></svg>записи об аномалиях между узлами</li>
+      <li><svg class="dg" viewBox="0 0 34 12" aria-hidden="true"><circle class="pin" cx="17" cy="6" r="4"/></svg>порт узла SberDS</li>
+    </ul>
+    <figcaption><b>Три узла, четыре запуска.</b> Между обучением и инференсом по платформе передаётся только пакет модели. Дальше по цепочке передаются только JSON-списки аномалий: <code>test_anomalies</code> от детектора к узлу RCA и <code>res</code> от узла RCA к отчёту. Метку аномалии ставит порог на ошибке FMLP-AE, а <code>p_anomaly</code> считается отдельно; отчёт показывает записи с <code>confidence ≥ 75</code>.</figcaption>
+  </figure>
+</section>
+
+<section id="parts">
+  <div class="sec-head">
+    <p class="sec-k">Компоненты</p>
+    <h2>Что делает каждая часть</h2>
+  </div>
+  <div class="cards">
+    <article class="card">
+      <h3><i style="--c:var(--data)"></i>Данные <small>s1 · ars/stages/s1__data.py</small></h3>
+      <ul>
+        <li><b>Контракт:</b> 46 полей спана, 13 обязательных; трасса с невалидным обязательным полем отбрасывается целиком (гейт <code>off | warn | strict</code>).</li>
+        <li><b>EPI:</b> около 2 900 кандидатов из 39 признаков спана и 11 признаков трассы; отбор по заполненности, доле моды и корреляции на нормальных трассах TRAIN.</li>
+        <li><b>SEM:</b> эмбеддинг <code>output_text</code> моделью deepvk/USER-bge-m3, 1024 измерения; на GPU — по реплике модели на каждую карту.</li>
+        <li><b>Синтетические аномалии:</b> dpi, ipi, mp, hallucination, bias, по умолчанию 20 % трасс; класс выбирается хешем <code>trace_id</code> и назначается, только если в трассе есть спаны-мишени.</li>
+        <li><b>Разбиение</b> по <code>trace_id</code>: норма 70/15/15, аномалии 0/70/30; EPI нормализуется медианой и IQR по TRAIN.</li>
+      </ul>
+      <a class="go" href="laim_e2e.html#data">подробнее: s1 →</a>
+    </article>
+    <article class="card">
+      <h3><i style="--c:var(--det)"></i>Детектор <small>s2–s4 · ars/stages, ars/models</small></h3>
+      <ul>
+        <li><b>EPI-AE и SEM-AE</b> (LSTM) сжимают последовательность спанов в латентные векторы 128 и 768.</li>
+        <li><b>FMLP-AE</b> восстанавливает их конкатенацию (896); ошибка <code>e_comb</code> выше порога даёт <code>is_anomaly = 1</code>.</li>
+        <li><b>p_anomaly</b> — отдельная логистическая калибровка трёх ошибок; порог, веса калибровки и выбор эксперимента подбираются на VAL.</li>
+        <li><b>s3</b> (стекинг) присваивает помеченным трассам один из пяти типов аномалий.</li>
+        <li><b>s4</b> раскладывает ошибку по спанам и признакам и формирует блок <code>detector_rca</code>.</li>
+      </ul>
+      <a class="go" href="laim_e2e.html#detector">подробнее: s2 →</a>
+    </article>
+    <article class="card">
+      <h3><i style="--c:var(--rca)"></i>Узел RCA <small>rca/ · отдельный узел</small></h3>
+      <ul>
+        <li><b>Вход</b> — <code>test_anomalies</code>: 11 полей записи и <code>detector_rca</code>. Узел не импортирует <code>ars</code> и <code>laim</code>.</li>
+        <li><b>Без LLM</b> строятся сигнал детектора (ветвь, сила, подозрительные спаны) и связи между трассами по общим кодам и терминам.</li>
+        <li><b>Отчёт о разработке агента</b>, если подан, становится главным контекстом промпта.</li>
+        <li><b>LLM возвращает вердикт:</b> <code>anomaly</code> и <code>uncertain</code> остаются, <code>normal</code> исключается как ложное срабатывание; RCA — текст до 600 символов без категорий.</li>
+        <li><b>Режимы</b> <code>llm</code>, <code>llm_fallback</code>, <code>detector_only</code>; все решения пишутся в <code>rca_audit</code>.</li>
+      </ul>
+      <a class="go" href="laim_e2e.html#rca">подробнее: узел RCA →</a>
+    </article>
+    <article class="card">
+      <h3><i style="--c:var(--plat)"></i>Отчёт и эксплуатация <small>anomaly_report/ · run.py · laim/</small></h3>
+      <ul>
+        <li><b>Отчёт</b> показывает записи с <code>confidence ≥ 75</code>, то есть с <code>p_anomaly ≥ 0,75</code>; типы — только если работал s3; светофор <code>amber</code> при наличии аномалий.</li>
+        <li><b>Пакет модели</b> передаётся по порту <code>model_out → model_in</code>: zip в base64 внутри JSON с sha256.</li>
+        <li><b>Инференс</b> проверяет отпечаток модели эмбеддингов и кодирует тексты на устройстве узла (GPU при <code>device = gpu</code>).</li>
+        <li><b>Локально:</b> <code>run.py {synth|validate|prepare|train|eval|infer|all}</code>; результаты — в <code>runs/&lt;id&gt;/</code>.</li>
+        <li><b>Конфигурация</b> проверяется до запуска: неизвестный ключ, некорректный код эксперимента или план внедрения вызывают ошибку.</li>
+      </ul>
+      <a class="go" href="laim_e2e.html#run">подробнее: запуск →</a>
+    </article>
+  </div>
+</section>
+
+<section id="outputs">
+  <div class="sec-head">
+    <p class="sec-k">Результаты</p>
+    <h2>Что передаётся между узлами</h2>
+  </div>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Артефакт</th><th>Откуда</th><th>Содержимое</th></tr></thead>
+      <tbody>
+        <tr><td><code>model_out</code></td><td>laim-detector, train</td><td>пакет модели: <code>s1_meta</code>, веса трёх автоэнкодеров, порог и калибровка, классификатор s3, манифест, <code>eval_report</code></td></tr>
+        <tr><td><code>detections.parquet</code></td><td>laim-detector, inference; <code>run.py infer</code></td><td>все трассы: ошибки ветвей, <code>p_anomaly</code>, <code>is_anomaly</code>, индексная атрибуция <code>rca_attribution</code></td></tr>
+        <tr><td><code>test_anomalies</code></td><td>laim-detector, inference</td><td>помеченные трассы: 11 полей записи и блок <code>detector_rca</code></td></tr>
+        <tr><td><code>res</code> · <code>rca_audit</code></td><td>LAIM RCA</td><td>записи, кроме признанных ложными срабатываниями (вердикт <code>normal</code>), с объектом <code>rca_results</code> · журнал решений по каждой входной записи</td></tr>
+        <tr><td><code>anomaly_report</code> · <code>all_results</code></td><td>LAIM anomaly report</td><td>HTML-отчёт для панели · сводка по типам и светофор</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+</main>
+
+<footer class="wrap">
+  <p>Схема соответствует коду ветки <code>claude/audit-05-fixes</code>, коммит <code>283eb7b</code> (27.09.2026). Подробная версия со слоями моделей, форматами и параметрами: <a href="laim_e2e.html">«Архитектура LAIM»</a>.</p>
+</footer>
+
+<script>
+(function(){
+  var fig = document.getElementById('ov');
+  if (!fig) return;
+  var btns = document.querySelectorAll('[data-focus-btn]');
+  Array.prototype.forEach.call(btns, function(b){
+    b.addEventListener('click', function(){
+      var v = b.getAttribute('data-focus-btn');
+      if (v === 'all') fig.removeAttribute('data-focus'); else fig.setAttribute('data-focus', v);
+      Array.prototype.forEach.call(btns, function(x){ x.setAttribute('aria-pressed', String(x === b)); });
+    });
+  });
+})();
+</script>
+</body>
+</html>

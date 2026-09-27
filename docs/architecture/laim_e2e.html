@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Анатомия LAIM</title>
+<title>Архитектура LAIM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Unbounded:wght@600;700&display=swap">
@@ -64,9 +64,12 @@ p{margin:0}
 .eyebrow{font:500 11.5px/1.5 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:14px}
 h1{font:700 clamp(34px,5.4vw,60px)/1.02 var(--f-display);letter-spacing:-.015em;margin:0 0 18px;text-wrap:balance}
 .lede{font-size:17px;line-height:1.55;max-width:64ch;color:var(--ink-2);margin-bottom:22px}
-.facts{display:flex;flex-wrap:wrap;gap:8px 26px;list-style:none;padding:0;margin:0}
+.facts{display:flex;flex-wrap:wrap;gap:8px 26px;list-style:none;padding:0;margin:0 0 22px}
 .facts li{font-size:13px;color:var(--ink-2)}
 .facts b{font:700 13.5px var(--f-mono);color:var(--ink);margin-right:5px}
+.more{display:inline-flex;align-items:center;gap:8px;font:600 13px var(--f-body);color:var(--ink);text-decoration:none;border:1px solid var(--line-2);border-radius:6px;padding:7px 12px;background:var(--surface)}
+.more:hover,.more:focus-visible{border-color:var(--ink);outline:none}
+.more span{font-family:var(--f-mono)}
 .hero-fig{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px 12px}
 .hero-fig figcaption{margin-top:6px}
 
@@ -88,7 +91,8 @@ h3{font:600 16px/1.35 var(--f-body);margin:0 0 8px}
 .sec-head p{color:var(--ink-2);max-width:74ch}
 .prose{max-width:76ch;color:var(--ink-2);display:grid;gap:10px}
 .prose b{color:var(--ink);font-weight:600}
-.stack{display:grid;gap:20px}
+.stack{display:grid;grid-template-columns:minmax(0,1fr);gap:20px}
+.stack>*,.two>*,.two-wide>*{min-width:0}
 
 /* figures */
 figure{margin:0}
@@ -112,9 +116,7 @@ figcaption b{color:var(--ink);font-weight:600}
 .sw-cls{background:var(--cls-bg);border-color:var(--cls)}
 .sw-rca{background:var(--rca-bg);border-color:var(--rca)}
 .sw-plat{background:var(--plat-bg);border-color:var(--plat)}
-.sw-anom{background:var(--anom-bg);border-color:var(--anom)}
 .legend svg{width:34px;height:12px;flex:none}
-.bdg{display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;background:var(--anom);color:var(--on-anom);font:700 10px/1 var(--f-mono);flex:none}
 
 .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,540px),1fr));gap:20px;align-items:start}
 .two-wide{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:20px;align-items:start}
@@ -134,18 +136,6 @@ pre{font:12.5px/1.6 var(--f-mono);background:var(--surface);border:1px solid var
 pre .k{color:var(--rca)}
 pre .c{color:var(--ink-3)}
 pre .s{color:var(--data)}
-
-/* issues */
-.issues{display:grid;gap:12px;list-style:none;margin:0;padding:0}
-.issue{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 14px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px 18px}
-.issue .bdg{width:24px;height:24px;font-size:12px;margin-top:1px}
-.issue h3{margin:0;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
-.issue p{grid-column:2;color:var(--ink-2);max-width:92ch}
-.issue p code{font-size:12.5px}
-.chip{font:600 10.5px/1.6 var(--f-mono);letter-spacing:.05em;text-transform:uppercase;padding:1px 7px;border-radius:4px;border:1px solid}
-.chip.hi{color:var(--anom);border-color:var(--anom)}
-.chip.mid{color:var(--rca);border-color:var(--rca)}
-.chip.lo{color:var(--ink-3);border-color:var(--line-2)}
 
 footer{padding-block:48px 56px;color:var(--ink-3);font-size:13px}
 footer p{max-width:100ch}
@@ -193,8 +183,6 @@ footer p{max-width:100ch}
 .dg .pin{fill:var(--surface);stroke:var(--ink-2);stroke-width:1.4}
 .dg .pin-an{fill:var(--surface);stroke:var(--anom);stroke-width:1.8}
 .dg .dot{fill:var(--ink-3)}
-.dg .badge{fill:var(--anom)}
-.dg .badge-t{font-family:var(--f-mono);font-size:10px;font-weight:700;fill:var(--on-anom)}
 .dg .div{stroke:var(--line-2);stroke-width:1}
 .dg .gridl{stroke:var(--line);stroke-width:1}
 .dg .cell{fill:var(--rca)}
@@ -227,20 +215,21 @@ footer p{max-width:100ch}
 <header class="wrap hero">
   <div>
     <p class="eyebrow">LAIM · детектор аномалий мультиагентных систем · LumiMAS</p>
-    <h1>Анатомия LAIM</h1>
-    <p class="lede">Путь AEF-трассы через всю систему: контракт данных, стадии s1–s4, узел <code>laim-detector</code> в режимах train и inference, узел LAIM&nbsp;RCA, где LLM отсеивает ложные срабатывания, и узел отчёта. Каждая подпись сверена с кодом ветки <code>claude/rca-fields-anomalies-xahwa8</code> на коммите <code>10f9e28</code>.</p>
+    <h1>Архитектура LAIM</h1>
+    <p class="lede">Путь AEF-трассы через систему: контракт данных, стадии s1–s4, узел <code>laim-detector</code> в режимах train и inference, узел LAIM&nbsp;RCA, где LLM отфильтровывает ложные срабатывания, и узел отчёта. Схемы соответствуют коду ветки <code>claude/audit-05-fixes</code>, коммит <code>283eb7b</code>.</p>
     <ul class="facts">
       <li><b>46</b>полей спана, 13 обязательных</li>
       <li><b>1024</b>измерения эмбеддинга USER-bge-m3</li>
-      <li><b>128 + 768</b>латенты двух LSTM-AE</li>
-      <li><b>5</b>классов инъекции, 20&nbsp;% трасс</li>
+      <li><b>128 + 768</b>латентные векторы двух LSTM-автоэнкодеров</li>
+      <li><b>5</b>классов синтетических аномалий</li>
       <li><b>3</b>узла SberDS и внешний LLM</li>
     </ul>
+    <a class="more" href="laim_overview.html">Обзорная версия <span>→</span></a>
   </div>
   <figure class="hero-fig">
-    <svg class="dg" viewBox="0 0 440 214" role="img" aria-label="Иллюстрация: трасса из семи спанов на шкале времени и ошибка реконструкции каждого спана; у пятого спана, llm, ошибка максимальна, он подсвечен как первый кандидат в причину.">
+    <svg class="dg" viewBox="0 0 440 214" role="img" aria-label="Иллюстрация: трасса из семи спанов на шкале времени и ошибка реконструкции каждого спана; у пятого спана, llm, ошибка максимальна, он выделен как первый кандидат в причину.">
       <text class="hd" x="0" y="12">AEF-ТРАССА · 7 СПАНОВ</text>
-      <text class="hd" x="440" y="12" text-anchor="end">ОШИБКА СПАНА</text>
+      <text class="hd" x="440" y="12" text-anchor="end">ОШИБКА РЕКОНСТРУКЦИИ</text>
       <rect class="hotband" x="0" y="117" width="440" height="22" rx="3"/>
       <text class="m" x="0" y="44">start_agent</text>
       <text class="m" x="0" y="66">llm</text>
@@ -267,7 +256,7 @@ footer p{max-width:100ch}
       <text class="faint" x="108" y="204">время →</text>
       <text class="faint" x="350" y="204">EPI-ветвь</text>
     </svg>
-    <figcaption>Иллюстрация. Трасса — последовательность спанов, упорядоченных по <code>start_time_ns</code>. Детектор реконструирует её целиком, а атрибуция раскладывает ошибку по спанам: спан с наибольшей ошибкой первым попадает в <code>rca_top_span_indices</code> и в <code>detector_rca</code>.</figcaption>
+    <figcaption>Иллюстрация. Трасса — последовательность спанов, упорядоченных по <code>start_time_ns</code>. Детектор восстанавливает её целиком, а атрибуция распределяет ошибку реконструкции по спанам: спан с наибольшей ошибкой первым попадает в <code>rca_top_span_indices</code> и в <code>detector_rca</code>.</figcaption>
   </figure>
 </header>
 
@@ -279,10 +268,9 @@ footer p{max-width:100ch}
       <li><a href="#detector"><i style="--c:var(--det)"></i>s2 · детектор</a></li>
       <li><a href="#classifier"><i style="--c:var(--cls)"></i>s3 · классификатор</a></li>
       <li><a href="#attribution"><i style="--c:var(--rca)"></i>s4 · атрибуция</a></li>
-      <li><a href="#rca"><i style="--c:var(--rca)"></i>RCA-узел</a></li>
-      <li><a href="#report"><i style="--c:var(--plat)"></i>Отчёт</a></li>
+      <li><a href="#rca"><i style="--c:var(--rca)"></i>Узел RCA</a></li>
+      <li><a href="#report"><i style="--c:var(--plat)"></i>Узел отчёта</a></li>
       <li><a href="#run"><i style="--c:var(--plat)"></i>Запуск и артефакты</a></li>
-      <li><a href="#issues"><i style="--c:var(--anom)"></i>Что всплыло</a></li>
     </ul>
   </div>
 </nav>
@@ -294,7 +282,7 @@ footer p{max-width:100ch}
   <div class="sec-head">
     <p class="sec-k"><i></i>Карта</p>
     <h2>Сквозная схема</h2>
-    <p>На схеме четыре запуска. Узел <code>laim-detector</code> в режиме train собирает бандл. Тот же узел в режиме inference получает бандл через <code>model_in</code> и помечает трассы. Узел LAIM&nbsp;RCA проверяет каждый флаг с помощью LLM, а узел LAIM anomaly report собирает из результата HTML-отчёт. Выровненные по вертикали блоки детектора выполняют один и тот же код: при обучении он подбирает параметры, при инференсе применяет их.</p>
+    <p>На схеме четыре запуска. Узел <code>laim-detector</code> в режиме train обучает детектор и собирает пакет модели. Тот же узел в режиме inference получает пакет через <code>model_in</code> и оценивает новые трассы. Узел LAIM&nbsp;RCA проверяет каждое срабатывание с помощью LLM, узел LAIM anomaly report формирует HTML-отчёт. Блоки детектора, выровненные по вертикали, выполняют один и тот же код: при обучении он оценивает параметры, при инференсе применяет их.</p>
   </div>
 
   <figure class="fig">
@@ -309,7 +297,7 @@ footer p{max-width:100ch}
     </div>
     <div class="scroll">
     <svg id="f1" class="dg" viewBox="0 0 1400 1096" style="--minw:1120px" role="group" aria-labelledby="f1-title">
-      <title id="f1-title">Сквозная схема LAIM: внешние входы, узел laim-detector в режимах train и inference, бандл между ними, продуктовый контракт test_anomalies, узел LAIM RCA с внешним LLM и узел отчёта LAIM anomaly report.</title>
+      <title id="f1-title">Сквозная схема LAIM: внешние входы, узел laim-detector в режимах train и inference, пакет модели между ними, продуктовый контракт test_anomalies, узел LAIM RCA с внешним LLM и узел отчёта LAIM anomaly report.</title>
       <defs>
         <marker id="f1-a" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah" d="M0 1.5 L9 5 L0 8.5 Z"/></marker>
         <marker id="f1-p" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah-plat" d="M0 1.5 L9 5 L0 8.5 Z"/></marker>
@@ -332,31 +320,31 @@ footer p{max-width:100ch}
         <text class="t" x="28" y="100">Трассы (обучение)</text>
         <text class="m" x="28" y="116">path_traces_train</text>
         <text class="dim" x="28" y="132">AEF-спаны, 46 полей</text>
-        <text class="dim" x="28" y="147">dataframe-порт</text>
+        <text class="dim" x="28" y="147">порт dataframe</text>
         <circle class="pin" cx="186" cy="120" r="4"/>
         <path class="w" d="M190 120 H219" marker-end="url(#f1-a)"/>
       </g>
       <g class="fx m-train m-infer">
         <rect class="bx b-src" x="16" y="250" width="170" height="80" rx="6"/>
-        <text class="t" x="28" y="270">Эмбеддер</text>
+        <text class="t" x="28" y="270" style="font-size:12px">Модель эмбеддингов</text>
         <text class="m" x="28" y="286">path_embedder</text>
         <text class="m" x="28" y="301">deepvk/USER-bge-m3</text>
-        <text class="dim" x="28" y="317">1024-d, HF offline</text>
+        <text class="dim" x="28" y="317">1024 измерения, офлайн</text>
         <circle class="pin" cx="186" cy="290" r="4"/>
-        <text class="lbl" x="200" y="283">sem_text → 1024-d</text>
+        <text class="lbl" x="200" y="283">sem_text → вектор 1024</text>
         <path class="w" d="M190 290 H380 V212 H395" marker-end="url(#f1-a)"/>
-        <path class="w" d="M380 290 V404 H395" marker-end="url(#f1-a)"/>
-        <circle class="dot" cx="380" cy="290" r="2.6"/>
+        <path class="w" d="M197 290 V404 H395" marker-end="url(#f1-a)"/>
+        <circle class="dot" cx="197" cy="290" r="2.6"/>
       </g>
       <g class="fx m-infer">
         <rect class="bx b-src" x="16" y="456" width="170" height="80" rx="6"/>
         <text class="t" x="28" y="476">Трассы (инференс)</text>
         <text class="m" x="28" y="492">path_traces_infer</text>
         <text class="dim" x="28" y="508">AEF-спаны, 46 полей</text>
-        <text class="dim" x="28" y="523">dataframe-порт</text>
+        <text class="dim" x="28" y="523">порт dataframe</text>
         <circle class="pin" cx="186" cy="496" r="4"/>
         <path class="w" d="M190 496 H395" marker-end="url(#f1-a)"/>
-        <text class="lbl" x="278" y="489" text-anchor="middle">без гейта</text>
+        <text class="lbl" x="292" y="489" text-anchor="middle">контракт не проверяется</text>
       </g>
       <g class="fx m-rca">
         <rect class="bx b-src" x="16" y="744" width="170" height="64" rx="6"/>
@@ -373,7 +361,7 @@ footer p{max-width:100ch}
         <text class="lane-t" x="220" y="58">laim-detector · mode=train</text>
         <text class="lane-s" x="424" y="58">run.py::main → laim.platform.run_node → run_train</text>
 
-        <a href="#data" aria-label="Контракт данных: гейт validation_gate">
+        <a href="#data" aria-label="Контракт данных: проверка validation_gate">
           <rect class="bx b-plat" x="220" y="80" width="116" height="104" rx="6"/>
           <text class="t" x="232" y="100">Контракт</text>
           <text class="t" x="232" y="115">данных</text>
@@ -386,58 +374,56 @@ footer p{max-width:100ch}
 
         <a href="#data" aria-label="s1: подготовка данных">
           <rect class="bx b-data" x="396" y="72" width="204" height="164" rx="6"/>
-          <text class="t c-data" x="408" y="92">s1 · данные</text>
+          <text class="t c-data" x="408" y="92">s1 · подготовка данных</text>
           <text class="m" x="408" y="107">process_train_data</text>
-          <text x="408" y="127">признаки EPI: ≈2 900 → отбор</text>
+          <text x="408" y="127">EPI-признаки: ≈2 900 → отбор</text>
           <text x="408" y="143">эмбеддинги sem_text → 1024</text>
-          <text x="408" y="159">инъекция: 5 классов, 20 %</text>
-          <text x="408" y="175">сплит по trace_id</text>
-          <text x="408" y="191">robust: median/IQR, клип ±20</text>
-          <text x="408" y="207">S1Meta: признаки, скейлер</text>
+          <text x="408" y="159">внедрение 5 классов аномалий</text>
+          <text x="408" y="175">разбиение по trace_id</text>
+          <text x="408" y="191">нормализация: медиана, IQR</text>
+          <text x="408" y="207">S1Meta: признаки, параметры</text>
         </a>
-        <circle class="badge" cx="588" cy="84" r="8"/><text class="badge-t" x="588" y="87.5" text-anchor="middle">1</text>
 
         <path class="w" d="M600 154 H659" marker-end="url(#f1-a)"/>
-        <text class="lbl" x="630" y="147" text-anchor="middle">сплиты</text>
+        <text class="lbl" x="630" y="147" text-anchor="middle">выборки</text>
         <text class="lbl" x="630" y="168" text-anchor="middle">s1_meta</text>
 
         <a href="#detector" aria-label="s2: обучение детектора">
           <rect class="bx b-det" x="660" y="72" width="212" height="164" rx="6"/>
           <text class="t c-det" x="672" y="92">s2 · детектор</text>
           <text class="m" x="672" y="107">train_detector</text>
-          <text x="672" y="127">EPI-AE (LSTM) → z_epi 128</text>
-          <text x="672" y="143">SEM-AE (LSTM) → z_sem 768</text>
-          <text x="672" y="159">FMLP-AE на латентах 896</text>
-          <text x="672" y="175">сетка: 2 эксперимента</text>
+          <text x="672" y="127">EPI-AE (LSTM) → z_epi, 128</text>
+          <text x="672" y="143">SEM-AE (LSTM) → z_sem, 768</text>
+          <text x="672" y="159">FMLP-AE по латентам, 896</text>
+          <text x="672" y="175">сетка экспериментов</text>
           <text x="672" y="191">выбор и порог — по VAL</text>
           <text x="672" y="207">калибровка → p_anomaly</text>
         </a>
-        <circle class="badge" cx="840" cy="84" r="8"/><text class="badge-t" x="840" y="87.5" text-anchor="middle">3</text>
-        <circle class="badge" cx="859" cy="84" r="8"/><text class="badge-t" x="859" y="87.5" text-anchor="middle">4</text>
 
         <path class="w" d="M872 154 H931" marker-end="url(#f1-a)"/>
         <text class="lbl" x="902" y="147" text-anchor="middle">s2_meta</text>
-        <text class="lbl" x="902" y="168" text-anchor="middle">val∪test</text>
+        <text class="lbl" x="902" y="168" text-anchor="middle">VAL∪TEST</text>
 
         <a href="#classifier" aria-label="s3: обучение классификатора">
           <rect class="bx b-cls" x="932" y="72" width="180" height="164" rx="6"/>
           <text class="t c-cls" x="944" y="92">s3 · тип аномалии</text>
           <text class="m" x="944" y="107">train_classifier</text>
-          <text x="944" y="127">стек: RF · GB · LogReg</text>
+          <text x="944" y="127">стекинг трёх моделей</text>
           <text x="944" y="143">922 признака детектора</text>
           <text x="944" y="159">5 классов, без «нормы»</text>
-          <text x="944" y="175">учится на инъекциях</text>
-          <text x="944" y="191">сбой не валит прогон</text>
+          <text x="944" y="175">учится на внедрённых</text>
+          <text x="944" y="191">аномалиях VAL∪TEST</text>
+          <text x="944" y="207">при ошибке прогон без s3</text>
         </a>
 
         <path class="w" d="M1112 154 H1171" marker-end="url(#f1-a)"/>
         <text class="lbl" x="1142" y="147" text-anchor="middle">s3_meta</text>
 
-        <a href="#run" aria-label="eval и сборка бандла, выходные порты">
+        <a href="#run" aria-label="Оценка и сборка пакета модели, выходные порты">
           <rect class="bx b-plat" x="1172" y="72" width="196" height="164" rx="6"/>
-          <text class="t" x="1184" y="92">eval · бандл</text>
+          <text class="t" x="1184" y="92">Оценка и пакет модели</text>
           <text class="m" x="1184" y="107">create_bundle</text>
-          <text x="1184" y="125">eval_report: VAL + TEST</text>
+          <text x="1184" y="125">eval_report: VAL и TEST</text>
           <text x="1184" y="140">zip → base64, ≤ 256 МБ</text>
           <text class="m" x="1358" y="160" text-anchor="end">eval_report</text>
           <text class="m" x="1358" y="173" text-anchor="end">html_reports → панель</text>
@@ -454,7 +440,7 @@ footer p{max-width:100ch}
         <circle class="pin" cx="1236" cy="236" r="4"/>
       </g>
 
-      <!-- bundle rail -->
+      <!-- model bundle -->
       <g class="fx m-train m-infer">
         <path class="w w-plat w-dash" d="M450 237 V271" marker-end="url(#f1-p)"/>
         <text class="lbl" x="458" y="265">s1_meta.json</text>
@@ -464,16 +450,16 @@ footer p{max-width:100ch}
         <text class="lbl" x="998" y="265">s3_meta + stack.pkl</text>
         <path class="w w-plat" d="M1236 240 V271" marker-end="url(#f1-p)"/>
 
-        <a href="#run" aria-label="Бандл модели: model_out → model_in">
+        <a href="#run" aria-label="Пакет модели: model_out → model_in">
           <rect class="rail" x="396" y="272" width="972" height="36" rx="18"/>
           <text class="m b" x="416" y="294">model_out → model_in</text>
-          <text class="dim" x="558" y="294">бандл laim_model_&lt;run&gt;.zip: base64 внутри JSON (laim-bundle-b64/1) + sha256; model_in примет и каталог, zip или путь</text>
+          <text class="dim" x="558" y="294">пакет модели laim_model_&lt;run&gt;.zip: base64 в JSON (laim-bundle-b64/1) и sha256; model_in также принимает каталог, zip или путь</text>
         </a>
 
         <path class="w w-plat w-dash" d="M560 309 V371" marker-end="url(#f1-p)"/>
         <text class="lbl" x="568" y="327">признаки, нормализация, отпечаток</text>
         <path class="w w-plat w-dash" d="M820 309 V371" marker-end="url(#f1-p)"/>
-        <text class="lbl" x="828" y="327">веса 3 AE, порог, калибровка</text>
+        <text class="lbl" x="828" y="327">веса трёх AE, порог, калибровка</text>
         <path class="w w-plat w-dash" d="M1300 309 V371" marker-end="url(#f1-p)"/>
         <text class="lbl" x="1292" y="327" text-anchor="end">s3: stack.pkl</text>
       </g>
@@ -486,14 +472,13 @@ footer p{max-width:100ch}
         <a href="#data" aria-label="s1 на инференсе: prepare_test_data">
           <rect class="bx b-data" x="396" y="372" width="204" height="164" rx="6"/>
           <text class="t c-data" x="408" y="392">s1 · prepare_test_data</text>
-          <text x="408" y="411">сверка отпечатка эмбеддера</text>
-          <text x="408" y="427">признаки s1_meta по имени</text>
-          <text x="408" y="443">нормализация из обучения</text>
-          <text x="408" y="459">без инъекции и сплита</text>
+          <text x="408" y="411">проверка отпечатка модели</text>
+          <text x="408" y="427">признаки s1_meta по именам</text>
+          <text x="408" y="443">нормализация по TRAIN</text>
+          <text x="408" y="459">без внедрения и разбиения</text>
           <text x="408" y="475">span_ids сохраняются</text>
-          <text class="c-anom" x="408" y="495">эмбеддер работает на CPU</text>
+          <text x="408" y="495">эмбеддинг на устройстве узла</text>
         </a>
-        <circle class="badge" cx="588" cy="384" r="8"/><text class="badge-t" x="588" y="387.5" text-anchor="middle">2</text>
 
         <path class="w" d="M600 454 H659" marker-end="url(#f1-a)"/>
         <text class="lbl" x="630" y="447" text-anchor="middle">EPI, SEM</text>
@@ -503,25 +488,25 @@ footer p{max-width:100ch}
           <rect class="bx b-det" x="660" y="372" width="212" height="164" rx="6"/>
           <text class="t c-det" x="672" y="392">s2 · detect_anomalies</text>
           <text x="672" y="411">ошибки e_epi, e_sem, e_comb</text>
-          <text x="672" y="427">флаг: e_comb &gt; порога</text>
-          <text x="672" y="443">p = σ(3 логита), отдельно</text>
-          <text x="672" y="459">атрибуция top-5: спаны,</text>
-          <text x="672" y="475">признаки, драйверы</text>
+          <text x="672" y="427">метка: e_comb &gt; порога</text>
+          <text x="672" y="443">p_anomaly: калибровка ошибок</text>
+          <text x="672" y="459">атрибуция: top-5 спанов</text>
+          <text x="672" y="475">и признаков (drivers)</text>
           <text x="672" y="495">все трассы → detections</text>
         </a>
 
         <path class="w" d="M872 454 H931" marker-end="url(#f1-a)"/>
         <text class="lbl" x="902" y="447" text-anchor="middle">rca_*</text>
 
-        <a href="#attribution" aria-label="s4: экспорт detector_rca">
+        <a href="#attribution" aria-label="s4: экспорт атрибуции detector_rca">
           <rect class="bx b-rca" x="932" y="372" width="180" height="164" rx="6"/>
-          <text class="t c-rca" x="944" y="392">s4 · RCA-экспорт</text>
+          <text class="t c-rca" x="944" y="392">s4 · атрибуция</text>
           <text class="m" x="944" y="407">export_detector_rca</text>
-          <text x="944" y="427">только флагнутые строки</text>
+          <text x="944" y="427">только помеченные строки</text>
           <text class="m" x="944" y="443">laim.detector_rca/1</text>
           <text x="944" y="459">каталог спанов: join по</text>
           <text class="m" x="944" y="475">trace_id + span_id</text>
-          <text x="944" y="495">значения в нат. единицах</text>
+          <text x="944" y="495">исходные единицы (*_raw)</text>
         </a>
 
         <path class="w" d="M1112 454 H1171" marker-end="url(#f1-a)"/>
@@ -544,7 +529,7 @@ footer p{max-width:100ch}
         <circle class="pin-an" cx="1270" cy="536" r="4"/>
       </g>
 
-      <!-- product contract wire -->
+      <!-- product contract -->
       <g class="fx m-infer m-rca">
         <path class="w w-anom" d="M1270 540 V572 H194 V690 H219" marker-end="url(#f1-n)"/>
         <text class="lbl c-anom" x="760" y="566" text-anchor="middle">test_anomalies → anom_data: JSON {"anomalies": [...]}, 11 полей + detector_rca</text>
@@ -554,7 +539,7 @@ footer p{max-width:100ch}
       <g class="fx m-rca">
         <text class="lane-t" x="220" y="614">LAIM RCA · rca/main.py::main</text>
 
-        <a href="#rca" aria-label="RCA: разбор входа">
+        <a href="#rca" aria-label="Узел RCA: разбор входа">
           <rect class="bx b-rca" x="220" y="640" width="116" height="136" rx="6"/>
           <text class="t" x="232" y="660">Вход</text>
           <text class="m" x="232" y="676">anom_data</text>
@@ -566,25 +551,25 @@ footer p{max-width:100ch}
         <text class="lbl" x="366" y="663" text-anchor="middle">записи</text>
         <path class="w" d="M336 744 H395" marker-end="url(#f1-a)"/>
 
-        <a href="#rca" aria-label="RCA: улики детектора">
+        <a href="#rca" aria-label="Узел RCA: сигнал детектора">
           <rect class="bx b-rca" x="396" y="640" width="204" height="60" rx="6"/>
-          <text class="t c-rca" x="408" y="658">Улики детектора</text>
+          <text class="t c-rca" x="408" y="658">Сигнал детектора</text>
           <text class="m" x="408" y="672">evidence.parse · без LLM</text>
-          <text x="408" y="689">сигнал, сила по p, ≤ 3 шага</text>
+          <text x="408" y="689">ветвь, сила по p, ≤ 3 спана</text>
         </a>
-        <a href="#rca" aria-label="RCA: связи между трейсами">
+        <a href="#rca" aria-label="Узел RCA: связанные трассы">
           <rect class="bx b-rca" x="396" y="708" width="204" height="68" rx="6"/>
-          <text class="t c-rca" x="408" y="725">Связи трейсов</text>
+          <text class="t c-rca" x="408" y="725">Связанные трассы</text>
           <text class="m" x="408" y="739">related.py · без LLM</text>
           <text x="408" y="754">общие коды и термины, IDF</text>
-          <text x="408" y="768">≤ 3 related на запись</text>
+          <text x="408" y="768">≤ 3 связанных на запись</text>
         </a>
         <path class="w" d="M600 670 H659" marker-end="url(#f1-a)"/>
-        <text class="lbl" x="630" y="663" text-anchor="middle">улики</text>
+        <text class="lbl" x="630" y="663" text-anchor="middle">сигнал</text>
         <path class="w" d="M600 744 H659" marker-end="url(#f1-a)"/>
         <text class="lbl" x="630" y="737" text-anchor="middle">related</text>
 
-        <a href="#rca" aria-label="RCA: промпт">
+        <a href="#rca" aria-label="Узел RCA: промпт">
           <rect class="bx b-rca" x="660" y="640" width="212" height="136" rx="6"/>
           <text class="t c-rca" x="672" y="660">Промпт</text>
           <text class="m" x="672" y="675">prompt.py</text>
@@ -597,26 +582,26 @@ footer p{max-width:100ch}
         <path class="w" d="M872 700 H931" marker-end="url(#f1-a)"/>
         <text class="lbl" x="902" y="693" text-anchor="middle">промпт</text>
 
-        <a href="#rca" aria-label="RCA: батчи и повторы">
+        <a href="#rca" aria-label="Узел RCA: группы запросов и повторы">
           <rect class="bx b-rca" x="932" y="640" width="180" height="136" rx="6"/>
-          <text class="t c-rca" x="944" y="660">Батчи и повторы</text>
+          <text class="t c-rca" x="944" y="660">Группы запросов</text>
           <text class="m" x="944" y="675">_analyze</text>
-          <text x="944" y="694">связанные записи — рядом</text>
+          <text x="944" y="694">связанные записи вместе</text>
           <text x="944" y="710">≤ 8 записей / 32 КБ</text>
-          <text x="944" y="726">сбой → батч пополам</text>
-          <text x="944" y="742">429/503 → бэкофф</text>
+          <text x="944" y="726">сбой → группа пополам</text>
+          <text x="944" y="742">429/503 → повтор с паузой</text>
           <text x="944" y="758">3 сбоя → LlmUnavailable</text>
         </a>
         <path class="w" d="M1112 700 H1171" marker-end="url(#f1-a)"/>
         <text class="lbl" x="1142" y="693" text-anchor="middle">ответы</text>
 
-        <a href="#rca" aria-label="RCA: вердикт и сборка результата">
+        <a href="#rca" aria-label="Узел RCA: вердикт и сборка результата">
           <rect class="bx b-rca" x="1172" y="640" width="196" height="136" rx="6"/>
           <text class="t c-rca" x="1184" y="660">Вердикт и сборка</text>
           <text class="m" x="1184" y="675">answers.py · report.py</text>
           <text x="1184" y="694">anomaly, uncertain → res</text>
-          <text x="1184" y="710">normal → отброшен (FP)</text>
-          <text x="1184" y="726">rca: строка ≤ 600 симв.,</text>
+          <text x="1184" y="710">normal → исключается</text>
+          <text x="1184" y="726">rca: текст ≤ 600 символов</text>
           <text x="1184" y="742">без категорий</text>
           <text class="m" x="1358" y="752" text-anchor="end">rca_audit</text>
           <text class="m b c-anom" x="1236" y="768" text-anchor="middle">res</text>
@@ -625,7 +610,7 @@ footer p{max-width:100ch}
         <circle class="pin-an" cx="1236" cy="776" r="4"/>
 
         <path class="w w-rca w-dash" d="M500 639 V628 H1300 V639" marker-end="url(#f1-r)"/>
-        <text class="lbl c-rca" x="990" y="622" text-anchor="middle">detector_only или отказ LLM при llm_fallback → вердикт по уликам</text>
+        <text class="lbl c-rca" x="990" y="622" text-anchor="middle">detector_only или отказ LLM при llm_fallback → вердикт по сигналу детектора</text>
 
         <rect class="bx b-ext" x="880" y="828" width="284" height="56" rx="6"/>
         <text class="t" x="894" y="848">LLM · внешний сервис</text>
@@ -637,7 +622,7 @@ footer p{max-width:100ch}
         <text class="lbl" x="1062" y="800">ответ JSON</text>
       </g>
 
-      <!-- res wire -->
+      <!-- res -->
       <g class="fx m-rca">
         <path class="w w-anom" d="M1236 780 V908 H194 V1010 H219" marker-end="url(#f1-n)"/>
         <text class="lbl c-anom" x="560" y="902" text-anchor="middle">res → вход отчёта: записи без detector_rca, rca_results — объект вердикта</text>
@@ -646,31 +631,30 @@ footer p{max-width:100ch}
       <!-- LANE E: report -->
       <g class="fx m-rca">
         <text class="lane-t" x="220" y="946">LAIM anomaly report · anomaly_report/main.py::main</text>
-        <text class="lane-s" x="596" y="946">stdlib, без JS</text>
+        <text class="lane-s" x="596" y="946">только stdlib, без JS</text>
 
-        <a href="#report" aria-label="Отчёт: вход">
+        <a href="#report" aria-label="Узел отчёта: вход">
           <rect class="bx b-plat" x="220" y="962" width="116" height="106" rx="6"/>
           <text class="t" x="232" y="982">Вход</text>
           <text class="m" x="232" y="998">test_anomalies</text>
-          <text class="dim" x="232" y="1016">res RCA-узла или</text>
+          <text class="dim" x="232" y="1016">res узла RCA или</text>
           <text class="m" x="232" y="1031">test_anomalies</text>
           <text class="dim" x="232" y="1046">детектора</text>
         </a>
         <path class="w" d="M336 1015 H395" marker-end="url(#f1-a)"/>
         <text class="lbl" x="366" y="1008" text-anchor="middle">записи</text>
 
-        <a href="#report" aria-label="Отчёт: фильтр по confidence">
+        <a href="#report" aria-label="Узел отчёта: фильтр по confidence">
           <rect class="bx b-plat" x="396" y="962" width="204" height="106" rx="6"/>
           <text class="t" x="408" y="982">Фильтр</text>
           <text class="m" x="408" y="998">_filter</text>
           <text x="408" y="1016">confidence ≥ min_confidence</text>
-          <text x="408" y="1032">= p_anomaly ≥ 0,75 по умолч.</text>
-          <text x="408" y="1048">без тестов дрифта и КМ</text>
+          <text x="408" y="1032">по умолч. p_anomaly ≥ 0,75</text>
+          <text x="408" y="1048">кроме дрифта и деградации</text>
         </a>
-        <circle class="badge" cx="588" cy="974" r="8"/><text class="badge-t" x="588" y="977.5" text-anchor="middle">7</text>
         <path class="w" d="M600 1015 H659" marker-end="url(#f1-a)"/>
 
-        <a href="#report" aria-label="Отчёт: типы аномалий">
+        <a href="#report" aria-label="Узел отчёта: типы аномалий">
           <rect class="bx b-plat" x="660" y="962" width="212" height="106" rx="6"/>
           <text class="t" x="672" y="982">Типы аномалий</text>
           <text class="m" x="672" y="998">anomaly_types</text>
@@ -680,7 +664,7 @@ footer p{max-width:100ch}
         </a>
         <path class="w" d="M872 1015 H931" marker-end="url(#f1-a)"/>
 
-        <a href="#report" aria-label="Отчёт: HTML">
+        <a href="#report" aria-label="Узел отчёта: HTML">
           <rect class="bx b-plat" x="932" y="962" width="180" height="106" rx="6"/>
           <text class="t" x="944" y="982">HTML-отчёт</text>
           <text class="m" x="944" y="998">render_report</text>
@@ -690,7 +674,7 @@ footer p{max-width:100ch}
         </a>
         <path class="w" d="M1112 1015 H1171" marker-end="url(#f1-a)"/>
 
-        <a href="#report" aria-label="Отчёт: выходы">
+        <a href="#report" aria-label="Узел отчёта: выходы">
           <rect class="bx b-plat" x="1172" y="962" width="196" height="106" rx="6"/>
           <text class="t" x="1184" y="982">Выходы узла</text>
           <text x="1184" y="1000">светофор: amber, если есть</text>
@@ -710,12 +694,11 @@ footer p{max-width:100ch}
       <li><span class="sw sw-rca"></span>s4 и RCA</li>
       <li><span class="sw sw-plat"></span>laim, платформа, артефакты</li>
       <li><svg class="dg" viewBox="0 0 34 12" aria-hidden="true"><line class="w" x1="1" y1="6" x2="33" y2="6"/></svg>данные</li>
-      <li><svg class="dg" viewBox="0 0 34 12" aria-hidden="true"><line class="w w-plat w-dash" x1="1" y1="6" x2="33" y2="6"/></svg>обученное состояние из бандла</li>
-      <li><svg class="dg" viewBox="0 0 34 12" aria-hidden="true"><line class="w w-anom" x1="1" y1="6" x2="33" y2="6"/></svg>аномалии между узлами</li>
+      <li><svg class="dg" viewBox="0 0 34 12" aria-hidden="true"><line class="w w-plat w-dash" x1="1" y1="6" x2="33" y2="6"/></svg>обученные параметры из пакета модели</li>
+      <li><svg class="dg" viewBox="0 0 34 12" aria-hidden="true"><line class="w w-anom" x1="1" y1="6" x2="33" y2="6"/></svg>записи об аномалиях между узлами</li>
       <li><svg class="dg" viewBox="0 0 34 12" aria-hidden="true"><circle class="pin" cx="17" cy="6" r="4"/></svg>порт узла SberDS</li>
-      <li><span class="bdg">1</span>находка из раздела «Что всплыло»</li>
     </ul>
-    <figcaption><b>Три узла, четыре запуска.</b> Между обучением и инференсом по платформе переходит только бандл, zip в JSON-порте. Дальше по цепочке идут только JSON-списки аномалий: <code>test_anomalies</code> от детектора к RCA-узлу и <code>res</code> от RCA-узла к отчёту. Узлы RCA и отчёта не импортируют ни <code>ars</code>, ни <code>laim</code>. Локально стадии детектора запускает <code>run.py {prepare|train|eval|infer|all}</code> через <code>laim.pipeline</code>, но без продуктового контракта и без s3 на инференсе (см. «Запуск и артефакты»).</figcaption>
+    <figcaption><b>Три узла, четыре запуска.</b> Между обучением и инференсом по платформе передаётся только пакет модели (zip внутри JSON-порта). Дальше по цепочке передаются только JSON-списки аномалий: <code>test_anomalies</code> от детектора к узлу RCA и <code>res</code> от узла RCA к отчёту. Узлы RCA и отчёта не импортируют ни <code>ars</code>, ни <code>laim</code>. Локально стадии детектора запускает <code>run.py {prepare|train|eval|infer|all}</code> через <code>laim.pipeline</code>, но без продуктового контракта и без s3 на инференсе (см. «Запуск и артефакты»).</figcaption>
   </figure>
 </section>
 
@@ -724,22 +707,22 @@ footer p{max-width:100ch}
   <div class="sec-head">
     <p class="sec-k"><i style="--c:var(--data)"></i>s1 · ars/stages/s1__data.py · ars/data</p>
     <h2>Подготовка данных: от спанов к последовательностям</h2>
-    <p>Метка аномалии — чистый хеш <code>trace_id</code>, поэтому план сплита известен ещё до расчёта признаков. Благодаря этому отбор признаков и нормализация видят только train-normal трассы, хотя сама инъекция идёт позже, в пространстве признаков и эмбеддингов. Числовая дорожка (EPI) и текстовая (SEM) сходятся в одну строку на пару <code>(trace_id, agent_id)</code>.</p>
+    <p>Класс аномалии определяется хешем <code>trace_id</code> с seed запуска и составом спанов трассы, поэтому план разбиения известен ещё до расчёта признаков. Благодаря этому отбор признаков и нормализация используют только нормальные трассы TRAIN, хотя сами аномалии внедряются позже, в пространстве признаков и эмбеддингов. Числовая дорожка (EPI) и текстовая (SEM) сходятся в одну строку на пару <code>(trace_id, agent_id)</code>.</p>
   </div>
 
   <div class="stack">
     <div class="prose">
-      <p><b>Контракт данных</b> (<code>ars/specification/spec.py</code>, ТЗ v1.9.2) — 46 полей в 11 группах: id&nbsp;6, время&nbsp;2, статус&nbsp;2, классификация&nbsp;2, текст&nbsp;2, LLM&nbsp;11, HTTP&nbsp;5, Kafka&nbsp;4, LangGraph&nbsp;7, сервис&nbsp;3, meta&nbsp;2. NULL запрещён: «не применимо» кодируется сентинелами (<code>-1</code>, <code>-1.0</code>, <code>false</code>, <code>''</code>, <code>root</code>, <code>outside</code>, <code>NONE</code>, <code>STATUS_CODE_UNSET</code>). Обязательны 13 полей: все id, оба времени, <code>aef_kind</code>, <code>input_text</code>, <code>output_text</code> и два session-флага. Одно невалидное обязательное поле отбрасывает всю трассу. Гейт стоит в <code>laim/pipeline.py</code> перед s1 и проверяет только обучающие спаны: <code>strict</code> пишет <code>train_spans_validated.parquet</code>, <code>warn</code> только логирует.</p>
+      <p><b>Контракт данных</b> (<code>ars/specification/spec.py</code>, ТЗ v1.9.2): 46 полей в 11 группах — id (6), время (2), статус (2), классификация (2), текст (2), LLM (11), HTTP (5), Kafka (4), LangGraph (7), сервис (3), meta (2). NULL запрещён: неприменимые значения кодируются сентинелами (<code>-1</code>, <code>-1.0</code>, <code>false</code>, <code>''</code>, <code>root</code>, <code>outside</code>, <code>NONE</code>, <code>STATUS_CODE_UNSET</code>). Обязательны 13 полей: все идентификаторы, оба времени, <code>aef_kind</code>, <code>input_text</code>, <code>output_text</code> и два логических поля сессии. Одно невалидное обязательное поле исключает всю трассу. Проверка (<code>validation_gate</code>) выполняется в <code>laim/pipeline.py</code> перед s1 и только для обучающих спанов: <code>strict</code> оставляет валидные трассы в <code>train_spans_validated.parquet</code>, <code>warn</code> только записывает нарушения в журнал.</p>
     </div>
 
     <figure class="fig">
       <div class="scroll">
-      <svg class="dg" viewBox="0 0 1280 470" style="--minw:1040px" role="img" aria-label="Конвейер s1: план меток по хешу trace_id известен до признаков и управляет отбором, инъекцией, сплитом и нормализацией; числовая дорожка EPI и текстовая SEM сходятся в сборке трасс.">
+      <svg class="dg" viewBox="0 0 1280 470" style="--minw:1040px" role="img" aria-label="Конвейер s1: план меток вычисляется из trace_id и состава спанов до расчёта признаков и определяет отбор, внедрение аномалий, разбиение и нормализацию; числовая дорожка EPI и текстовая SEM сходятся при сборке трасс.">
         <defs>
           <marker id="f2-a" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah" d="M0 1.5 L9 5 L0 8.5 Z"/></marker>
           <marker id="f2-n" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah-anom" d="M0 1.5 L9 5 L0 8.5 Z"/></marker>
         </defs>
-        <text class="hd" x="20" y="30">ПЛАН МЕТОК — ЧИСТЫЙ ХЕШ, ДО ПРИЗНАКОВ</text>
+        <text class="hd" x="20" y="30">ПЛАН МЕТОК — ДО РАСЧЁТА ПРИЗНАКОВ</text>
         <text class="hd" x="20" y="136">EPI — ЧИСЛОВАЯ ДОРОЖКА</text>
         <text class="hd" x="20" y="292">SEM — ТЕКСТОВАЯ ДОРОЖКА</text>
 
@@ -749,29 +732,30 @@ footer p{max-width:100ch}
         <text class="dim" x="32" y="80">одна метка на трассу</text>
         <path class="w" d="M186 66 H213" marker-end="url(#f2-a)"/>
         <rect class="bx b-src" x="214" y="40" width="180" height="52" rx="6"/>
-        <text class="m" x="226" y="61">hash(trace_id, 12345)</text>
+        <text class="m" x="226" y="61">hash(trace_id, seed)</text>
         <text class="m" x="226" y="78">mod 10⁶ / 10⁶ → u ∈ [0; 1)</text>
         <path class="w" d="M394 66 H421" marker-end="url(#f2-a)"/>
         <rect class="bx b-anom" x="422" y="40" width="838" height="52" rx="6"/>
-        <text class="t" x="438" y="61">Класс по полосе u (20 % трасс) и список train-normal — до расчёта признаков</text>
-        <text class="m" x="438" y="79">dpi [0; .04) · ipi [.04; .08) · mp [.08; .11) · hallucination [.11; .16) · bias [.16; .20) · иначе норма</text>
+        <text class="t" x="438" y="61">Класс по интервалу u, если в трассе есть спаны-мишени класса; иначе норма</text>
+        <text class="m" x="438" y="79">dpi [0; .04) · ipi [.04; .08) · mp [.08; .11) · hallucination [.11; .16) · bias [.16; .20) · доли: data.injection_fractions</text>
 
         <path class="w w-anom w-dash" style="stroke-width:1.4" d="M517 93 V145" marker-end="url(#f2-n)"/>
-        <text class="lbl" x="525" y="124">отбор по train-normal</text>
+        <text class="lbl" x="525" y="124">отбор по TRAIN (норма)</text>
         <path class="w w-anom w-dash" style="stroke-width:1.4" d="M720 93 V145" marker-end="url(#f2-n)"/>
-        <text class="lbl" x="728" y="124">класс, тяжесть</text>
+        <text class="lbl" x="728" y="124">класс и интенсивность</text>
         <path class="w w-anom w-dash" style="stroke-width:1.4" d="M908 93 V145" marker-end="url(#f2-n)"/>
         <text class="lbl" x="916" y="124">план = факт</text>
         <path class="w w-anom w-dash" style="stroke-width:1.4" d="M1100 93 V145" marker-end="url(#f2-n)"/>
-        <text class="lbl" x="1108" y="124">fit на train-normal</text>
+        <text class="lbl" x="1108" y="124">оценка по TRAIN</text>
 
         <!-- EPI row -->
         <rect class="bx b-data" x="20" y="146" width="166" height="116" rx="6"/>
         <text class="t c-data" x="32" y="166">Спаны</text>
         <text class="m" x="32" y="182">load_spans</text>
-        <text x="32" y="200">46 полей, recast</text>
-        <text x="32" y="216">сортировка по</text>
-        <text class="m" x="32" y="232">agent, trace, start</text>
+        <text x="32" y="200">46 полей</text>
+        <text x="32" y="216">приведение типов</text>
+        <text x="32" y="232">сортировка:</text>
+        <text class="m" x="32" y="248">agent, trace, start</text>
         <path class="w" d="M186 204 H213" marker-end="url(#f2-a)"/>
 
         <rect class="bx b-data" x="214" y="146" width="180" height="116" rx="6"/>
@@ -779,7 +763,7 @@ footer p{max-width:100ch}
         <text class="m" x="226" y="182">make_features</text>
         <text x="226" y="200">39 признаков спана</text>
         <text x="226" y="216">× агрегаты, окна 3…1000</text>
-        <text x="226" y="232">+ 11 уровня трассы</text>
+        <text x="226" y="232">+ 11 признаков трассы</text>
         <text x="226" y="248">≈ 2 900 кандидатов</text>
         <path class="w" d="M394 204 H421" marker-end="url(#f2-a)"/>
 
@@ -788,10 +772,9 @@ footer p{max-width:100ch}
         <text class="m" x="434" y="182">select_features</text>
         <text x="434" y="200">заполненность ≥ 0,5</text>
         <text x="434" y="216">доля моды ≤ 0,95</text>
-        <text x="434" y="232">|r| &gt; 0,999 → дубль</text>
+        <text x="434" y="232">|r| &gt; 0,999 по заполненным</text>
         <text x="434" y="248">итог: F признаков</text>
-        <circle class="badge" cx="598" cy="158" r="8"/><text class="badge-t" x="598" y="161.5" text-anchor="middle">1</text>
-        <path class="w" d="M612 204 H639" marker-end="url(#f2-a)"/>
+        <path class="w" d="M612 204 H631" marker-end="url(#f2-a)"/>
 
         <!-- SEM row -->
         <rect class="bx b-data" x="20" y="300" width="166" height="96" rx="6"/>
@@ -803,94 +786,94 @@ footer p{max-width:100ch}
 
         <rect class="bx b-data" x="214" y="300" width="180" height="96" rx="6"/>
         <text class="t c-data" x="226" y="320">Уникальные тексты</text>
-        <text x="226" y="338">дедупликация: кодируем</text>
-        <text x="226" y="354">только уникальные,</text>
-        <text x="226" y="370">потом раскладка по спанам</text>
+        <text x="226" y="338">дедупликация текстов:</text>
+        <text x="226" y="354">кодируются уникальные,</text>
+        <text x="226" y="370">затем раскладка по спанам</text>
         <path class="w" d="M394 348 H421" marker-end="url(#f2-a)"/>
 
         <rect class="bx b-data" x="422" y="300" width="190" height="96" rx="6"/>
         <text class="t c-data" x="434" y="320">USER-bge-m3</text>
         <text x="434" y="338">max_len 1024, batch 32</text>
-        <text x="434" y="354">L2-норма → 1024-d</text>
-        <text x="434" y="370">несколько GPU: потоки</text>
-        <path class="w" d="M612 348 H639" marker-end="url(#f2-a)"/>
+        <text x="434" y="354">L2-норма, 1024 измерения</text>
+        <text x="434" y="370">GPU: реплика на карту</text>
+        <path class="w" d="M612 348 H631" marker-end="url(#f2-a)"/>
 
         <!-- injection (both tracks) -->
-        <rect class="bx b-anom" x="640" y="146" width="160" height="250" rx="6"/>
-        <text class="t c-anom" x="652" y="166">Инъекция</text>
-        <text class="m" x="652" y="182">inject_anomalies</text>
-        <text x="652" y="200">5 классов LumiMAS</text>
-        <text x="652" y="216">в признаках и</text>
-        <text x="652" y="232">эмбеддингах</text>
-        <line class="div" x1="652" y1="246" x2="788" y2="246"/>
-        <text x="652" y="266">EPI: сдвиг копулы</text>
-        <text class="dim" x="652" y="281">— dpi, mp</text>
-        <text x="652" y="301">SEM: смещение к якорю</text>
-        <text class="dim" x="652" y="316">— dpi, ipi, bias;</text>
-        <text class="dim" x="652" y="331">mp — дрейф по шагам</text>
-        <text x="652" y="351">hallucination: порча</text>
-        <text x="652" y="366">текста и повторный</text>
-        <text x="652" y="381">эмбеддинг</text>
-        <path class="w" d="M800 204 H827" marker-end="url(#f2-a)"/>
-        <path class="w" d="M800 348 H827" marker-end="url(#f2-a)"/>
+        <rect class="bx b-anom" x="632" y="146" width="172" height="250" rx="6"/>
+        <text class="t c-anom" x="644" y="166">Внедрение аномалий</text>
+        <text class="m" x="644" y="182">inject_anomalies</text>
+        <text x="644" y="200">5 классов LumiMAS</text>
+        <text x="644" y="216">в признаках и</text>
+        <text x="644" y="232">эмбеддингах</text>
+        <line class="div" x1="644" y1="246" x2="792" y2="246"/>
+        <text x="644" y="266">EPI: сдвиг в копуле</text>
+        <text class="dim" x="644" y="281">— dpi, mp</text>
+        <text x="644" y="301">SEM: смещение к якорю</text>
+        <text class="dim" x="644" y="316">— dpi, ipi, bias;</text>
+        <text class="dim" x="644" y="331">mp — дрейф по шагам</text>
+        <text x="644" y="351">hallucination: текст</text>
+        <text x="644" y="366">искажается, SEM и EPI</text>
+        <text x="644" y="381">пересчитываются</text>
+        <path class="w" d="M804 204 H827" marker-end="url(#f2-a)"/>
+        <path class="w" d="M804 348 H827" marker-end="url(#f2-a)"/>
 
         <!-- build + split -->
-        <rect class="bx b-data" x="828" y="146" width="160" height="250" rx="6"/>
-        <text class="t c-data" x="840" y="166">Сборка и сплит</text>
+        <rect class="bx b-data" x="828" y="146" width="168" height="250" rx="6"/>
+        <text class="t c-data" x="840" y="166">Сборка и разбиение</text>
         <text class="m" x="840" y="182">build_traces</text>
         <text x="840" y="200">строка = (trace_id,</text>
         <text x="840" y="216">agent_id), спаны по</text>
         <text x="840" y="232">времени старта</text>
-        <line class="div" x1="840" y1="246" x2="976" y2="246"/>
+        <line class="div" x1="840" y1="246" x2="984" y2="246"/>
         <text class="m" x="840" y="266">stratified_split</text>
         <text x="840" y="284">норма: 70 / 15 / 15</text>
         <text x="840" y="300">аномалии: 0 / 70 / 30</text>
-        <text x="840" y="316">в train аномалий нет</text>
-        <text x="840" y="332">сверка с планом</text>
+        <text x="840" y="316">в TRAIN аномалий нет</text>
+        <text x="840" y="332">проверка план = факт</text>
         <text class="m" x="840" y="360">epi_sequence L×F</text>
         <text class="m" x="840" y="376">sem_sequence L×1024</text>
-        <path class="w" d="M988 204 H1015" marker-end="url(#f2-a)"/>
-        <path class="w" d="M988 348 H1015" marker-end="url(#f2-a)"/>
+        <path class="w" d="M996 204 H1019" marker-end="url(#f2-a)"/>
+        <path class="w" d="M996 348 H1019" marker-end="url(#f2-a)"/>
 
         <!-- normalization -->
-        <rect class="bx b-data" x="1016" y="146" width="244" height="250" rx="6"/>
-        <text class="t c-data" x="1028" y="166">Нормализация</text>
-        <text class="m" x="1028" y="182">normalize_epi_features</text>
-        <text x="1028" y="204">EPI: (x − median) / IQR</text>
-        <text x="1028" y="220">fit на train-normal</text>
-        <text x="1028" y="236">IQR &lt; 0,01 → 0,01</text>
-        <text x="1028" y="252">затем клип ±20</text>
-        <text class="dim" x="1028" y="268">shift, scale → S1Meta</text>
-        <line class="div" x1="1028" y1="290" x2="1248" y2="290"/>
-        <text x="1028" y="348">SEM не нормализуется:</text>
-        <text class="dim" x="1028" y="364">векторы уже единичной длины</text>
-        <path class="w" d="M1138 397 V417" marker-end="url(#f2-a)"/>
+        <rect class="bx b-data" x="1020" y="146" width="240" height="250" rx="6"/>
+        <text class="t c-data" x="1032" y="166">Нормализация</text>
+        <text class="m" x="1032" y="182">normalize_epi_features</text>
+        <text x="1032" y="204">EPI: (x − медиана) / IQR</text>
+        <text x="1032" y="220">параметры по TRAIN (норма)</text>
+        <text x="1032" y="236">масштаб не меньше 0,01</text>
+        <text x="1032" y="252">ограничение |z| ≤ 20</text>
+        <text class="dim" x="1032" y="268">shift, scale → S1Meta</text>
+        <line class="div" x1="1032" y1="290" x2="1248" y2="290"/>
+        <text x="1032" y="348">SEM не нормализуется:</text>
+        <text class="dim" x="1032" y="364">векторы уже единичной длины</text>
+        <path class="w" d="M1140 397 V417" marker-end="url(#f2-a)"/>
 
         <!-- outputs -->
         <rect class="bx b-plat" x="20" y="418" width="1240" height="40" rx="20"/>
-        <text class="m b" x="40" y="442">→ s2 и бандл:</text>
-        <text class="dim" x="146" y="442">traces_train/laim_s&lt;seed&gt;_{train,val,test}.parquet · s1_meta.json (epi_features, epi_normalization, embedding_fingerprint) · spans_features.parquet (до инъекции) · data_report.html</text>
+        <text class="m b" x="40" y="442">→ s2 и пакет модели:</text>
+        <text class="dim" x="182" y="442">laim_s&lt;seed&gt;_{train,val,test}.parquet · s1_meta.json: epi_features, epi_normalization, embedding_fingerprint, injection_coverage · spans_features.parquet · data_report.html</text>
       </svg>
       </div>
-      <figcaption><b>Пунктир — единственная связь, которая идёт «назад во времени».</b> План меток считается из <code>trace_id</code> до признаков, и s1 в конце жёстко сверяет плановый train-сплит с фактическим (<code>RuntimeError</code> при расхождении). На инференсе (<code>prepare_test_data</code>) нет гейта, отбора, инъекции и сплита: признаки пересчитываются и выбираются по именам из <code>S1Meta.epi_features</code>, нормализация берётся из обучения, а <code>span_ids</code> сохраняются для атрибуции.</figcaption>
+      <figcaption><b>Пунктиром показан план меток.</b> Он вычисляется из <code>trace_id</code>, seed запуска и состава спанов ещё до признаков и определяет отбор признаков, внедрение аномалий, разбиение и нормализацию. В конце s1 проверяет, что фактический TRAIN совпал с плановым (иначе <code>RuntimeError</code>). Корреляции для отбора считаются по значениям с заполненными пропусками; на тестовом наборе из 20 трасс остаётся 996 признаков. На инференсе (<code>prepare_test_data</code>) нет гейта, отбора, внедрения и разбиения: признаки пересчитываются и выбираются по именам из <code>S1Meta.epi_features</code>, нормализация берётся из обучения, <code>span_ids</code> сохраняются для атрибуции.</figcaption>
     </figure>
 
     <div class="two">
       <figure class="fig">
-        <svg class="dg" viewBox="0 0 600 214" role="img" aria-label="Состав сплитов в масштабе: train — 56 процентов трасс, только норма; val — 26 процентов, из них около 54 процентов аномалий; test — 18 процентов, около 33 процентов аномалий.">
-          <text class="hd" x="0" y="14">ДОЛЯ ВСЕХ ТРАСС · В МАСШТАБЕ</text>
+        <svg class="dg" viewBox="0 0 600 214" role="img" aria-label="Состав выборок в масштабе при доле аномалий 20 процентов: TRAIN — 56 процентов трасс, только норма; VAL — 26 процентов, из них около 54 процентов аномалий; TEST — 18 процентов, около 33 процентов аномалий.">
+          <text class="hd" x="0" y="14">ДОЛЯ ТРАСС ПРИ 20 % АНОМАЛИЙ · В МАСШТАБЕ</text>
           <line class="gridl" x1="70" y1="26" x2="70" y2="138"/>
           <line class="gridl" x1="190" y1="26" x2="190" y2="138"/>
           <line class="gridl" x1="310" y1="26" x2="310" y2="138"/>
           <line class="gridl" x1="430" y1="26" x2="430" y2="138"/>
-          <text class="m" x="60" y="48" text-anchor="end">train</text>
+          <text class="m" x="60" y="48" text-anchor="end">TRAIN</text>
           <rect class="bar-n" x="70" y="34" width="336" height="20" rx="2"/>
           <text class="dim" x="414" y="48">56 % · аномалий нет</text>
-          <text class="m" x="60" y="88" text-anchor="end">val</text>
+          <text class="m" x="60" y="88" text-anchor="end">VAL</text>
           <rect class="bar-n" x="70" y="74" width="72" height="20" rx="2"/>
           <rect class="bar-a" x="142" y="74" width="84" height="20" rx="2"/>
           <text class="dim" x="234" y="88">26 % · аномалий ≈ 54 %</text>
-          <text class="m" x="60" y="128" text-anchor="end">test</text>
+          <text class="m" x="60" y="128" text-anchor="end">TEST</text>
           <rect class="bar-n" x="70" y="114" width="72" height="20" rx="2"/>
           <rect class="bar-a" x="142" y="114" width="36" height="20" rx="2"/>
           <text class="dim" x="186" y="128">18 % · аномалий ≈ 33 %</text>
@@ -901,23 +884,23 @@ footer p{max-width:100ch}
           <rect class="bar-n" x="70" y="178" width="14" height="10" rx="2"/>
           <text class="dim" x="90" y="187">норма</text>
           <rect class="bar-a" x="150" y="178" width="14" height="10" rx="2"/>
-          <text class="dim" x="170" y="187">инъекция</text>
-          <text class="faint" x="70" y="208">внутри s2: норма из val — ранняя остановка; весь val — порог, калибровка, выбор</text>
+          <text class="dim" x="170" y="187">внедрённая аномалия</text>
+          <text class="faint" x="70" y="208">в s2: норма из VAL — ранняя остановка; весь VAL — порог, калибровка, выбор</text>
         </svg>
-        <figcaption>20&nbsp;% трасс получают класс. Нормальные трассы делятся 70/15/15, аномальные — 0/70/30 по каждому классу, поэтому в VAL аномалий больше половины. <code>Plan.seed = 12345</code> зашит и не зависит от <code>runtime.seed</code>: смена seed тасует сплит, но не меняет набор аномальных трасс.</figcaption>
+        <figcaption>По умолчанию хеш выбирает класс для 20&nbsp;% трасс. Трасса без спанов-мишеней своего класса остаётся нормальной, поэтому фактическая доля аномалий может быть меньше. Нормальные трассы делятся 70/15/15, аномальные — 0/70/30 по каждому классу, поэтому в VAL аномалий больше половины. Seed плана равен <code>runtime.seed</code>, доли классов задаёт <code>data.injection_fractions</code>.</figcaption>
       </figure>
 
       <div>
-        <p class="tcap">Классы инъекции (<code>ars/data/anomalies_injection.py</code>). Профиль ячеек <code>(aef_kind, agent_id)</code> строится по всему корпусу до инъекции.</p>
+        <p class="tcap">Классы внедряемых аномалий (<code>ars/data/anomalies_injection.py</code>). Класс присваивается, только если в трассе есть спаны-мишени в ячейке <code>(aef_kind, agent_id)</code> размером не меньше 64 спанов; для hallucination достаточно llm-спана. Трассы с меткой, но без изменённых спанов исключаются из VAL и TEST; счётчики по классам — <code>injection_coverage</code> в S1Meta, манифесте и <code>eval_report</code>.</p>
         <div class="tbl">
           <table>
-            <thead><tr><th>Класс</th><th>Доля</th><th>Жертвы</th><th>EPI</th><th>SEM</th></tr></thead>
+            <thead><tr><th>Класс</th><th>Доля</th><th>Спаны-мишени</th><th>EPI</th><th>SEM</th></tr></thead>
             <tbody>
-              <tr><td><code>dpi</code></td><td class="num">4 %</td><td>llm, start_agent</td><td>сдвиг копулы вдоль главного собственного вектора ячейки</td><td>смещение с PCA-многообразия к якорю класса</td></tr>
-              <tr><td><code>ipi</code></td><td class="num">4 %</td><td>tool, retriever, output_request</td><td>—</td><td>смещение к якорю</td></tr>
-              <tr><td><code>mp</code></td><td class="num">3 %</td><td>все спаны трассы</td><td>сдвиг копулы</td><td>дрейф, растущий с номером шага</td></tr>
-              <tr><td><code>hallucination</code></td><td class="num">5 %</td><td>llm</td><td>— (счётчики текста не пересчитываются)</td><td>порча текста (символы, петля, чужой язык, моджибейк) и повторный эмбеддинг</td></tr>
-              <tr><td><code>bias</code></td><td class="num">4 %</td><td>llm</td><td>—</td><td>смещение к якорю</td></tr>
+              <tr><td><code>dpi</code></td><td class="num">4 %</td><td>llm, start_agent</td><td>сдвиг в копуле вдоль первого собственного вектора ячейки</td><td>смещение с PCA-многообразия к якорю класса</td></tr>
+              <tr><td><code>ipi</code></td><td class="num">4 %</td><td>tool, retriever, output_request</td><td>не меняется</td><td>смещение к якорю</td></tr>
+              <tr><td><code>mp</code></td><td class="num">3 %</td><td>все спаны трассы</td><td>сдвиг в копуле</td><td>дрейф, растущий с номером шага</td></tr>
+              <tr><td><code>hallucination</code></td><td class="num">5 %</td><td>llm</td><td>признаки пересчитываются по искажённому тексту</td><td>искажение текста (символы, повтор, чужой язык, моджибейк) и повторный эмбеддинг</td></tr>
+              <tr><td><code>bias</code></td><td class="num">4 %</td><td>llm</td><td>не меняется</td><td>смещение к якорю</td></tr>
             </tbody>
           </table>
         </div>
@@ -925,7 +908,7 @@ footer p{max-width:100ch}
     </div>
 
     <div>
-      <p class="tcap">Признаки EPI (<code>ars/data/features.py</code>): 39 признаков спана и 11 признаков уровня трассы. Спановые считаются после signed log1p, а агрегаты — по <code>(trace_id, agent_id)</code>: static (max, min, mean, std, sum, q25…q95) и rolling с окнами 3, 5, 10, 30, 50, 100, 500, 1000.</p>
+      <p class="tcap">Признаки EPI (<code>ars/data/features.py</code>): 39 признаков спана и 11 признаков уровня трассы. Спановые признаки считаются после знакового log1p; агрегаты по <code>(trace_id, agent_id)</code> — статические (max, min, mean, std, sum, q25…q95) и скользящие с окнами 3, 5, 10, 30, 50, 100, 500, 1000.</p>
       <div class="tbl">
         <table>
           <thead><tr><th>Группа</th><th>Признаки</th></tr></thead>
@@ -933,7 +916,7 @@ footer p{max-width:100ch}
             <tr><td>Время</td><td><code>duration</code>, <code>total_duration</code>, <code>duration_diff</code>, <code>delta_time</code>, <code>exec_gap</code>, <code>llm_duration</code>, <code>tool_duration</code></td></tr>
             <tr><td>Токены</td><td><code>llm_tokens</code>, <code>token_ratio</code></td></tr>
             <tr><td>Инструменты</td><td><code>tool_success</code>, <code>tool_compression</code>, <code>unique_tools_local</code></td></tr>
-            <tr><td>Вид спана</td><td><code>is_llm</code>, <code>is_tool</code>, <code>is_chain</code>, <code>is_repeat</code></td></tr>
+            <tr><td>Тип спана</td><td><code>is_llm</code>, <code>is_tool</code>, <code>is_chain</code>, <code>is_repeat</code></td></tr>
             <tr><td>Текст ответа</td><td>7 счётчиков (символы, слова, предложения, пунктуация, заглавные, цифры, спецсимволы), <code>avg_word_length_sem</code>, <code>error_flag</code>; те же 7 счётчиков как <code>exec_out_*</code></td></tr>
             <tr><td>Текст запроса</td><td>7 счётчиков <code>prompt_*</code> по <code>input_text</code></td></tr>
             <tr><td>Уровень трассы</td><td><code>final_output_length</code>, <code>unique_agents</code>, <code>actions_per_agent</code>, <code>unique_tools_global</code>, <code>action_entropy</code>, <code>time_gap_variance</code>, <code>iteration_duration_variance</code>, <code>repetitive_actions</code>, <code>processing_time_variance</code>, <code>cv_duration</code>, <code>cv_delta</code></td></tr>
@@ -948,14 +931,14 @@ footer p{max-width:100ch}
 <section id="detector">
   <div class="sec-head">
     <p class="sec-k"><i style="--c:var(--det)"></i>s2 · ars/stages/s2__detector.py · ars/models/m2__detector</p>
-    <h2>Детектор: два LSTM-автоэнкодера и FMLP над их латентами</h2>
-    <p>Ветви обучаются по очереди: EPI-AE, SEM-AE, затем FMLP-AE на замороженных нормализованных латентах. Флаг ставит только ошибка FMLP-AE (<code>e_comb</code>) против порога. Ошибки ветвей в флаге не участвуют, но входят в калибровку <code>p_anomaly</code>, поэтому у флагнутой трассы может быть <code>p &lt; 0,5</code>.</p>
+    <h2>Детектор: два LSTM-автоэнкодера и автоэнкодер латентных векторов</h2>
+    <p>Ветви обучаются по очереди: EPI-AE, SEM-AE, затем FMLP-AE на зафиксированных нормализованных латентных векторах. Метку аномалии ставит только ошибка FMLP-AE (<code>e_comb</code>) при сравнении с порогом. Ошибки ветвей в метке не участвуют, но входят в калибровку <code>p_anomaly</code>, поэтому у помеченной трассы возможно <code>p_anomaly &lt; 0,5</code>.</p>
   </div>
 
   <div class="stack">
     <figure class="fig">
       <div class="scroll">
-      <svg class="dg" viewBox="0 36 1200 376" style="--minw:980px" role="img" aria-label="Архитектура детектора: EPI-AE и SEM-AE кодируют последовательность в латенты 128 и 768, латенты нормализуются и склеиваются в вектор 896, который восстанавливает FMLP-AE; три ошибки e_epi, e_sem и e_comb идут в скоринг.">
+      <svg class="dg" viewBox="0 36 1200 376" style="--minw:980px" role="img" aria-label="Архитектура детектора: EPI-AE и SEM-AE кодируют последовательность в латентные векторы 128 и 768; векторы нормализуются и конкатенируются в вектор 896, который восстанавливает FMLP-AE; три ошибки e_epi, e_sem и e_comb передаются в оценку.">
         <defs>
           <marker id="f3-a" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah" d="M0 1.5 L9 5 L0 8.5 Z"/></marker>
         </defs>
@@ -974,7 +957,7 @@ footer p{max-width:100ch}
         <rect class="bx b-det" x="332" y="68" width="86" height="48" rx="5"/>
         <text x="375" y="88" text-anchor="middle">BiLSTM</text><text class="m" x="375" y="105" text-anchor="middle">2 × 32</text>
         <path class="w" d="M418 92 H443" marker-end="url(#f3-a)"/>
-        <text class="lbl xs" x="431" y="61" text-anchor="middle">посл. шаг</text>
+        <text class="lbl xs" x="431" y="61" text-anchor="middle">последний шаг</text>
         <rect class="bx b-det" x="444" y="68" width="72" height="48" rx="5"/>
         <text x="480" y="88" text-anchor="middle">Dense</text><text class="m" x="480" y="105" text-anchor="middle">128</text>
         <path class="w" d="M516 92 H539" marker-end="url(#f3-a)"/>
@@ -990,25 +973,25 @@ footer p{max-width:100ch}
         <rect class="bx b-det" x="818" y="68" width="72" height="48" rx="5"/>
         <text x="854" y="88" text-anchor="middle">Dense</text><text class="m" x="854" y="105" text-anchor="middle">F</text>
         <path class="w" d="M890 92 H1059" marker-end="url(#f3-a)"/>
-        <text class="lbl" x="975" y="85" text-anchor="middle">x̂ против x, по маске</text>
+        <text class="lbl" x="975" y="85" text-anchor="middle">x̂ и x, только валидные шаги</text>
         <rect class="bx b-det" x="1060" y="64" width="120" height="56" rx="6"/>
         <text class="t c-det" x="1072" y="86">e_epi</text>
         <text class="m" x="1072" y="104">Huber, δ = 1</text>
-        <text class="faint" x="650" y="140">декодер авторегрессионный: T шагов, свой выход подаётся следующим входом</text>
+        <text class="faint" x="650" y="140">декодер авторегрессионный: T шагов, выход шага t подаётся на вход шага t+1</text>
 
-        <!-- middle: latents + FMLP -->
+        <!-- middle: latent vectors + FMLP -->
         <path class="w" d="M582 128 V203" marker-end="url(#f3-a)"/>
         <rect class="bx b-det" x="470" y="204" width="224" height="96" rx="6"/>
         <text class="t c-det" x="482" y="224">Нормализация латентов</text>
         <text class="m" x="482" y="242">(z − mean) / max(std, 1e-3)</text>
-        <text class="dim" x="482" y="259">mean, std: train-normal</text>
+        <text class="dim" x="482" y="259">mean, std по TRAIN (норма)</text>
         <text class="m" x="482" y="276">[z_epi ‖ z_sem] → 896</text>
-        <text class="dim" x="482" y="292">энкодеры заморожены</text>
+        <text class="dim" x="482" y="292">энкодеры зафиксированы</text>
         <path class="w" d="M694 252 H719" marker-end="url(#f3-a)"/>
         <rect class="bx b-det strong" x="720" y="196" width="320" height="112" rx="6"/>
         <text class="t c-det" x="732" y="216">FMLP-AE</text>
-        <text class="dim" x="796" y="216">обучается 3-м, вход = цель = 896</text>
-        <!-- widths glyph: h = 5*log2(w) -->
+        <text class="dim" x="796" y="216">обучается 3-м; вход = цель, 896</text>
+        <!-- layer widths, bar height = 5·log2(width) -->
         <rect class="bar-d" x="732" y="232" width="14" height="49" rx="1.5"/>
         <rect class="bar-d" x="752" y="246" width="14" height="35" rx="1.5"/>
         <rect class="bar-d" x="772" y="256" width="14" height="25" rx="1.5"/>
@@ -1027,10 +1010,10 @@ footer p{max-width:100ch}
         <text class="m xs" x="859" y="296" text-anchor="middle">32</text>
         <text class="m xs" x="879" y="296" text-anchor="middle">128</text>
         <text class="m xs" x="899" y="296" text-anchor="middle">896</text>
-        <text class="dim" x="922" y="240">два «горла»</text>
-        <text class="dim" x="922" y="254">подряд;</text>
-        <text class="dim" x="922" y="268">BatchNorm,</text>
-        <text class="dim" x="922" y="282">ReLU/tanh,</text>
+        <text class="dim" x="922" y="240">2 блока кодер–</text>
+        <text class="dim" x="922" y="254">декодер подряд,</text>
+        <text class="dim" x="922" y="268">узкий слой 32;</text>
+        <text class="dim" x="922" y="282">BatchNorm,</text>
         <text class="dim" x="922" y="296">dropout 0,2</text>
         <path class="w" d="M1040 252 H1059" marker-end="url(#f3-a)"/>
         <rect class="bx b-det" x="1060" y="224" width="120" height="56" rx="6"/>
@@ -1053,7 +1036,7 @@ footer p{max-width:100ch}
         <rect class="bx b-det" x="346" y="336" width="72" height="48" rx="5"/>
         <text x="382" y="356" text-anchor="middle">LSTM</text><text class="m" x="382" y="373" text-anchor="middle">256</text>
         <path class="w" d="M418 360 H443" marker-end="url(#f3-a)"/>
-        <text class="lbl xs" x="431" y="329" text-anchor="middle">посл. шаг</text>
+        <text class="lbl xs" x="431" y="329" text-anchor="middle">последний шаг</text>
         <rect class="bx b-det" x="444" y="336" width="72" height="48" rx="5"/>
         <text x="480" y="356" text-anchor="middle">Dense</text><text class="m" x="480" y="373" text-anchor="middle">768</text>
         <path class="w" d="M516 360 H539" marker-end="url(#f3-a)"/>
@@ -1069,34 +1052,34 @@ footer p{max-width:100ch}
         <rect class="bx b-det" x="818" y="336" width="72" height="48" rx="5"/>
         <text x="854" y="356" text-anchor="middle">Dense</text><text class="m" x="854" y="373" text-anchor="middle">1024</text>
         <path class="w" d="M890 360 H1059" marker-end="url(#f3-a)"/>
-        <text class="lbl" x="975" y="353" text-anchor="middle">x̂ против x, по маске</text>
+        <text class="lbl" x="975" y="353" text-anchor="middle">x̂ и x, только валидные шаги</text>
         <rect class="bx b-det" x="1060" y="332" width="120" height="56" rx="6"/>
         <text class="t c-det" x="1072" y="354">e_sem</text>
         <text class="m" x="1072" y="372">MSE</text>
       </svg>
       </div>
-      <figcaption><b>Стадийное обучение.</b> Оптимизатор AdamW, lr 1e-4 с экспоненциальным затуханием до lr/4, weight decay 1e-6, клип градиента 1,0. Ранняя остановка идёт по потере на норме из VAL и восстанавливает лучшее состояние. Ошибка ветви — сумма её собственной функции потерь по валидным ячейкам, делённая на (число шагов × D). Для EPI это Huber, поэтому «MSE» в отчётах для этой ветви — условное имя. Эпохи/patience: 10/50 в <code>laim</code> и <code>default.toml</code>, 100/20 в форме узла SberDS.</figcaption>
+      <figcaption><b>Поэтапное обучение.</b> Оптимизатор AdamW: lr 1e-4 с экспоненциальным затуханием до lr/4, weight decay 1e-6, ограничение нормы градиента 1,0. Ранняя остановка выполняется по потере на нормальных трассах VAL с восстановлением лучших весов. FMLP-AE — каскад двух блоков «кодер–декодер» (896→128→32→64→896 и 896→64→32→128→896) с BatchNorm, активациями ReLU и tanh и dropout 0,2. Ошибка ветви — поэлементное среднее её функции потерь по валидным шагам: Huber для EPI, MSE для SEM. Эпохи и patience: 10/50 в <code>laim</code> и <code>default.toml</code>, 100/20 в форме узла SberDS.</figcaption>
     </figure>
 
     <figure class="fig">
       <div class="scroll">
-      <svg class="dg" viewBox="0 0 1200 280" style="--minw:960px" role="img" aria-label="Скоринг: флаг is_anomaly ставит только сравнение e_comb с порогом; p_anomaly — отдельная логистическая калибровка трёх логитов от e_epi, e_sem и e_comb.">
+      <svg class="dg" viewBox="0 0 1200 280" style="--minw:960px" role="img" aria-label="Оценка трассы: метку is_anomaly ставит только сравнение e_comb с порогом; p_anomaly — отдельная логистическая калибровка трёх логитов, построенных из e_epi, e_sem и e_comb.">
         <defs>
           <marker id="f3b-a" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah" d="M0 1.5 L9 5 L0 8.5 Z"/></marker>
           <marker id="f3b-n" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah-anom" d="M0 1.5 L9 5 L0 8.5 Z"/></marker>
         </defs>
-        <text class="hd" x="20" y="16">ФЛАГ</text>
+        <text class="hd" x="20" y="16">МЕТКА</text>
         <rect class="bx b-det" x="20" y="28" width="120" height="44" rx="6"/>
         <text class="t c-det" x="32" y="48">e_comb</text>
-        <text class="dim" x="32" y="63">ошибка FMLP</text>
+        <text class="dim" x="32" y="63">ошибка FMLP-AE</text>
         <path class="w" d="M140 50 H189" marker-end="url(#f3b-a)"/>
         <rect class="bx b-det" x="190" y="28" width="280" height="44" rx="6"/>
         <text class="m t" x="202" y="48">e_comb &gt; порог</text>
-        <text class="dim" x="202" y="64">порог: 10 000 кандидатов на val-mixed</text>
+        <text class="dim" x="202" y="64">порог: перебор 10 000 значений на VAL</text>
         <path class="w w-anom" d="M470 50 H519" marker-end="url(#f3b-n)"/>
         <rect class="bx b-anom" x="520" y="28" width="240" height="44" rx="6"/>
         <text class="m t c-anom" x="532" y="48">detector_is_anomaly</text>
-        <text class="dim" x="532" y="64">решает только e_comb</text>
+        <text class="dim" x="532" y="64">определяется только e_comb</text>
 
         <text class="hd" x="190" y="94">ВЕРОЯТНОСТЬ</text>
         <path class="w" d="M80 72 V120 H189" marker-end="url(#f3b-a)"/>
@@ -1120,9 +1103,9 @@ footer p{max-width:100ch}
         <text class="m" x="532" y="146">p = σ(w_epi·ℓ_epi</text>
         <text class="m" x="532" y="161">    + w_sem·ℓ_sem</text>
         <text class="m" x="532" y="176">    + w_comb·ℓ_comb + b)</text>
-        <text class="dim" x="532" y="200">w, b — логрегрессия на val-mixed</text>
-        <text class="dim" x="532" y="215">с балансом классов</text>
-        <text class="dim" x="532" y="233">запасные: 0,2 · 0,2 · 0,6 · 0</text>
+        <text class="dim" x="532" y="200">w, b — логистическая регрессия</text>
+        <text class="dim" x="532" y="215">на VAL, веса классов уравнены</text>
+        <text class="dim" x="532" y="233">резервные: 0,2 · 0,2 · 0,6 · 0</text>
         <text class="dim" x="532" y="248">если &lt; 5 примеров или w_comb ≤ 0</text>
         <path class="w" d="M760 180 H799" marker-end="url(#f3b-a)"/>
         <rect class="bx b-det" x="800" y="160" width="200" height="40" rx="6"/>
@@ -1130,26 +1113,27 @@ footer p{max-width:100ch}
 
         <text class="m" x="1030" y="118">z = (e − median)</text>
         <text class="m" x="1030" y="133">    / (1,4826 · MAD)</text>
-        <text class="dim" x="1030" y="150">median, MAD — train-normal</text>
-        <text class="m" x="1030" y="176">T = max(σ по val,</text>
-        <text class="m" x="1030" y="191">    1,4826 · MAD_comb)</text>
+        <text class="dim" x="1030" y="149">median, MAD —</text>
+        <text class="dim" x="1030" y="163">по TRAIN (норма)</text>
+        <text class="m" x="1030" y="186">T = max(σ по VAL,</text>
+        <text class="m" x="1030" y="201">    1,4826 · MAD_comb)</text>
         <text class="dim" x="1030" y="226">в продукте confidence</text>
         <text class="dim" x="1030" y="241">= round(p · 100)</text>
-        <text class="dim" x="800" y="44">флаг и p считаются раздельно:</text>
-        <text class="dim" x="800" y="60">бывает флаг при p &lt; 0,5 и наоборот</text>
+        <text class="dim" x="800" y="44">метка и p_anomaly считаются</text>
+        <text class="dim" x="800" y="60">раздельно: возможна метка при p &lt; 0,5</text>
       </svg>
       </div>
-      <figcaption><b>Какие данные что настраивают.</b> Норма из train задаёт веса трёх AE, median/MAD ошибок и mean/std латентов. Норма из VAL даёт только раннюю остановку. Весь VAL (val-mixed) задаёт порог, температуру T, веса калибровки и выбор эксперимента. TEST попадает только в <code>eval_report.json</code>. <code>detector_confidence</code> в <code>detections.parquet</code> равен max(p, 1 − p), а в продуктовом контракте с коммита <code>aea3d8a</code> <code>confidence</code> = round(p · 100).</figcaption>
+      <figcaption><b>Какие данные что настраивают.</b> Нормальные трассы TRAIN задают веса трёх автоэнкодеров, median/MAD ошибок и mean/std латентных векторов. Нормальные трассы VAL используются только для ранней остановки. Весь VAL (норма и аномалии) задаёт порог, температуру T, веса калибровки и выбор эксперимента. TEST используется только в <code>eval_report.json</code>. <code>detector_confidence</code> в <code>detections.parquet</code> равен max(p, 1 − p), а в продуктовом контракте <code>confidence</code> = round(p · 100).</figcaption>
     </figure>
 
     <div>
-      <p class="tcap">Сетка экспериментов (<code>ars/configuration/experiments/e2__detector.py</code>, <code>CODES</code>): активны два кода, <code>laim</code> по умолчанию запускает оба, победитель — максимум <code>youden</code> на val-mixed.</p>
+      <p class="tcap">Сетка экспериментов (<code>ars/configuration/experiments/e2__detector.py</code>). По умолчанию запускаются два кода из <code>CODES</code>. <code>detector.experiments</code> принимает любой код формата <code>{epi}_{sem}_{comb}_{batch}_{lr}[_{arch}]</code>; некорректный код вызывает ошибку до начала s1. Порог подбирается по <code>detector.threshold_metric</code> (по умолчанию youden), если эксперимент не задаёт метрику явно; эксперимент выбирается по <code>select_metric</code> на VAL. В S2Meta сохраняются <code>selection_value</code> (VAL) и <code>test_value</code> (TEST).</p>
       <div class="tbl">
         <table>
-          <thead><tr><th>Код</th><th>Архитектура</th><th>Потери EPI / SEM / FMLP</th><th>Батч</th><th>Метрика порога</th></tr></thead>
+          <thead><tr><th>Код</th><th>Архитектура</th><th>Потери EPI / SEM / FMLP</th><th>Размер батча</th><th>lr</th></tr></thead>
           <tbody>
-            <tr><td><code>hub_mse_mse_08_4</code></td><td>базовая, как на схеме</td><td>Huber / MSE / MSE</td><td class="num">8</td><td><code>youden</code></td></tr>
-            <tr><td><code>hub_mse_hub_32_4_deep</code></td><td>deep: 10 и 14 слоёв LSTM, FMLP из 14 скрытых слоёв</td><td>Huber / MSE / Huber</td><td class="num">32</td><td><code>precision</code> — назначена по позиции, см. <span class="bdg" style="display:inline-grid;vertical-align:-3px">3</span></td></tr>
+            <tr><td><code>hub_mse_mse_08_4</code></td><td>базовая, как на схеме</td><td>Huber / MSE / MSE</td><td class="num">8</td><td class="num">1e-4</td></tr>
+            <tr><td><code>hub_mse_hub_32_4_deep</code></td><td>deep: 10 и 14 слоёв LSTM, FMLP-AE из 14 скрытых слоёв</td><td>Huber / MSE / Huber</td><td class="num">32</td><td class="num">1e-4</td></tr>
           </tbody>
         </table>
       </div>
@@ -1162,72 +1146,74 @@ footer p{max-width:100ch}
   <div class="sec-head">
     <p class="sec-k"><i style="--c:var(--cls)"></i>s3 · ars/stages/s3__classifier.py · ars/models/m3__classifier</p>
     <h2>Классификатор типа аномалии</h2>
-    <p>Supervised-стек на чистом JAX. Он учится на инъецированных аномалиях из VAL ∪ TEST, а в инференсе размечает только флагнутые трассы внутри <code>build_product_contract</code>. Класса «норма» нет: ложное срабатывание детектора тоже получит один из пяти типов. Отсевом ложных срабатываний занимается RCA-узел.</p>
+    <p>Стекинг-ансамбль на JAX, обучение с учителем. Он обучается на внедрённых аномалиях из VAL ∪ TEST, а на инференсе размечает только помеченные трассы внутри <code>build_product_contract</code>. Класса «норма» нет: ложному срабатыванию детектора тоже будет присвоен один из пяти типов. Ложные срабатывания отфильтровывает узел RCA.</p>
   </div>
   <figure class="fig">
     <div class="scroll">
-    <svg class="dg" viewBox="0 0 1280 256" style="--minw:1000px" role="img" aria-label="Классификатор s3: вектор из 922 признаков, в основном латенты детектора, идёт в три базовые модели; их вероятности вне фолдов идут в мета-модель, которая выдаёт anomaly_type и уверенность.">
+    <svg class="dg" viewBox="0 0 1280 274" style="--minw:1000px" role="img" aria-label="Классификатор s3: вектор из 922 признаков, в основном латентные векторы детектора, подаётся в три базовые модели; их out-of-fold вероятности подаются в мета-модель, которая выдаёт anomaly_type и уверенность.">
       <defs>
         <marker id="f4-a" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah" d="M0 1.5 L9 5 L0 8.5 Z"/></marker>
       </defs>
       <text class="hd" x="20" y="22">ВЕКТОР ПРИЗНАКОВ · 922 ИЗМЕРЕНИЯ · В МАСШТАБЕ</text>
-      <rect class="bar-d" x="20" y="40" width="75" height="30"/>
-      <rect class="bar-d2" x="95" y="40" width="449.8" height="30"/>
-      <rect class="bar-i" x="544.8" y="40" width="2.9" height="30"/>
-      <rect class="bar-a" x="547.7" y="40" width="2.3" height="30"/>
-      <rect class="bar-q" x="550" y="40" width="10" height="30"/>
-      <text class="m b" x="57.5" y="59" text-anchor="middle">z_epi 128</text>
-      <text class="m b" x="320" y="59" text-anchor="middle">z_sem 768 — латенты детектора</text>
-      <path class="gridl" d="M544.8 71 L440 99 M560 71 L560 99" style="fill:none"/>
-      <rect class="bar-i" x="440" y="100" width="23" height="18"/>
-      <rect class="bar-a" x="463" y="100" width="18.5" height="18"/>
-      <rect class="bar-q" x="481.5" y="100" width="78.5" height="18"/>
-      <text class="m xs" x="451.5" y="131" text-anchor="middle">5</text>
-      <text class="m xs" x="472.3" y="131" text-anchor="middle">4</text>
-      <text class="m xs" x="520.8" y="131" text-anchor="middle">17</text>
-      <text class="faint" x="20" y="102">хвост из 26 измерений, увеличен справа:</text>
+      <rect class="bar-d" x="20" y="40" width="66.6" height="30"/>
+      <rect class="bar-d2" x="86.6" y="40" width="399.8" height="30"/>
+      <rect class="bar-i" x="486.4" y="40" width="2.6" height="30"/>
+      <rect class="bar-a" x="489" y="40" width="2.1" height="30"/>
+      <rect class="bar-q" x="491.1" y="40" width="8.9" height="30"/>
+      <text class="m b" x="53.3" y="59" text-anchor="middle">z_epi 128</text>
+      <text class="m b" x="286.5" y="59" text-anchor="middle">z_sem 768 — латентные векторы детектора</text>
+      <path class="gridl" d="M486.4 71 L380 99 M500 71 L500 99" style="fill:none"/>
+      <rect class="bar-i" x="380" y="100" width="23" height="18"/>
+      <rect class="bar-a" x="403" y="100" width="18.5" height="18"/>
+      <rect class="bar-q" x="421.5" y="100" width="78.5" height="18"/>
+      <text class="m xs" x="391.5" y="131" text-anchor="middle">5</text>
+      <text class="m xs" x="412.3" y="131" text-anchor="middle">4</text>
+      <text class="m xs" x="460.8" y="131" text-anchor="middle">17</text>
+      <text class="faint" x="20" y="102">последние 26 измерений, увеличено:</text>
       <text class="m" x="20" y="120">5 — e_epi, e_sem, e_comb, p, confidence</text>
       <text class="m" x="20" y="134">4 — robust z трёх ошибок, e_comb − порог</text>
-      <text class="m" x="20" y="148">17 — настройки детектора, одинаковы во всех строках</text>
+      <text class="m" x="20" y="148">17 — настройки детектора, одинаковые во всех строках</text>
 
-      <path class="w" d="M566 55 H578 V36 H749" marker-end="url(#f4-a)"/>
-      <path class="w" d="M578 55 V80 H749" marker-end="url(#f4-a)"/>
-      <path class="w" d="M578 80 V124 H749" marker-end="url(#f4-a)"/>
-      <rect class="bx b-cls" x="750" y="18" width="150" height="36" rx="5"/>
-      <text class="t" x="762" y="33">RF, 64 дерева</text>
-      <text class="m" x="762" y="47">oblivious, глубина 6</text>
-      <rect class="bx b-cls" x="750" y="62" width="150" height="36" rx="5"/>
-      <text class="t" x="762" y="77">GB, 200 раундов</text>
-      <text class="m" x="762" y="91">oblivious, lr 0,05</text>
-      <rect class="bx b-cls" x="750" y="106" width="150" height="36" rx="5"/>
-      <text class="t" x="762" y="121">LogReg</text>
-      <text class="m" x="762" y="135">мультиномиальная</text>
-      <path class="w" d="M900 36 H914 V80 H929" marker-end="url(#f4-a)"/>
-      <path class="w" d="M900 80 H929" marker-end="url(#f4-a)"/>
-      <path class="w" d="M900 124 H914 V80" />
-      <rect class="bx b-cls" x="930" y="60" width="132" height="40" rx="5"/>
-      <text class="t" x="942" y="77">OOF, 5 фолдов</text>
-      <text class="m" x="942" y="92">15 вероятностей</text>
-      <path class="w" d="M1062 80 H1075" marker-end="url(#f4-a)"/>
-      <rect class="bx b-cls" x="1076" y="60" width="80" height="40" rx="5"/>
-      <text class="t" x="1086" y="77">мета-GB</text>
-      <text class="m" x="1086" y="92">stack</text>
-      <path class="w" d="M1156 80 H1171" marker-end="url(#f4-a)"/>
-      <rect class="bx b-cls strong" x="1172" y="56" width="104" height="48" rx="5"/>
-      <text class="m t" x="1182" y="76">anomaly_type</text>
-      <text class="m" x="1182" y="92">+ confidence</text>
+      <path class="w" d="M506 55 H518 V36 H555" marker-end="url(#f4-a)"/>
+      <path class="w" d="M518 55 V80 H555" marker-end="url(#f4-a)"/>
+      <path class="w" d="M518 80 V124 H555" marker-end="url(#f4-a)"/>
+      <rect class="bx b-cls" x="556" y="18" width="200" height="36" rx="5"/>
+      <text class="t" x="568" y="33">Случайный лес</text>
+      <text class="m" x="568" y="47">64 дерева, глубина 6</text>
+      <rect class="bx b-cls" x="556" y="62" width="200" height="36" rx="5"/>
+      <text class="t" x="568" y="77">Градиентный бустинг</text>
+      <text class="m" x="568" y="91">200 раундов, lr 0,05</text>
+      <rect class="bx b-cls" x="556" y="106" width="200" height="36" rx="5"/>
+      <text class="t" x="568" y="121">Логистическая регрессия</text>
+      <text class="m" x="568" y="135">мультиномиальная</text>
+      <path class="w" d="M756 36 H770 V80 H789" marker-end="url(#f4-a)"/>
+      <path class="w" d="M756 80 H789" marker-end="url(#f4-a)"/>
+      <path class="w" d="M756 124 H770 V80" />
+      <rect class="bx b-cls" x="790" y="60" width="176" height="40" rx="5"/>
+      <text class="t" x="802" y="77">Out-of-fold, 5 фолдов</text>
+      <text class="m" x="802" y="92">15 вероятностей</text>
+      <path class="w" d="M966 80 H983" marker-end="url(#f4-a)"/>
+      <rect class="bx b-cls" x="984" y="60" width="122" height="40" rx="5"/>
+      <text class="t" x="996" y="77">Мета-модель</text>
+      <text class="m" x="996" y="92">бустинг</text>
+      <path class="w" d="M1106 80 H1123" marker-end="url(#f4-a)"/>
+      <rect class="bx b-cls strong" x="1124" y="56" width="152" height="48" rx="5"/>
+      <text class="m t" x="1136" y="76">anomaly_type</text>
+      <text class="m" x="1136" y="92">classifier_confidence</text>
 
-      <rect class="bx b-cls" x="20" y="190" width="600" height="56" rx="6"/>
-      <text class="t" x="34" y="210">Обучение · mode=train</text>
-      <text x="34" y="227">инъекции из VAL ∪ TEST, пересплит 60/20/20 по классам; ≥ 5 примеров на класс,</text>
-      <text x="34" y="241">иначе ValueError и прогон идёт дальше без s3; выбор по macro-F1 на s3-val</text>
-      <rect class="bx b-cls" x="652" y="190" width="620" height="56" rx="6"/>
-      <text class="t" x="666" y="210">Применение · mode=inference</text>
-      <text x="666" y="227">только флагнутые строки, внутри build_product_contract; argmax даже для ложных</text>
-      <text x="666" y="241">срабатываний; сбой → строки без типа и classifier_error в eval_report</text>
+      <rect class="bx b-cls" x="20" y="186" width="600" height="78" rx="6"/>
+      <text class="t" x="34" y="206">Обучение · mode=train</text>
+      <text x="34" y="225">внедрённые аномалии из VAL ∪ TEST, повторное разбиение 60/20/20 по классам;</text>
+      <text x="34" y="241">не меньше 5 примеров на класс, иначе ValueError и прогон продолжается без s3;</text>
+      <text x="34" y="257">выбор модели по macro-F1 на отложенной части s3</text>
+      <rect class="bx b-cls" x="652" y="186" width="624" height="78" rx="6"/>
+      <text class="t" x="666" y="206">Применение · mode=inference</text>
+      <text x="666" y="225">только помеченные строки, внутри build_product_contract;</text>
+      <text x="666" y="241">тип присваивается всегда, в том числе ложным срабатываниям;</text>
+      <text x="666" y="257">при ошибке строки остаются без типа, причина — classifier_error в eval_report</text>
     </svg>
     </div>
-    <figcaption><b>Что на самом деле видит классификатор.</b> 896 из 922 измерений — латенты детектора. Семнадцать «настроек» одинаковы во всех строках модели и информации не несут. Стекинг: базовые модели переобучаются по фолдам с нулевым весом отложенных строк, мета-GB учится на их вероятностях вне фолдов. Границы квантильных бинов считаются по всей матрице — это та самая утечка F-33.</figcaption>
+    <figcaption><b>Состав признаков.</b> 896 из 922 измерений — латентные векторы детектора; 17 настроек детектора одинаковы во всех строках и информации не несут. Стекинг: базовые модели обучаются по 5 фолдам с нулевым весом отложенных строк, мета-модель — на их out-of-fold вероятностях. Деревья симметричные (oblivious). Границы квантильных бинов вычисляются по всей матрице, включая отложенный фолд (известная утечка F-33).</figcaption>
   </figure>
 </section>
 
@@ -1235,20 +1221,19 @@ footer p{max-width:100ch}
 <section id="attribution">
   <div class="sec-head">
     <p class="sec-k"><i style="--c:var(--rca)"></i>s4 · m2__detector/attribution.py · ars/stages/s4__rca.py</p>
-    <h2>Атрибуция: где именно ошибся автоэнкодер</h2>
-    <p>Поэлементная ошибка ветви считается в её же функции потерь. Среднее по признакам даёт ошибку спана, среднее по валидным шагам — ошибку признака. Для каждой трассы это даёт индексный JSON <code>rca_attribution</code>. Для флагнутых <code>export_detector_rca</code> добавляет имена, каталог спанов и значения в натуральных единицах — блок <code>laim.detector_rca/1</code>.</p>
+    <h2>Атрибуция ошибки реконструкции</h2>
+    <p>Поэлементная ошибка ветви вычисляется в её функции потерь. Среднее по признакам даёт ошибку спана, среднее по валидным шагам — ошибку признака. Для каждой трассы результат хранится в индексном JSON <code>rca_attribution</code>. Для помеченных трасс <code>export_detector_rca</code> добавляет имена, каталог спанов и значения в исходных единицах — блок <code>laim.detector_rca/1</code>.</p>
   </div>
 
   <div class="two-wide">
     <figure class="fig">
-      <svg class="dg" viewBox="0 0 780 446" role="img" aria-label="Иллюстрация атрибуции: матрица ошибок спаны на признаки; средние по строкам дают топ спанов, средние по столбцам — топ признаков; пик признака — шаг с максимальной ошибкой; дальше индексы уходят в rca_attribution и, для флагнутых, в detector_rca.">
+      <svg class="dg" viewBox="0 0 780 446" role="img" aria-label="Иллюстрация атрибуции: матрица ошибок «спаны × признаки»; средние по строкам дают ранжирование спанов, средние по столбцам — ранжирование признаков; пиковый спан признака — спан с максимальной ошибкой; индексы попадают в rca_attribution, а для помеченных трасс — в detector_rca.">
         <defs>
           <marker id="f5-a" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah" d="M0 1.5 L9 5 L0 8.5 Z"/></marker>
         </defs>
         <text class="hd" x="0" y="14">ИЛЛЮСТРАЦИЯ · EPI-ОШИБКА [T × F], ЯРЧЕ — БОЛЬШЕ</text>
         <text class="faint" x="120" y="38">признаки f →</text>
         <text class="faint" x="428" y="38">ошибка спана</text>
-        <!-- row labels -->
         <text class="m" x="112" y="62" text-anchor="end">0 start_agent</text>
         <text class="m" x="112" y="82" text-anchor="end">1 llm</text>
         <text class="m" x="112" y="102" text-anchor="end">2 tool</text>
@@ -1256,8 +1241,7 @@ footer p{max-width:100ch}
         <text class="m" x="112" y="142" text-anchor="end">4 retriever</text>
         <text class="m" x="112" y="162" text-anchor="end">5 tool</text>
         <text class="m" x="112" y="182" text-anchor="end">6 output_request</text>
-        <text class="m faint" x="112" y="202" text-anchor="end">паддинг</text>
-        <!-- heat cells: 12 cols x 7 rows, cell 24x20 at x=120+24c, y=48+20r -->
+        <text class="m faint" x="112" y="202" text-anchor="end">дополнение</text>
         <g class="cells">
           <rect class="cell" x="120" y="48" width="23" height="19" fill-opacity=".10"/><rect class="cell" x="144" y="48" width="23" height="19" fill-opacity=".08"/><rect class="cell" x="168" y="48" width="23" height="19" fill-opacity=".12"/><rect class="cell" x="192" y="48" width="23" height="19" fill-opacity=".06"/><rect class="cell" x="216" y="48" width="23" height="19" fill-opacity=".10"/><rect class="cell" x="240" y="48" width="23" height="19" fill-opacity=".07"/><rect class="cell" x="264" y="48" width="23" height="19" fill-opacity=".09"/><rect class="cell" x="288" y="48" width="23" height="19" fill-opacity=".15"/><rect class="cell" x="312" y="48" width="23" height="19" fill-opacity=".06"/><rect class="cell" x="336" y="48" width="23" height="19" fill-opacity=".06"/><rect class="cell" x="360" y="48" width="23" height="19" fill-opacity=".08"/><rect class="cell" x="384" y="48" width="23" height="19" fill-opacity=".10"/>
           <rect class="cell" x="120" y="68" width="23" height="19" fill-opacity=".12"/><rect class="cell" x="144" y="68" width="23" height="19" fill-opacity=".20"/><rect class="cell" x="168" y="68" width="23" height="19" fill-opacity=".10"/><rect class="cell" x="192" y="68" width="23" height="19" fill-opacity=".08"/><rect class="cell" x="216" y="68" width="23" height="19" fill-opacity=".15"/><rect class="cell" x="240" y="68" width="23" height="19" fill-opacity=".10"/><rect class="cell" x="264" y="68" width="23" height="19" fill-opacity=".12"/><rect class="cell" x="288" y="68" width="23" height="19" fill-opacity=".30"/><rect class="cell" x="312" y="68" width="23" height="19" fill-opacity=".10"/><rect class="cell" x="336" y="68" width="23" height="19" fill-opacity=".07"/><rect class="cell" x="360" y="68" width="23" height="19" fill-opacity=".09"/><rect class="cell" x="384" y="68" width="23" height="19" fill-opacity=".11"/>
@@ -1268,14 +1252,12 @@ footer p{max-width:100ch}
           <rect class="cell" x="120" y="168" width="23" height="19" fill-opacity=".10"/><rect class="cell" x="144" y="168" width="23" height="19" fill-opacity=".12"/><rect class="cell" x="168" y="168" width="23" height="19" fill-opacity=".09"/><rect class="cell" x="192" y="168" width="23" height="19" fill-opacity=".07"/><rect class="cell" x="216" y="168" width="23" height="19" fill-opacity=".20"/><rect class="cell" x="240" y="168" width="23" height="19" fill-opacity=".08"/><rect class="cell" x="264" y="168" width="23" height="19" fill-opacity=".10"/><rect class="cell" x="288" y="168" width="23" height="19" fill-opacity=".35"/><rect class="cell" x="312" y="168" width="23" height="19" fill-opacity=".15"/><rect class="cell" x="336" y="168" width="23" height="19" fill-opacity=".08"/><rect class="cell" x="360" y="168" width="23" height="19" fill-opacity=".30"/><rect class="cell" x="384" y="168" width="23" height="19" fill-opacity=".12"/>
         </g>
         <rect class="pad" x="120" y="188" width="287" height="19"/>
-        <text class="m faint" x="264" y="201" text-anchor="middle">маска: −∞, не ранжируется</text>
-        <!-- highlights -->
+        <text class="m faint" x="264" y="201" text-anchor="middle">дополнение: −∞, не ранжируется</text>
         <rect class="outl" x="119" y="107" width="289" height="21" rx="2"/>
         <rect class="outl-d" x="287" y="45" width="25" height="146" rx="2"/>
         <circle cx="228" cy="117.5" r="3" style="fill:var(--ink)"/>
         <circle cx="300" cy="117.5" r="3" style="fill:var(--ink)"/>
         <circle cx="372" cy="117.5" r="3" style="fill:var(--ink)"/>
-        <!-- span error bars (row means, scale 300px per 1.0) -->
         <rect class="bar-q" x="428" y="52" width="26" height="11" rx="1.5"/>
         <rect class="bar-r" x="428" y="72" width="38.5" height="11" rx="1.5"/>
         <rect class="bar-q" x="428" y="92" width="25.7" height="11" rx="1.5"/>
@@ -1287,7 +1269,6 @@ footer p{max-width:100ch}
         <text class="m b" x="532" y="122">#1</text>
         <text class="m" x="477" y="182">#2</text>
         <text class="m faint" x="428" y="202">−∞</text>
-        <!-- feature error bars (col means, baseline 284, scale 160px per 1.0) -->
         <line class="gridl" x1="120" y1="284.5" x2="408" y2="284.5"/>
         <rect class="bar-q" x="124" y="266.6" width="16" height="17.4"/>
         <rect class="bar-q" x="148" y="262" width="16" height="22"/>
@@ -1305,18 +1286,16 @@ footer p{max-width:100ch}
         <text class="m" x="372" y="247" text-anchor="middle">#2</text>
         <text class="m" x="228" y="249" text-anchor="middle">#3</text>
         <text class="faint" x="120" y="301">ошибка признака: среднее по валидным шагам</text>
-        <!-- annotations -->
         <text class="t" x="560" y="62">top-k спанов</text>
         <text class="dim" x="560" y="78">среднее ошибки по признакам;</text>
-        <text class="dim" x="560" y="93">паддинг не участвует</text>
-        <text class="t" x="560" y="122">драйверы спана</text>
-        <text class="dim" x="560" y="138">top-3 признака в строке</text>
-        <text class="dim" x="560" y="153">топ-спана (точки), только</text>
-        <text class="dim" x="560" y="168">step-признаки</text>
-        <text class="t" x="560" y="202">пик признака</text>
-        <text class="dim" x="560" y="218">шаг, где признак ошибается</text>
-        <text class="dim" x="560" y="233">сильнее всего, + obs и exp</text>
-        <!-- outputs -->
+        <text class="dim" x="560" y="93">дополнение не учитывается</text>
+        <text class="t" x="560" y="122">ключевые признаки спана</text>
+        <text class="dim" x="560" y="138">top-3 признака в строке спана</text>
+        <text class="dim" x="560" y="153">(точки), только признаки</text>
+        <text class="dim" x="560" y="168">уровня шага (scope = step)</text>
+        <text class="t" x="560" y="202">пиковый спан признака</text>
+        <text class="dim" x="560" y="218">спан с максимальной ошибкой</text>
+        <text class="dim" x="560" y="233">признака; observed и expected</text>
         <rect class="bx b-src" x="0" y="330" width="236" height="58" rx="6"/>
         <text class="m t" x="12" y="350">rca_top_span_*</text>
         <text class="m t" x="12" y="366">rca_top_feature_*</text>
@@ -1325,21 +1304,21 @@ footer p{max-width:100ch}
         <rect class="bx b-src" x="264" y="330" width="236" height="58" rx="6"/>
         <text class="m t" x="276" y="350">rca_attribution</text>
         <text class="dim" x="276" y="366">JSON в индексах i, f;</text>
-        <text class="dim" x="276" y="381">логиты дают ровно p_anomaly</text>
+        <text class="dim" x="276" y="381">σ(Σ логитов) = p_anomaly</text>
         <path class="w" d="M500 359 H527" marker-end="url(#f5-a)"/>
         <rect class="bx b-rca strong" x="528" y="330" width="252" height="58" rx="6"/>
-        <text class="m t c-rca" x="540" y="350">detector_rca · флагнутые</text>
+        <text class="m t c-rca" x="540" y="350">detector_rca · помеченные</text>
         <text class="dim" x="540" y="366">имена, каталог спанов,</text>
-        <text class="dim" x="540" y="381">*_raw в натуральных единицах</text>
+        <text class="dim" x="540" y="381">*_raw в исходных единицах</text>
         <text class="faint" x="0" y="416">SEM: та же схема по [T × 1024], но только спаны — измерения эмбеддинга не именуются.</text>
-        <text class="faint" x="0" y="434">comb_share_epi — доля ошибки FMLP-AE, которая приходится на EPI-блок латента (flag_share).</text>
+        <text class="faint" x="0" y="434">comb_share_epi — доля ошибки FMLP-AE, приходящаяся на EPI-часть латентного вектора (flag_share).</text>
       </svg>
-      <figcaption>Иллюстрация на выдуманных числах: 7 спанов × 12 признаков. Средние по строкам и столбцам посчитаны по этим клеткам. В реальной трассе признаков F, спанов до T (длина самой длинной обучающей последовательности). Более длинные трассы усекаются и получают <code>detector_truncated</code>.</figcaption>
+      <figcaption>Иллюстрация на условных числах: 7 спанов × 12 признаков; средние по строкам и столбцам рассчитаны по этим клеткам. В реальной трассе признаков F, а спанов не больше T (длина самой длинной обучающей последовательности). Более длинные трассы усекаются и получают <code>detector_truncated</code>.</figcaption>
     </figure>
 
     <div class="stack">
       <div>
-        <p class="tcap">Блок <code>detector_rca</code> — структура, а не пример значений (<code>s4__rca.py:189–205</code>)</p>
+        <p class="tcap">Блок <code>detector_rca</code>: структура, а не пример значений (<code>s4__rca.py</code>)</p>
 <pre><span class="c">// только для строк с detector_is_anomaly; строгий JSON без NaN</span>
 { <span class="k">"schema"</span>: <span class="s">"laim.detector_rca/1"</span>, <span class="k">"agent_id"</span>,
   <span class="k">"scores"</span>: { p_anomaly, reconstruction_error <span class="c">// = e_comb</span>
@@ -1369,8 +1348,8 @@ footer p{max-width:100ch}
                           error_share, vs_typical } ] } }</pre>
       </div>
       <div class="prose">
-        <p><b>Как считаются значения.</b> <code>observed</code> и <code>expected</code> = z · scale + shift, то есть шкала самого признака (для лог-признаков — после log1p). <code>*_raw</code> обращает log1p только там, где это осмысленно (max, min, mean, квантили); для std и sum сырых значений нет. <code>clipped</code> ставится, если |z| упёрся в клип ±20. <code>vs_typical</code> — ошибка, делённая на медиану ошибки нормальных обучающих трасс.</p>
-        <p><b>Имена, которые легко перепутать.</b> Колонки <code>detector_z_epi</code> и <code>detector_z_sem</code> в <code>detections.parquet</code> — это нормализованные латентные векторы (128 и 768), вход s3. Robust z-оценки ошибок живут только внутри <code>rca_attribution</code> и <code>detector_rca</code> (<code>branch_z</code>).</p>
+        <p><b>Как вычисляются значения.</b> <code>observed</code> и <code>expected</code> = z · scale + shift, то есть значения в шкале самого признака (для лог-признаков — после log1p). <code>*_raw</code> обращает log1p только там, где это корректно (max, min, mean, квантили); для std и sum исходных значений нет. <code>clipped</code> ставится, если |z| достиг ограничения <code>norm_z_clip</code> (20). <code>vs_typical</code> — ошибка, делённая на медиану ошибки нормальных обучающих трасс.</p>
+        <p><b>Похожие имена.</b> Колонки <code>detector_z_epi</code> и <code>detector_z_sem</code> в <code>detections.parquet</code> — нормализованные латентные векторы (128 и 768), вход s3. Robust z-оценки ошибок есть только внутри <code>rca_attribution</code> и <code>detector_rca</code> (<code>branch_z</code>).</p>
       </div>
     </div>
   </div>
@@ -1380,24 +1359,22 @@ footer p{max-width:100ch}
 <section id="rca">
   <div class="sec-head">
     <p class="sec-k"><i style="--c:var(--rca)"></i>rca/ · отдельный узел SberDS · main.py::main</p>
-    <h2>RCA-узел: LLM проверяет флаг и пишет причину</h2>
-    <p>Узел не импортирует <code>ars</code> и <code>laim</code>, с детектором его связывает только JSON <code>test_anomalies</code>. Улики из <code>detector_rca</code> и связи между трейсами строятся детерминированно, без LLM. Отчёт о разработке агента, если подан, становится главным контекстом промпта. LLM возвращает вердикт и короткое RCA без категорий, а записи с вердиктом <code>normal</code> отбрасываются как ложные срабатывания.</p>
+    <h2>Узел RCA: проверка срабатывания и анализ первопричины</h2>
+    <p>Узел не импортирует <code>ars</code> и <code>laim</code>; с детектором его связывает только JSON <code>test_anomalies</code>. Сигнал детектора (<code>detector_rca</code>) и связи между трассами строятся детерминированно, без LLM. Отчёт о разработке агента, если подан, становится главным контекстом промпта. LLM возвращает вердикт и краткое описание первопричины без категорий; записи с вердиктом <code>normal</code> исключаются как ложные срабатывания.</p>
   </div>
 
   <div class="stack">
     <figure class="fig">
       <div class="scroll">
-      <svg class="dg" viewBox="0 0 1280 430" style="--minw:1040px" role="img" aria-label="Конвейер RCA-узла: разбор записей, детерминированные улики и связи между трейсами, отчёт агента, промпт, батчи к внешнему LLM, разбор ответов и решение оставить или отбросить запись; в режиме detector_only LLM не вызывается.">
+      <svg class="dg" viewBox="0 0 1280 430" style="--minw:1040px" role="img" aria-label="Конвейер узла RCA: разбор записей, детерминированный сигнал детектора и связи между трассами, отчёт агента, промпт, группы запросов к внешнему LLM, разбор ответов и решение оставить или исключить запись; в режиме detector_only LLM не вызывается.">
         <defs>
           <marker id="f6-a" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah" d="M0 1.5 L9 5 L0 8.5 Z"/></marker>
           <marker id="f6-r" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="ah-rca" d="M0 1.5 L9 5 L0 8.5 Z"/></marker>
           <marker id="f6-n" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto-start-reverse"><path class="ah-anom" d="M0 1.5 L9 5 L0 8.5 Z"/></marker>
         </defs>
-        <!-- mode bypass -->
         <path class="w w-rca w-dash" d="M355 47 V22 H1250 V240 H1231" marker-end="url(#f6-r)"/>
-        <text class="lbl c-rca" x="800" y="16" text-anchor="middle">mode=detector_only или отказ LLM при llm_fallback: все записи → unverified, RCA по уликам</text>
+        <text class="lbl c-rca" x="800" y="16" text-anchor="middle">mode=detector_only или отказ LLM при llm_fallback: все записи → unverified, RCA по сигналу детектора</text>
 
-        <!-- inputs -->
         <path class="w w-anom" d="M0 95 H19" marker-end="url(#f6-n)"/>
         <rect class="bx b-src" x="20" y="48" width="180" height="104" rx="6"/>
         <text class="m t" x="32" y="68">anom_data</text>
@@ -1407,46 +1384,41 @@ footer p{max-width:100ch}
         <text class="dim" x="32" y="134">11 полей + detector_rca</text>
         <rect class="bx b-src" x="20" y="320" width="180" height="80" rx="6"/>
         <text class="m t" x="32" y="340">agent_report</text>
-        <text class="dim" x="32" y="357">опционально</text>
+        <text class="dim" x="32" y="357">необязательный порт</text>
         <text class="dim" x="32" y="373">.docx, HTML, MHTML, txt</text>
         <text class="dim" x="32" y="389">PDF не принимается</text>
 
-        <!-- evidence -->
         <path class="w" d="M200 100 H239" marker-end="url(#f6-a)"/>
         <rect class="bx b-rca" x="240" y="48" width="230" height="152" rx="6"/>
-        <text class="t c-rca" x="252" y="68">Улики · evidence.parse</text>
-        <text class="dim" x="252" y="84">детерминированно, без LLM</text>
-        <text x="252" y="104">сигнал: ветвь с z ≥ 2, иначе</text>
+        <text class="t c-rca" x="252" y="68">Сигнал детектора</text>
+        <text class="dim" x="252" y="84">evidence.parse, без LLM</text>
+        <text x="252" y="104">ветвь: та, у которой z ≥ 2, иначе</text>
         <text x="252" y="119">flag_share ≥ 0,65 / ≤ 0,35</text>
         <text x="252" y="137">сила: p ≥ 0,8 · ≥ 0,5 · ниже</text>
-        <text x="252" y="155">≤ 3 шага, с ошибкой — первыми</text>
-        <text x="252" y="173">LLM видит brief: p и шаги;</text>
+        <text x="252" y="155">≤ 3 спана, с ошибкой — первыми</text>
+        <text x="252" y="173">для LLM brief: p и спаны;</text>
         <text x="252" y="188">full: + признаки и гипотеза</text>
 
-        <!-- related -->
         <path class="w" d="M200 130 H220 V252 H239" marker-end="url(#f6-a)"/>
         <rect class="bx b-rca" x="240" y="214" width="230" height="76" rx="6"/>
-        <text class="t c-rca" x="252" y="234">Связи · related.py</text>
-        <text class="dim" x="252" y="250">по всему входу, без LLM</text>
+        <text class="t c-rca" x="252" y="234">Связанные трассы</text>
+        <text class="dim" x="252" y="250">related.py, по всему входу</text>
         <text x="252" y="267">общий код или ≥ 2 редких</text>
         <text x="252" y="282">слова (IDF) → до 3 related</text>
 
-        <!-- records path to prompt -->
         <path class="w" d="M110 152 V305 H509" marker-end="url(#f6-a)"/>
         <text class="lbl" x="236" y="300">записи без detector_rca и rca_results</text>
 
-        <!-- agent report load -->
         <path class="w" d="M200 360 H239" marker-end="url(#f6-a)"/>
         <rect class="bx b-rca" x="240" y="320" width="230" height="80" rx="6"/>
         <text class="t c-rca" x="252" y="340">agent_report.load</text>
         <text x="252" y="357">путь, bytes, dict, Document</text>
-        <text x="252" y="373">чистка шаблона и PII</text>
+        <text x="252" y="373">удаление шаблона и ПДн</text>
         <text x="252" y="389">бюджет report_max_chars</text>
         <path class="w" d="M470 360 H509" marker-end="url(#f6-a)"/>
         <path class="w" d="M470 124 H509" marker-end="url(#f6-a)"/>
         <path class="w" d="M470 252 H509" marker-end="url(#f6-a)"/>
 
-        <!-- prompt -->
         <rect class="bx b-rca" x="510" y="48" width="210" height="352" rx="6"/>
         <text class="t c-rca" x="522" y="68">Промпт</text>
         <text class="m" x="522" y="88">system, по порядку:</text>
@@ -1458,28 +1430,27 @@ footer p{max-width:100ch}
         <text x="522" y="184">4 шаги: 0 — по отчёту;</text>
         <text x="522" y="199">   1 ответ против запроса;</text>
         <text x="522" y="214">   2 сравнение с related;</text>
-        <text x="522" y="229">   3 улики; 4 вердикт</text>
+        <text x="522" y="229">   3 сигнал; 4 вердикт</text>
         <text x="522" y="245">5 правила: записи — данные</text>
-        <text x="522" y="261">6 формат: rca ≤ 600 симв.,</text>
+        <text x="522" y="261">6 формат: rca ≤ 600 символов,</text>
         <text x="522" y="276">   без категорий</text>
         <text x="522" y="292">7 add_info — последним</text>
         <line class="div" x1="522" y1="312" x2="708" y2="312"/>
         <text class="m" x="522" y="330">user:</text>
         <text x="522" y="348">TRACES_DATA: id, поля,</text>
         <text x="522" y="363">related, detector_evidence</text>
-        <text x="522" y="379">строки > 24 тыс. → 16 + 8</text>
+        <text x="522" y="379">строки &gt; 24 тыс. → 16 + 8</text>
 
-        <!-- batching -->
         <path class="w" d="M720 144 H759" marker-end="url(#f6-a)"/>
         <rect class="bx b-rca" x="760" y="48" width="200" height="192" rx="6"/>
-        <text class="t c-rca" x="772" y="68">Батчи · _analyze</text>
-        <text x="772" y="88">порядок: связанные — рядом</text>
+        <text class="t c-rca" x="772" y="68">Группы запросов</text>
+        <text x="772" y="88">связанные записи — подряд</text>
         <text x="772" y="104">записи трассы — вместе</text>
         <text x="772" y="122">≤ 8 записей и ≤ 32 КБ</text>
-        <text x="772" y="140">сбой → батч пополам,</text>
-        <text x="772" y="155">3 успеха → снова вдвое</text>
-        <text x="772" y="173">429/503 → ждать, ≤ 60 с</text>
-        <text x="772" y="191">пропущенные → повтор ≤ 3</text>
+        <text x="772" y="140">сбой → группа пополам,</text>
+        <text x="772" y="155">3 успеха подряд → ×2</text>
+        <text x="772" y="173">429/503 → пауза до 60 с</text>
+        <text x="772" y="191">пропуски → повтор ≤ 3 раз</text>
         <text x="772" y="209">3 сбоя транспорта подряд</text>
         <text x="772" y="224">→ LlmUnavailable</text>
         <path class="w" d="M840 241 V299" marker-end="url(#f6-a)"/>
@@ -1492,7 +1463,6 @@ footer p{max-width:100ch}
         <text class="dim" x="772" y="353">giga* → GigaChat</text>
         <text class="dim" x="772" y="369">иначе SDS /chat/completions</text>
 
-        <!-- answers -->
         <path class="w" d="M960 100 H999" marker-end="url(#f6-a)"/>
         <rect class="bx b-rca" x="1000" y="48" width="230" height="118" rx="6"/>
         <text class="t c-rca" x="1012" y="68">Разбор · answers.py</text>
@@ -1500,20 +1470,18 @@ footer p{max-width:100ch}
         <text x="1012" y="103">сопоставление по id или trace_id</text>
         <text x="1012" y="119">verdict, confidence, severity,</text>
         <text x="1012" y="135">span_id, rca, business_desc.</text>
-        <text x="1012" y="151">метки и категории вычищаются</text>
+        <text x="1012" y="151">метки и категории удаляются</text>
         <path class="w" d="M1115 166 V181" marker-end="url(#f6-a)"/>
 
-        <!-- decision -->
         <rect class="bx b-rca strong" x="1000" y="182" width="230" height="122" rx="6"/>
         <text class="t c-rca" x="1012" y="202">Решение · report.py</text>
         <text x="1012" y="221"><tspan class="m">anomaly</tspan> → остаётся</text>
         <text x="1012" y="237"><tspan class="m">uncertain</tspan> → остаётся*</text>
         <text x="1012" y="253">нет ответа → <tspan class="m">unverified</tspan>*</text>
-        <text class="c-anom" x="1012" y="269"><tspan class="m c-anom">normal</tspan> → отброшена как FP</text>
-        <text class="dim" x="1012" y="289">* если keep_uncertain = true</text>
+        <text class="c-anom" x="1012" y="269"><tspan class="m c-anom">normal</tspan> → исключается</text>
+        <text class="dim" x="1012" y="289">* при keep_uncertain = true</text>
         <path class="w" d="M1115 304 V321" marker-end="url(#f6-a)"/>
 
-        <!-- outputs -->
         <rect class="bx b-plat" x="1000" y="322" width="230" height="98" rx="6"/>
         <text class="m t" x="1012" y="342">res</text>
         <text class="dim" x="1046" y="342">→ LAIM anomaly report</text>
@@ -1521,44 +1489,44 @@ footer p{max-width:100ch}
         <text class="dim" x="1012" y="373">location, related_traces,</text>
         <text class="dim" x="1012" y="388">agent_report_used</text>
         <text class="m t" x="1012" y="408">rca_audit</text>
-        <text class="dim" x="1082" y="408">аудит всех решений</text>
+        <text class="dim" x="1082" y="408">журнал всех решений</text>
       </svg>
       </div>
-      <figcaption><b>Ложное срабатывание отсеивается здесь.</b> Детектор флагует по порогу, s3 обязан выбрать тип, и только LLM может сказать <code>normal</code>. Самые сильные доказательства модель получает из соседних трейсов: <code>related.py</code> находит записи с тем же кодом или термином по всему входу, а батчи собираются так, чтобы связанные записи шли вместе. В режиме <code>llm</code> недоступность LLM роняет узел, <code>llm_fallback</code> переходит на улики, а <code>detector_only</code> вообще не зовёт LLM и оставляет все записи с вердиктом <code>unverified</code>.</figcaption>
+      <figcaption><b>Здесь отфильтровываются ложные срабатывания.</b> Детектор ставит метку по порогу, s3 всегда выбирает тип, и только LLM может вернуть <code>normal</code>. Самые сильные доказательства модель получает из связанных трасс: <code>related.py</code> находит записи с тем же кодом или термином по всему входу, а группы запросов формируются так, чтобы связанные записи шли вместе. В режиме <code>llm</code> недоступность LLM завершает узел с ошибкой; <code>llm_fallback</code> в этом случае использует сигнал детектора, а <code>detector_only</code> вообще не вызывает LLM и оставляет все записи с вердиктом <code>unverified</code>.</figcaption>
     </figure>
 
     <div class="two">
       <div>
-        <p class="tcap">Запись на входе (<code>test_anomalies</code>) — 11 полей в фиксированном порядке и <code>detector_rca</code></p>
+        <p class="tcap">Запись на входе (<code>test_anomalies</code>): 11 полей в фиксированном порядке и <code>detector_rca</code></p>
 <pre>{ <span class="k">"anomalies"</span>: [ {
   _comment, trace_id, starttime, endtime,
-  anomaly_type,          <span class="c">// из s3, пусто при сбое</span>
+  anomaly_type,          <span class="c">// из s3, пусто при ошибке</span>
   confidence,            <span class="c">// round(p_anomaly · 100)</span>
   business_description,
   user_query,            <span class="c">// первый input_request</span>
   agent_response,        <span class="c">// последний output_request</span>
-  tech_details,          <span class="c">// RCA-узел больше не заполняет</span>
-  rca_results,           <span class="c">// "" — заполнит RCA-узел</span>
-  detector_rca           <span class="c">// только если флаг</span>
+  tech_details,          <span class="c">// узел RCA не заполняет</span>
+  rca_results,           <span class="c">// "" — заполняет узел RCA</span>
+  detector_rca           <span class="c">// только для помеченных</span>
 } ] }</pre>
       </div>
       <div>
-        <p class="tcap">Запись на выходе (<code>res</code>): та же запись без <code>detector_rca</code>, поля детектора не меняются, <code>rca_results</code> теперь объект</p>
+        <p class="tcap">Запись на выходе (<code>res</code>): та же запись без <code>detector_rca</code>; поля детектора не меняются, <code>rca_results</code> становится объектом</p>
 <pre>rca_results: {
   verdict: anomaly | uncertain | unverified,
   verdict_confidence, severity,
   rca: <span class="s">"Суть с фактами и trace_id. Возможные</span>
-<span class="s">        причины: 1) …; 2) …; 3) …"</span>  <span class="c">// ≤ 600 симв.</span>
+<span class="s">        причины: 1) …; 2) …; 3) …"</span>  <span class="c">// ≤ 600 символов</span>
        <span class="c">// без LLM: { root_cause, evidence[],</span>
        <span class="c">//            recommendation }</span>
   location: { agent_id, span_id, span_name,
               span_kind, source: llm | detector },
-  related_traces: [ trace_id, … ],  <span class="c">// цитируемые в rca</span>
+  related_traces: [ trace_id, … ],  <span class="c">// упомянутые в rca</span>
   detector_evidence: { p_anomaly, strength, signal,
     category, hypothesis, top_spans[≤3],
     top_features[≤4], caveats },
   analyzed_by: "llm:&lt;model&gt;" | "detector",
-  agent_report_used: true }         <span class="c">// если отчёт дошёл</span></pre>
+  agent_report_used: true }         <span class="c">// если отчёт дошёл до LLM</span></pre>
       </div>
     </div>
 
@@ -1566,16 +1534,16 @@ footer p{max-width:100ch}
       <p class="tcap">Параметры узла (<code>rca/descriptor.json</code>)</p>
       <div class="tbl">
         <table>
-          <thead><tr><th>Параметр</th><th>По умолчанию</th><th>Смысл</th></tr></thead>
+          <thead><tr><th>Параметр</th><th>По умолчанию</th><th>Назначение</th></tr></thead>
           <tbody>
-            <tr><td><code>mode</code></td><td><code>llm</code></td><td><code>llm</code> — без LLM узел падает; <code>llm_fallback</code> — откат на улики; <code>detector_only</code> — LLM не вызывается</td></tr>
-            <tr><td><code>model_id</code></td><td><code>minimax-m2.5</code></td><td>префикс <code>giga</code> → <code>GigaChat</code>, иначе OpenAI-совместимый <code>SdsChatModel</code> через <code>AI_GATEWAY_URL</code></td></tr>
-            <tr><td><code>evidence_detail</code></td><td><code>brief</code></td><td>что LLM видит из сигнала детектора: <code>brief</code> — вероятность и подозрительные шаги с фрагментами, <code>full</code> — ещё признаки, отклонения и гипотеза</td></tr>
-            <tr><td><code>use_detector_evidence</code></td><td><code>true</code></td><td>передавать ли LLM сигнал детектора (выключение удобно для A/B)</td></tr>
+            <tr><td><code>mode</code></td><td><code>llm</code></td><td><code>llm</code> — при недоступности LLM узел завершается с ошибкой; <code>llm_fallback</code> — переход на сигнал детектора; <code>detector_only</code> — LLM не вызывается</td></tr>
+            <tr><td><code>model_id</code></td><td><code>minimax-m2.5</code></td><td>префикс <code>giga</code> → клиент <code>GigaChat</code>, иначе OpenAI-совместимый <code>SdsChatModel</code> через <code>AI_GATEWAY_URL</code></td></tr>
+            <tr><td><code>evidence_detail</code></td><td><code>brief</code></td><td>объём сигнала детектора в промпте: <code>brief</code> — вероятность и подозрительные спаны с фрагментами, <code>full</code> — дополнительно признаки, отклонения и гипотеза</td></tr>
+            <tr><td><code>use_detector_evidence</code></td><td><code>true</code></td><td>передавать ли LLM сигнал детектора (выключение используется для A/B-сравнения)</td></tr>
             <tr><td><code>keep_uncertain</code></td><td><code>true</code></td><td>оставлять в <code>res</code> записи <code>uncertain</code> и <code>unverified</code></td></tr>
-            <tr><td><code>report_max_chars</code></td><td class="num">20 000</td><td>бюджет отчёта агента, не меньше 1000; лишние разделы отбрасываются целиком, приложение с промптами — последним</td></tr>
+            <tr><td><code>report_max_chars</code></td><td class="num">20 000</td><td>ограничение размера отчёта агента в промпте, не меньше 1000; лишние разделы удаляются целиком, приложение с промптами — последним</td></tr>
             <tr><td><code>llm_temp</code> · <code>max_tokens</code></td><td class="num">0,001 · 8192</td><td>параметры генерации</td></tr>
-            <tr><td><code>add_info</code></td><td><code>" "</code></td><td>добавка в конец system-промпта, может переопределить формат <code>rca</code></td></tr>
+            <tr><td><code>add_info</code></td><td><code>" "</code></td><td>текст в конце system-промпта; может задать другой формат <code>rca</code></td></tr>
           </tbody>
         </table>
       </div>
@@ -1587,23 +1555,23 @@ footer p{max-width:100ch}
 <section id="report">
   <div class="sec-head">
     <p class="sec-k"><i style="--c:var(--plat)"></i>anomaly_report/ · отдельный узел SberDS · main.py::main</p>
-    <h2>Отчёт по аномалиям: последний узел цепочки</h2>
-    <p>Узел берёт <code>res</code> RCA-узла (или сразу <code>test_anomalies</code> детектора) и рендерит самодостаточный HTML без JS и JSON-сводку со светофором. Зависимостей нет, только стандартная библиотека Python.</p>
+    <h2>Узел отчёта: HTML-отчёт по аномалиям</h2>
+    <p>Узел принимает <code>res</code> узла RCA (или непосредственно <code>test_anomalies</code> детектора) и формирует самодостаточный HTML без JavaScript и JSON-сводку со светофором. Используется только стандартная библиотека Python.</p>
   </div>
   <div class="two">
     <div class="tbl">
       <table>
         <thead><tr><th>Шаг</th><th>Что происходит</th></tr></thead>
         <tbody>
-          <tr><td>Фильтр <span class="bdg" style="display:inline-grid;vertical-align:-3px">7</span></td><td>остаются записи с <code>confidence ≥ min_confidence</code> (по умолчанию 75). Детектор пишет туда round(p_anomaly · 100), RCA-узел это поле не трогает, поэтому в отчёт попадают трассы с p ≥ 0,75. Записи тестов дрифта и КМ исключаются, остальные сортируются по confidence</td></tr>
+          <tr><td>Фильтр</td><td>остаются записи с <code>confidence ≥ min_confidence</code> (по умолчанию 75). Детектор записывает туда round(p_anomaly · 100), узел RCA это поле не меняет, поэтому в отчёт попадают трассы с p_anomaly ≥ 0,75. Записи дрифт-тестов и деградации качества исключаются, остальные сортируются по confidence</td></tr>
           <tr><td>Типы</td><td><code>anomaly_types = auto</code>: блоки о типах показываются, только если s3 заполнил <code>anomaly_type</code> хотя бы у одной записи; <code>show</code> и <code>hide</code> включают и выключают их принудительно</td></tr>
-          <tr><td>HTML</td><td>«Описание показателей» (типы и шкала confidence), «Сводка», «Перечень аномалий»: карточки с trace_id, временем, типом, confidence, запросом, ответом и RCA. trace_id в тексте RCA ссылаются на карточки, категории и служебные метки вычищаются</td></tr>
-          <tr><td>Светофор</td><td><code>amber</code>, если показана хотя бы одна аномалия, иначе <code>green</code>: порога «сколько аномалий — плохо» пока нет</td></tr>
+          <tr><td>HTML</td><td>«Описание показателей» (типы и шкала confidence), «Сводка», «Перечень аномалий»: карточки с trace_id, временем, типом, confidence, запросом, ответом и RCA. trace_id в тексте RCA становятся ссылками на карточки; категории и служебные метки удаляются</td></tr>
+          <tr><td>Светофор</td><td><code>amber</code>, если показана хотя бы одна аномалия, иначе <code>green</code>; отдельного порога по числу аномалий нет</td></tr>
         </tbody>
       </table>
     </div>
     <div>
-      <p class="tcap">Выходные порты: <code>anomaly_report</code> — HTML в панели «Отчёт по аномалиям», <code>all_results</code> — сводка</p>
+      <p class="tcap">Выходные порты: <code>anomaly_report</code> — HTML на панели «Отчёт по аномалиям», <code>all_results</code> — сводка</p>
 <pre>all_results: {
   total, unique_traces, types, by_type[],
   shown, min_confidence,
@@ -1621,23 +1589,23 @@ footer p{max-width:100ch}
   <div class="sec-head">
     <p class="sec-k"><i style="--c:var(--plat)"></i>Эксплуатация · run.py · laim/ · descriptor.json</p>
     <h2>Запуск: локально и на SberDS</h2>
-    <p>Локально всё идёт через <code>run.py</code> и <code>laim.pipeline</code>. На платформе дескриптор вызывает <code>run.py::main</code> → <code>laim.platform.run_node</code>, который переводит порты и форму в тот же конфиг. <code>ars/main.py</code> остался legacy-адаптером; живы только его <code>Anomalies</code> и <code>extract_query_response</code>.</p>
+    <p>Локально все команды выполняются через <code>run.py</code> и <code>laim.pipeline</code>. На платформе дескриптор вызывает <code>run.py::main</code> → <code>laim.platform.run_node</code>, который преобразует порты и параметры формы в ту же конфигурацию. <code>ars/main.py</code> — устаревший адаптер; из него используются только <code>Anomalies</code> и <code>extract_query_response</code>.</p>
   </div>
 
   <div class="stack">
     <div>
-      <p class="tcap">Команды <code>run.py</code>. Конфиг: TOML + <code>--set section.key=value</code>; неизвестные ключи молча игнорируются.</p>
+      <p class="tcap">Команды <code>run.py</code>. Конфигурация: TOML и <code>--set section.key=value</code>. Неизвестный ключ, некорректный код эксперимента, метрика или план внедрения вызывают ошибку до создания каталога прогона.</p>
       <div class="tbl">
         <table>
           <thead><tr><th>Команда</th><th>Что выполняет</th><th>Результат</th></tr></thead>
           <tbody>
-            <tr><td><code>synth</code></td><td>детерминированный генератор: 3 агента, 6 сценариев, ≈ 7 % трасс с дефектами контракта</td><td><code>synthetic_spans.parquet</code></td></tr>
-            <tr><td><code>validate</code></td><td><code>recast</code> → <code>validation.Quality</code>: вердикт и отказы по трассам</td><td>метрики в <code>manifest.json</code></td></tr>
-            <tr><td><code>prepare</code></td><td>гейт контракта → s1 <code>process_train_data</code></td><td><code>traces_train/</code>, <code>s1_meta.json</code></td></tr>
-            <tr><td><code>train</code></td><td><code>prepare</code> + s2 <code>train_detector</code> + s3 <code>train_classifier</code> (если включён; сбой s3 пишется в манифест)</td><td><code>s2_meta.json</code>, <code>s3_meta.json</code>, модели</td></tr>
-            <tr><td><code>eval</code></td><td><code>train</code> (всегда заново) + предсказание на VAL и TEST → <code>laim.evaluation</code></td><td><code>eval_report.json</code></td></tr>
+            <tr><td><code>synth</code></td><td>детерминированный генератор (seed = <code>synth.seed</code>): 3 агента, 6 сценариев, ≈ 7 % трасс с нарушениями контракта</td><td><code>synthetic_spans.parquet</code></td></tr>
+            <tr><td><code>validate</code></td><td><code>recast</code> → <code>validation.Quality</code>: вердикт и число отклонённых трасс</td><td>метрики в <code>manifest.json</code></td></tr>
+            <tr><td><code>prepare</code></td><td>проверка конфигурации → гейт контракта → s1 <code>process_train_data</code></td><td><code>traces_train/</code>, <code>s1_meta.json</code></td></tr>
+            <tr><td><code>train</code></td><td><code>prepare</code> + s2 <code>train_detector</code> + s3 <code>train_classifier</code> (если включён; ошибка s3 записывается в манифест)</td><td><code>s2_meta.json</code>, <code>s3_meta.json</code>, модели</td></tr>
+            <tr><td><code>eval</code></td><td><code>train</code> (всегда заново) + прогноз на VAL и TEST → <code>laim.evaluation</code></td><td><code>eval_report.json</code>, включая <code>injection_coverage</code></td></tr>
             <tr><td><code>all</code></td><td><code>eval</code>, затем <code>infer</code> в тот же каталог, если задан <code>paths.infer_spans</code></td><td>+ <code>detections.parquet</code></td></tr>
-            <tr><td><code>infer</code></td><td><code>--model-dir</code>: s1 <code>prepare_test_data</code> → s2 <code>detect_anomalies</code> → s4 <code>export_detector_rca</code>. Без s3 и без <code>test_anomalies</code>: их строит только узел платформы</td><td><code>detections.parquet</code> в новом <code>runs/&lt;id&gt;</code></td></tr>
+            <tr><td><code>infer</code></td><td><code>--model-dir</code>: s1 <code>prepare_test_data</code> → s2 <code>detect_anomalies</code> → s4 <code>export_detector_rca</code>. Без s3 и без <code>test_anomalies</code>: их формирует только узел платформы</td><td><code>detections.parquet</code> в новом <code>runs/&lt;id&gt;</code></td></tr>
           </tbody>
         </table>
       </div>
@@ -1647,26 +1615,26 @@ footer p{max-width:100ch}
       <p class="tcap">Порты узлов SberDS</p>
       <div class="tbl">
         <table>
-          <thead><tr><th>Узел</th><th>Порт</th><th>Направление</th><th>Что несёт</th></tr></thead>
+          <thead><tr><th>Узел</th><th>Порт</th><th>Направление</th><th>Содержимое</th></tr></thead>
           <tbody>
-            <tr><td rowspan="12"><code>laim-detector</code><br><span class="mono" style="color:var(--ink-3)">py312-gpu</span></td><td><code>path_traces_train</code></td><td>вход, dataframe</td><td>спаны для обучения (in-memory; колонки с bool чинит <code>Recast.overlay</code>)</td></tr>
-            <tr><td><code>path_traces_infer</code></td><td>вход, dataframe</td><td>спаны для скоринга; в train-режиме запускает инференс в том же прогоне</td></tr>
-            <tr><td><code>path_embedder</code></td><td>вход, модель, обязательный</td><td>USER-bge-m3: каталог, zip или tar; корень ищется по <code>modules.json</code></td></tr>
-            <tr><td><code>model_in</code></td><td>вход, модель</td><td>бандл: JSON-payload, zip, каталог или текст пути</td></tr>
+            <tr><td rowspan="12"><code>laim-detector</code><br><span class="mono" style="color:var(--ink-3)">py312-gpu</span></td><td><code>path_traces_train</code></td><td>вход, dataframe</td><td>спаны для обучения (передаются в памяти; булевы колонки восстанавливает <code>Recast.overlay</code>)</td></tr>
+            <tr><td><code>path_traces_infer</code></td><td>вход, dataframe</td><td>спаны для оценки; в режиме train запускают инференс в том же прогоне</td></tr>
+            <tr><td><code>path_embedder</code></td><td>вход, модель, обязательный</td><td>USER-bge-m3: каталог, zip или tar; корень определяется по <code>modules.json</code></td></tr>
+            <tr><td><code>model_in</code></td><td>вход, модель</td><td>пакет модели: JSON-payload, zip, каталог или текст пути</td></tr>
             <tr><td><code>model_out</code></td><td>выход</td><td><code>{bundle_format: laim-bundle-b64/1, sha256, size_bytes, bundle_b64}</code></td></tr>
-            <tr><td><code>test_anomalies</code></td><td>выход</td><td>JSON-строка <code>{"anomalies": [...]}</code> → RCA-узел</td></tr>
-            <tr><td><code>anomaly_traces</code></td><td>выход, dataframe</td><td>флагнутые трассы с обогащением</td></tr>
+            <tr><td><code>test_anomalies</code></td><td>выход</td><td>JSON-строка <code>{"anomalies": [...]}</code> → узел RCA</td></tr>
+            <tr><td><code>anomaly_traces</code></td><td>выход, dataframe</td><td>помеченные трассы с дополнительными полями</td></tr>
             <tr><td><code>eval_report</code></td><td>выход</td><td>полный отчёт (train) или счётчики <code>n_traces_scored / n_detected / n_truncated</code> (inference)</td></tr>
             <tr><td><code>detector_metrics_holdout</code></td><td>выход</td><td>метрики TEST, порог, лучший эксперимент</td></tr>
             <tr><td><code>classifier_metrics_holdout</code></td><td>выход</td><td>метрики s3</td></tr>
-            <tr><td><code>html_reports</code></td><td>выход</td><td><code>{data, detector}</code> — рендерит панель результатов</td></tr>
+            <tr><td><code>html_reports</code></td><td>выход</td><td><code>{data, detector}</code> — отображаются на панели результатов</td></tr>
             <tr><td><code>manifest</code></td><td>выход</td><td>манифест прогона</td></tr>
             <tr><td rowspan="4"><code>LAIM RCA</code><br><span class="mono" style="color:var(--ink-3)">py312-simple</span></td><td><code>anom_data</code></td><td>вход, обязательный</td><td><code>test_anomalies</code> детектора</td></tr>
-            <tr><td><code>agent_report</code></td><td>вход, опц.</td><td>отчёт о разработке агента</td></tr>
+            <tr><td><code>agent_report</code></td><td>вход, необязательный</td><td>отчёт о разработке агента</td></tr>
             <tr><td><code>res</code></td><td>выход</td><td><code>{"anomalies": [...]}</code> с заполненным <code>rca_results</code></td></tr>
             <tr><td><code>rca_audit</code></td><td>выход</td><td><code>laim.rca_audit/1</code>: счётчики, согласие с детектором, статистика LLM, решение по каждой записи</td></tr>
-            <tr><td rowspan="3"><code>LAIM anomaly report</code><br><span class="mono" style="color:var(--ink-3)">py312-simple</span></td><td><code>test_anomalies</code></td><td>вход, обязательный</td><td><code>res</code> RCA-узла или <code>test_anomalies</code> детектора</td></tr>
-            <tr><td><code>anomaly_report</code></td><td>выход</td><td>HTML — рендерит панель «Отчёт по аномалиям»</td></tr>
+            <tr><td rowspan="3"><code>LAIM anomaly report</code><br><span class="mono" style="color:var(--ink-3)">py312-simple</span></td><td><code>test_anomalies</code></td><td>вход, обязательный</td><td><code>res</code> узла RCA или <code>test_anomalies</code> детектора</td></tr>
+            <tr><td><code>anomaly_report</code></td><td>выход</td><td>HTML для панели «Отчёт по аномалиям»</td></tr>
             <tr><td><code>all_results</code></td><td>выход</td><td>сводка по типам и светофор <code>amber | green</code></td></tr>
           </tbody>
         </table>
@@ -1677,11 +1645,12 @@ footer p{max-width:100ch}
       <div>
         <p class="tcap">Каталог прогона</p>
 <pre>runs/&lt;YYYYmmdd_HHMMSS&gt;_&lt;команда&gt;_&lt;hash12&gt;/
-├── manifest.json     <span class="c">конфиг, хеш, sha256 входов, стадии</span>
+├── manifest.json     <span class="c">конфигурация, хеш, sha256 входов, стадии</span>
 ├── run.log  native_debug.log
 ├── s1_meta.json  s2_meta.json  s3_meta.json
 ├── eval_report.json  <span class="c">VAL и TEST: overall, per_anomaly_type,</span>
-│                     <span class="c">recall@FPR, PPV, ECE/Brier, латентность</span>
+│                     <span class="c">recall@FPR, PPV, ECE/Brier, задержка,</span>
+│                     <span class="c">injection_coverage</span>
 ├── traces_train/
 │   ├── laim_s&lt;seed&gt;_{train,val,test}.parquet
 │   ├── spans_features.parquet  data_report.html
@@ -1691,72 +1660,27 @@ footer p{max-width:100ch}
 └── detections.parquet  <span class="c">после all или infer</span></pre>
       </div>
       <div>
-        <p class="tcap">Бандл, который едет по порту <code>model_out</code> → <code>model_in</code></p>
-<pre>laim_model_&lt;run&gt;.zip   <span class="c">base64 в JSON, ≤ 256 МБ</span>
+        <p class="tcap">Пакет модели, который передаётся по порту <code>model_out</code> → <code>model_in</code></p>
+<pre>laim_model_&lt;run&gt;.zip   <span class="c">base64 в JSON, до 256 МБ</span>
 ├── s1_meta.json  s2_meta.json  s3_meta.json
 ├── manifest.json  eval_report.json
 ├── models/**      <span class="c">*.pkl и *.json из traces_train/models</span>
 └── models_s3/**   <span class="c">*.pkl и *.json из traces_train/classifier</span>
 
-<span class="c">Пути в s2/s3_meta переписаны относительно бандла.</span>
-<span class="c">HTML и PNG не упаковываются. Инференс берёт из</span>
-<span class="c">манифеста бандла только embedding batch/max_length,</span>
-<span class="c">остальные параметры формы игнорирует.</span></pre>
+<span class="c">Пути в s2_meta и s3_meta записаны относительно пакета.</span>
+<span class="c">HTML и PNG в пакет не входят. Инференс берёт из</span>
+<span class="c">манифеста пакета embedding_batch_size и</span>
+<span class="c">embedding_max_length; embedding_gpus и</span>
+<span class="c">embedding_pool_chunk — из формы своего инстанса.</span></pre>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ================= 8. ISSUES ================= -->
-<section id="issues">
-  <div class="sec-head">
-    <p class="sec-k"><i style="--c:var(--anom)"></i>Проверено по коду</p>
-    <h2>Что всплыло при разборе</h2>
-    <p>Ниже расхождения, найденные при сверке схемы с кодом. Номера совпадают с метками на схемах. Пункт 1 перепроверен запуском на polars 1.43.2 и по <code>tests/golden/golden.json</code>, остальные — чтением указанных строк.</p>
-  </div>
-  <ol class="issues">
-    <li class="issue">
-      <span class="bdg">1</span>
-      <h3>Отбор признаков вырождается в алфавитный порядок <span class="chip hi">высокий</span></h3>
-      <p>В <code>s1__data.py:227</code> корреляция <code>stats_df.select(cols).corr()</code> считается до заполнения пропусков. У любого столбца с null она равна NaN (например, у всех <code>*_rolling_std_w*</code>), а в polars <code>NaN.abs() &gt; 0.999</code> истинно. Такие пары считаются дублями, и правило разрыва ничьей удаляет имя, которое позже по алфавиту. В golden-файле ровно 45 признаков EPI, и все начинаются на «a» (<code>action_entropy</code>, <code>actions_per_agent</code>, <code>avg_word_length_sem_*</code>). Это объясняет «схлопывание» из PLAN.md, и согласованный следующий эксперимент (<code>max_correlation=0.9</code> и др.) его не лечит. Исправление: заполнять пропуски до <code>corr()</code> или считать NaN-корреляцию нулём. Поменяются golden-пины.</p>
-    </li>
-    <li class="issue">
-      <span class="bdg">2</span>
-      <h3>Инференс кодирует эмбеддинги на CPU <span class="chip mid">средний</span></h3>
-      <p><code>cmd_infer</code> (<code>laim/pipeline.py:354–361</code>) собирает <code>S1Config</code> без <code>device</code>, и срабатывает значение по умолчанию <code>'cpu'</code> (<code>c1__data.py:38</code>). В <code>prepare</code> (<code>pipeline.py:210</code>) устройство передаётся. JAX-детектор на инференсе идёт на GPU, а USER-bge-m3 — на CPU, поэтому скоринг больших корпусов упирается в процессор.</p>
-    </li>
-    <li class="issue">
-      <span class="bdg">3</span>
-      <h3><code>detector.threshold_metric</code> ни на что не влияет <span class="chip mid">средний</span></h3>
-      <p><code>build_grid</code> назначает каждому эксперименту метрику по позиции в <code>CODES</code> (youden, precision, …), а <code>threshold_metric_or</code> предпочитает её конфигу (<code>e2__detector.py:63, 188–190</code>; <code>s2__detector.py:440</code>). Deep-эксперимент порогуется по precision, а выбор между экспериментами идёт по youden, что структурно его штрафует.</p>
-    </li>
-    <li class="issue">
-      <span class="bdg">4</span>
-      <h3>Эксперименты вне <code>CODES</code> молча отбрасываются <span class="chip mid">средний</span></h3>
-      <p><code>s2__detector.py:577–578</code> фильтрует <code>EXPERIMENTS</code> по имени, а <code>hub_mse_hub_16_4</code> из согласованного эксперимента в PLAN.md закомментирован в <code>CODES</code>. Из трёх запрошенных кодов запустятся два. Ошибка будет, только если не совпадёт ни один.</p>
-    </li>
-    <li class="issue">
-      <span class="bdg">5</span>
-      <h3>Документация устарела в двух местах <span class="chip lo">низкий</span></h3>
-      <p>CLAUDE.md пишет, что платформа вызывает <code>ars/main.py::main</code>. На деле <code>descriptor.json:125–128</code> указывает на <code>run.py::main</code> → <code>laim.platform.run_node</code>. README перечисляет <code>rca_report_str</code> среди колонок <code>detections.parquet</code>, но <code>cmd_infer</code> его не создаёт: <code>analyze_anomalies</code> зовётся только из legacy-пути, а <code>rca_results</code> заполняет RCA-узел.</p>
-    </li>
-    <li class="issue">
-      <span class="bdg">6</span>
-      <h3>Seed инъекции не связан с <code>runtime.seed</code> <span class="chip lo">низкий</span></h3>
-      <p>s1 создаёт <code>InjectionConfig</code> с планом по умолчанию, где <code>Plan.seed = 12345</code> (<code>s1__data.py:1132, 1162</code>; <code>anomalies_injection.py:200</code>). Смена seed перетасует сплит, но набор аномальных трасс останется прежним. Отдельно известно (OQ-8): <code>data.scale_floor</code> и <code>data.norm_z_clip</code> не доходят до s1.</p>
-    </li>
-    <li class="issue">
-      <span class="bdg">7</span>
-      <h3>Отчёт не показывает флаги с p &lt; 0,75 <span class="chip lo">на заметку</span></h3>
-      <p>Узел отчёта оставляет записи с <code>confidence ≥ min_confidence = 75</code> (<code>anomaly_report/main.py:259–263</code>), а <code>confidence</code> = round(p_anomaly · 100), и RCA-узел его не меняет. Флаг же детектор ставит по <code>e_comb &gt; порога</code>, отдельно от p. Поэтому аномалия, подтверждённая LLM, но с p = 0,6, есть в <code>res</code>, а в отчёт не попадёт. Если так не задумано, порог стоит согласовать с калибровкой или фильтровать по вердикту RCA.</p>
-    </li>
-  </ol>
-</section>
-
 </main>
 
 <footer class="wrap">
-  <p>Источники: <code>ars/stages/s1–s5</code>, <code>ars/models/m2__detector</code>, <code>ars/models/m3__classifier</code>, <code>ars/data</code>, <code>laim/*.py</code>, <code>descriptor.json</code>, <code>rca/</code>, <code>anomaly_report/</code>, <code>deploy/README.md</code>. Собрано 26.09.2026 по коммиту <code>10f9e28</code>, ветка <code>claude/rca-fields-anomalies-xahwa8</code>. Цифры на иллюстрациях атрибуции и трассы выдуманы; доли сплитов и размерности посчитаны по коду.</p>
+  <p>Источники: <code>ars/stages/s1–s5</code>, <code>ars/models/m2__detector</code>, <code>ars/models/m3__classifier</code>, <code>ars/data</code>, <code>laim/*.py</code>, <code>descriptor.json</code>, <code>rca/</code>, <code>anomaly_report/</code>, <code>deploy/README.md</code>. Схемы соответствуют коду ветки <code>claude/audit-05-fixes</code>, коммит <code>283eb7b</code> (27.09.2026). Числа на иллюстрациях трассы и атрибуции условные; доли выборок и размерности рассчитаны по коду. Сокращённая версия: <a href="laim_overview.html">«Обзор архитектуры LAIM»</a>.</p>
 </footer>
 
 <script>
