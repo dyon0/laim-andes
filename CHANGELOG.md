@@ -84,6 +84,16 @@ fails before and passes after.
   S1Config F-05 values (1e-2 / 20), so default runs are unchanged. A test
   pins that every UI parameter maps to a real config key.
 
+- **F-83 (P3)** `S2Meta/S3Meta.best_metric_value` held the TEST value of
+  `select_metric` although the choice is made on VAL (F-02) — and s3 fed it
+  to the classifier as a constant metaparameter. The metas now carry
+  `select_on`, `selection_value` (the VAL value the choice was based on) and
+  `test_value`; `best_info.json` uses the same names (`value` is gone).
+  `S2Meta.from_dict` / `S3Meta.from_dict` read pre-F-83 JSON
+  (`best_metric_value` -> `test_value`, `selection_value = None`), and s3's
+  metaparameter falls back to the test value for such bundles, so an old
+  classifier still sees the constant it was trained with.
+
 ## Fixed (P0s, each with the test that failed before / passes after)
 
 - **F-36** injector text-noise crashed on ~5% of spans (u64 hash → i64 wrap in

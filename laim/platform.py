@@ -566,16 +566,8 @@ def _load_s3_meta(bundle_root: Path):
     p = bundle_root / 's3_meta.json'
     if not p.exists():
         return None
-    from ars.data.stages_meta import S2Meta, S3Meta
-    raw = json.loads(p.read_text())
-    inner = dict(raw['s2_meta'])
-    for k in ('epi_latent_mean', 'epi_latent_std', 'sem_latent_mean', 'sem_latent_std'):
-        inner[k] = tuple(inner[k]) if inner[k] is not None else None
-    raw['s2_meta'] = S2Meta(**inner)
-    for k in ('class_names', 'base_kinds', 'metaparams'):
-        raw[k] = tuple(raw[k])
-    raw['feature_layout'] = dict(raw['feature_layout'])
-    return S3Meta(**raw)
+    from ars.data.stages_meta import S3Meta
+    return S3Meta.from_dict(json.loads(p.read_text()))
 
 
 def _classified(detected, s3_meta, notes: dict):

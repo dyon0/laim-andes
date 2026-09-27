@@ -72,7 +72,7 @@ class Features:
     def metaparams(s2: S2Meta) -> Tuple[float, ...]:
         cal = s2.calibration
         return tuple(map(float, (
-            s2.best_threshold, s2.best_metric_value, s2.epi_sz_latent, s2.sem_sz_latent, s2.max_len,
+            s2.best_threshold, s2.selection_value_or_legacy, s2.epi_sz_latent, s2.sem_sz_latent, s2.max_len,
             cal.get('comb_temperature', 0.0), cal.get('aux_z_anomaly', 0.0),
             cal.get('w_epi', 0.0), cal.get('w_sem', 0.0), cal.get('w_comb', 0.0), cal.get('bias', 0.0),
             cal.get('epi_median', 0.0), cal.get('epi_mad', 0.0),
@@ -292,7 +292,9 @@ def train_experiments(cfg: S3Config) -> Tuple[FeatureData, Tuple[dict, ...]]:
     FileIO.json_write(best_dir / 'best_info.json', {
         'best_experiment':  best['experiment'],
         'metric':           cfg.select_metric,
-        'value':            float(best['test_metrics'][cfg.select_metric]),
+        'selected_on':      cfg.select_on,
+        'selection_value':  float(best['val_metrics' if cfg.select_on == 'val' else 'test_metrics'][cfg.select_metric]),
+        'test_value':       float(best['test_metrics'][cfg.select_metric]),
         'test_metrics':     best['test_metrics']})
     print_best_summary(mcs, best)
     _write_report(cfg, data, all_results, best)
@@ -307,7 +309,9 @@ def _build_s3_meta(cfg: S3Config, data: FeatureData, all_results: Tuple[dict, ..
         experiment_dir      = (Path(cfg.output_dir) / best['experiment']).as_posix(),
         best_experiment     = best['experiment'],
         select_metric       = cfg.select_metric,
-        best_metric_value   = float(best['test_metrics'][cfg.select_metric]),
+        select_on           = cfg.select_on,
+        selection_value     = float(best['val_metrics' if cfg.select_on == 'val' else 'test_metrics'][cfg.select_metric]),
+        test_value          = float(best['test_metrics'][cfg.select_metric]),
         n_classes           = len(data.class_names),
         class_names         = tuple(data.class_names),
         feature_dim         = int(data.feature_dim),

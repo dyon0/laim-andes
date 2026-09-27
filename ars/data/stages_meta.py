@@ -55,7 +55,14 @@ class S2Meta:
     experiment_dir      : str
     best_experiment     : str
     select_metric       : str
-    best_metric_value   : float
+    # F-83: the experiment is chosen on `select_on` (VAL since F-02);
+    # selection_value is select_metric THERE — what the choice was based on —
+    # and test_value the same metric on TEST (reporting only). The old single
+    # `best_metric_value` held the TEST value; legacy JSON is read by
+    # from_dict (selection_value None -> unknown).
+    select_on           : str
+    selection_value     : None | float
+    test_value          : float
 
     max_len         : int
     epi_dim         : int
@@ -75,6 +82,20 @@ class S2Meta:
     test_metrics    : Dict[str, float]
     calibration     : Dict[str, float]
 
+    @classmethod
+    def from_dict(cls, raw: dict) -> 'S2Meta':
+        '''s2_meta.json -> S2Meta, including artifacts written before F-83'''
+        data = _legacy_selection(dict(raw))
+        for k in ('epi_latent_mean', 'epi_latent_std', 'sem_latent_mean', 'sem_latent_std'):
+            data[k] = tuple(data[k]) if data.get(k) is not None else None
+        return cls(**data)
+
+    @property
+    def selection_value_or_legacy(self) -> float:
+        '''the value s3 used as a constant metaparameter: selection_value, or —
+        for a pre-F-83 artifact — the TEST value it was trained with'''
+        return self.selection_value if self.selection_value is not None else self.test_value
+
 
 @dataclass(frozen = True)
 class S3Meta:
@@ -84,7 +105,10 @@ class S3Meta:
     experiment_dir      : str
     best_experiment     : str
     select_metric       : str
-    best_metric_value   : float
+    # F-83: see S2Meta — selection_value on select_on (VAL), test_value on TEST
+    select_on           : str
+    selection_value     : None | float
+    test_value          : float
 
     n_classes       : int
     class_names     : Tuple[str, ...]
@@ -99,3 +123,23 @@ class S3Meta:
     metaparams      : Tuple[float, ...]
 
     s2_meta : S2Meta
+
+    @classmethod
+    def from_dict(cls, raw: dict) -> 'S3Meta':
+        '''s3_meta.json -> S3Meta, including artifacts written before F-83'''
+        data = _legacy_selection(dict(raw))
+        data['s2_meta'] = S2Meta.from_dict(data['s2_meta'])
+        for k in ('class_names', 'base_kinds', 'metaparams'):
+            data[k] = tuple(data[k])
+        data['feature_layout'] = dict(data['feature_layout'])
+        return cls(**data)
+
+
+def _legacy_selection(data: dict) -> dict:
+    '''F-83: before the fix a single `best_metric_value` held the TEST value of
+    select_metric; the value on the selection split was not stored.'''
+    if 'best_metric_value' in data:
+        data.setdefault('test_value', data.pop('best_metric_value'))
+        data.setdefault('selection_value', None)
+        data.setdefault('select_on', 'val')
+    return data

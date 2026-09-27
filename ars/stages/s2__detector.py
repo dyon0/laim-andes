@@ -589,7 +589,7 @@ def train_experiments(cfg: S2Config) -> Tuple[PreparedData, Tuple[dict, ...]]:
         'metric':           cfg.select_metric,
         'selected_on':      cfg.select_on,
         'selection_value':  float(best['val_metrics' if cfg.select_on == 'val' else 'test_metrics'][cfg.select_metric]),
-        'value':            float(best['test_metrics'][cfg.select_metric]),
+        'test_value':       float(best['test_metrics'][cfg.select_metric]),
         'test_metrics':     best['test_metrics']}
     best_model_dir  = Path(cfg.output_dir) / 'best'
     best_model_dir.mkdir(parents = True, exist_ok = True)
@@ -609,7 +609,9 @@ def _build_s2_meta(cfg: S2Config, data: PreparedData, all_results: Tuple[dict, .
         experiment_dir      = experiment_dir.as_posix(),
         best_experiment     = experiment_name,
         select_metric       = cfg.select_metric,
-        best_metric_value   = float(best['test_metrics'][cfg.select_metric]),
+        select_on           = cfg.select_on,
+        selection_value     = float(best['val_metrics' if cfg.select_on == 'val' else 'test_metrics'][cfg.select_metric]),
+        test_value          = float(best['test_metrics'][cfg.select_metric]),
         max_len             = int(data.max_len),
         epi_dim             = int(data.epi_dim),
         sem_dim             = int(data.sem_dim),

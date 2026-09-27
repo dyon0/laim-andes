@@ -81,7 +81,9 @@ def main() -> None:
     s2_meta = S2Meta(
         output_dir=str(models_dir), experiment_dir=str(exp_dir),
         best_experiment=exp_name, select_metric=best_info['metric'],
-        best_metric_value=float(best_info['value']),
+        select_on=best_info.get('selected_on', 'test'),   # the legacy baseline selected on TEST
+        selection_value=best_info.get('selection_value'),
+        test_value=float(best_info.get('test_value', best_info.get('value'))),
         max_len=0, epi_dim=s1_meta.epi_dim,
         sem_dim=s1_meta.semantic_vectors['sem_sem_vector'],
         epi_sz_latent=int(combined['config'].sz_latent_epi),

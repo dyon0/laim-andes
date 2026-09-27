@@ -371,10 +371,7 @@ def cmd_infer(cfg: RunConfig, run_dir: Path, manifest: Manifest,
         s1_raw['epi_normalization'] = ast.literal_eval(s1_raw['epi_normalization'])
     s1_meta = S1Meta(**s1_raw)
 
-    raw = json.loads((model_run_dir / 's2_meta.json').read_text())
-    for k in ('epi_latent_mean', 'epi_latent_std', 'sem_latent_mean', 'sem_latent_std'):
-        raw[k] = tuple(raw[k]) if raw[k] is not None else None
-    s2_meta = S2Meta(**raw)
+    s2_meta = S2Meta.from_dict(json.loads((model_run_dir / 's2_meta.json').read_text()))
 
     from ars.configuration.c1__data import S1Config
     from ars.tools.tui.tui_data import ColorSchemeDataScienceSakura
