@@ -2,7 +2,8 @@
 
 Состояние кода: ветка `claude/rca-fields-anomalies-xahwa8`, коммит `10f9e28`.
 Находки собраны при построении сквозной схемы детектора, RCA и отчёта
-(`docs/architecture/laim_e2e.html`). **Код не менялся.**
+(`docs/architecture/laim_e2e.html`). При сверке код не менялся; исправления —
+в разделе «Статус исправлений» ниже.
 
 Шкала и формат — как в `AUDIT_01_findings.md`:
 - **P0** — неверные результаты или тихая порча;
@@ -11,6 +12,25 @@
 - **P3** — мелочи.
 
 Номера продолжают серию F-xx (последний занятый — F-74). У каждой находки есть разделы: где · что не так · последствия · доказательство · как чинить · проверка (тест, который падает до исправления и проходит после).
+
+## Статус исправлений (2026-09-27, ветка `claude/audit-05-fixes`)
+
+Все находки, кроме F-80, исправлены — по одной в коммите, у каждой есть тест, который падает до исправления и проходит после. F-80 намеренно не тронута: сначала нужно решение по продукту.
+
+| ID | Статус | Коммит | Что сделано | Тест |
+|---|---|---|---|---|
+| F-75 | исправлено | `0ecc7a8` | корреляция на заполненных значениях, NaN-корреляция = 0; `make golden`: 45 → 996 признаков на фикстуре (метки и сплит не изменились) | `tests/test_characterization_s1.py` (`test_selection_keeps_uncorrelated_column_with_a_null`, `test_epi_selection_is_not_an_alphabet_prefix`) |
+| F-77 | исправлено | `2b0d1ad` | `build_grid` не назначает метрики; метрика эксперимента — только явная; `results.json` пишет `threshold_metric` | `tests/test_experiment_grid.py` (в т. ч. медленный: `threshold_metric=f1` у каждого эксперимента) |
+| F-78 | исправлено | `2b0d1ad` | сетка строится из запрошенных кодов (`resolve_grid`); некорректный код → `ValueError` с форматом ещё до s1 | `tests/test_experiment_grid.py` |
+| F-79 | исправлено | `e335ef0` | класс ставится только трассам с жертвами (вариант 1, план = факт сохранён); флаг `anomaly_applied`; покрытие по классам в отчёте инъекции, `S1Meta`, манифесте и `eval_report.injection_coverage`; остаточные «пустые» исключаются из val/test (вариант 2). Мелочи: EPI классов без EPI-воздействия больше не клипуется; у `hallucination` EPI пересчитывается по искажённому тексту | `tests/test_injection_coverage.py`, `tests/test_integration.py` |
+| F-76 | исправлено | `78ac0aa` | единый `RunConfig.s1_device()` в `to_s1_overrides()`; инференс на платформе сохраняет `embedding_gpus` своего инстанса; локально на GPU `XLA_PYTHON_CLIENT_PREALLOCATE=false` | `tests/test_inference_device.py` |
+| F-80 | **открыто** | — | ждёт решения по продукту (варианты а/б/в ниже) | — |
+| F-81 | исправлено | `8886fc2` | единый `injection_config(cfg)`, seed плана = `runtime.seed`; заодно OQ-8: `data.injection_fractions` | `tests/test_injection_coverage.py` |
+| F-82 | исправлено | `7a86bff` | неизвестный ключ → `ValueError` с подсказкой; подсказка дескриптора исправлена; `scale_floor`/`norm_z_clip` доведены до s1 (OQ-8 закрыт) | `tests/test_config.py`, `tests/test_platform.py` |
+| F-83 | исправлено | `77be497` | `select_on` + `selection_value` (VAL) + `test_value` (TEST) в `S2Meta`/`S3Meta`/`best_info.json`; старые бандлы читаются (`from_dict`) | `tests/test_stage_meta.py` |
+| F-84 | исправлено | `61a08f2` | CLAUDE.md, README.md, deploy/README.md, докстринг `laim/platform.py` | — (документация) |
+
+Мелочи и непроверенные наводки проверены: исправлены `GenConfig.seed`, `model_out_echo` для «сырого пути», потерянные ранние логи `run_node` (`361d5a9`), описание deep/wide FMLP в EXPERIMENTS.md (`61a08f2`); неиспользуемые поля `S1Config` помечены (их передаёт legacy-адаптер `ars/main.py`); про детерминизм на GPU — оговорка в CLAUDE.md.
 
 ## Сводка
 

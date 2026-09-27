@@ -97,19 +97,44 @@ single agent, no real labels — metrics measure injected anomalies):
   max_correlation=0.999); (c) metrics average 5 injected classes of which
   ipi/bias were near-chance even in controlled validation — check
   `eval_report.test.per_anomaly_type` before concluding anything.
-* Agreed next experiment (parameter-only): validation_gate=strict vs warn,
+* UPDATE 2026-09-27 (AUDIT_05, branch `claude/audit-05-fixes`): diagnosis
+  (b) was mostly a BUG, not the corpus — F-75: correlations were computed
+  before null filling, NaN.abs() > x is TRUE in polars, and the tie-break
+  kept only names starting with "a" (45 on the fixture; 31 with the knobs
+  below). Fixed: the EPI set now spans duration, delta_time, exec_gap,
+  llm_tokens, text counters... (1000-span sample: 979 features at the
+  default max_correlation=0.999, 366 with the knobs below — the EPI tensor
+  grows accordingly; check `prepare.epi_dim` in the manifest). Also fixed
+  before the rerun: `threshold_metric` now applies to every experiment
+  (F-77 — the deep one used to threshold by precision), codes outside
+  `CODES` run (F-78 — `hub_mse_hub_16_4` would have been dropped), and
+  inference embeds on GPU with device=gpu (F-76).
+* Agreed next experiment (parameter-only; now runs as intended): validation_gate=strict vs warn,
   min_fill_rate=0.3, max_static_rate=0.99, max_correlation=0.9,
   embedding_max_length=1024, epochs=500/patience=50, experiments=
   ["hub_mse_mse_08_4","hub_mse_hub_16_4","hub_mse_hub_32_4_deep"],
   threshold_metric=select_metric=youden, classifier_enabled=false while
   iterating. NEVER threshold_metric=recall (degenerates to flag-everything).
-* Planned feature work (OQ-8): expose `data.injection_fractions` (enables
-  hallucination-focused detection + realistic-prevalence studies) and wire
-  the dead `scale_floor`/`norm_z_clip` knobs.
+  Compare `eval_report.test.per_anomaly_type` with the 0.54-AUC run, and
+  read `eval_report.injection_coverage` first (F-79): per class, how many
+  hash-drawn traces had nothing to perturb (`no_victims`, kept normal) and
+  how many labeled traces stayed unchanged (`unapplied`, dropped from
+  val/test) — recall is only meaningful against `applied`. Config typos
+  now fail the run instead of being ignored (F-82).
+* OQ-8 DONE: `data.injection_fractions` (e.g. `{"hallucination": 0.2}` —
+  replaces the default shares; unlisted classes are not injected) and the
+  `scale_floor`/`norm_z_clip` knobs reach s1.
 * Key semantics to not re-derive: norm_*/anom_* ratios are SPLIT fractions
   (anomalies never enter training); the classifier (s3) is downstream of
-  detection and cannot affect detector metrics; injected share is 20% of
-  traces via `Plan.fractions`.
+  detection and cannot affect detector metrics; the hash draws 20% of
+  traces via `Plan.fractions` (or `data.injection_fractions`), but only
+  traces with something to perturb for the drawn class become anomalous
+  (F-79), so the effective share can be lower; the plan seed is
+  `runtime.seed` (F-81).
+* Open from AUDIT_05: F-80 — the report node hides flags with
+  p_anomaly < 0.75 (`anomaly_report/main.py` `min_confidence`); needs a
+  product decision (keep+document / filter by RCA verdict / separate
+  threshold for RCA input) before any code change.
 
 ## Remaining work (not in this engagement's budget, recorded honestly)
 * s3 nested-CV redesign (M8 long-term); currently guarded, biases documented.

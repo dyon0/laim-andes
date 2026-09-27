@@ -13,7 +13,9 @@ is a SberDS-style node platform (`deploy/`): `descriptor.json` points it at
 Read in this order: `PLAN.md` **"Active threads"** (current state + agreed
 next steps — start here), `AUDIT_00_baseline.md` (what the legacy code did),
 `AUDIT_01_findings.md` (every defect, with IDs used across commits/tests),
-`PLAN.md` + `GAPS.md`, `AUDIT_04_parity.md`, `VALIDATION.md`, `FINAL_REPORT.md`.
+`AUDIT_05_findings.md` (F-75..F-84 — status table at the top; all fixed except
+F-80), `PLAN.md` + `GAPS.md`, `AUDIT_04_parity.md`, `VALIDATION.md`,
+`FINAL_REPORT.md`.
 For the SberDS deployment (works end-to-end since 2026-08-14): `deploy/README.md`
 — every platform quirk with its evidence. Experiments: `EXPERIMENTS.md`.
 
@@ -33,7 +35,7 @@ For the SberDS deployment (works end-to-end since 2026-08-14): `deploy/README.md
   `manifest.json`, `eval_report.json`); `infer --model-dir runs/<id> --spans f.parquet`
   scores new data (full audit trail + RCA columns: `rca_top_*`, index-space
   `rca_attribution` JSON for every trace, and `detector_rca` for flagged traces).
-- `tests/` — 140 tests; `make test` (fast, CPU, ~3 min warm), `make test-all`
+- `tests/` — ~190 tests; `make test` (fast, CPU, ~3 min warm), `make test-all`
   (adds micro-training/integration/latency). Golden pins live in
   `tests/golden/golden.json`; regenerate ONLY with an intended behavior change
   (`make golden`) and explain the diff in the same commit.
@@ -84,10 +86,17 @@ authoritative: 46 fields, sentinels instead of NULL (-1 / -1.0 / False / '' /
   `path_embedder` port (confirmed in production). Dev containers use a
   random-weight stand-in because huggingface.co is network-blocked (OQ-3) —
   local quality numbers measure pipeline mechanics, not semantic quality.
-- Injection labels are a pure hash of trace_id (`planned_trace_labels`), which
-  is how train-only feature selection works pre-injection. If you change the
-  injector's label assignment, s1 has a hard runtime consistency check that
-  will fail loudly.
+- Injection labels are a pure function of trace_id (hash with the plan seed =
+  `runtime.seed`) and of `(aef_kind, agent_id)` cell sizes (a class is kept
+  only where the trace has spans it can perturb — F-79), computed by ONE
+  function (`Assign.trace_labels`) for `planned_trace_labels` and the
+  injection. That is how train-only feature selection works pre-injection.
+  If you change the injector's label assignment, s1 has a hard runtime
+  consistency check that will fail loudly. Per-class coverage (planned /
+  no_victims / labeled / applied / unapplied) is in `S1Meta` and
+  `eval_report.injection_coverage`; labeled-but-unchanged traces are dropped.
+- Config keys are strict: an unknown key in TOML / `--set` /
+  `config_overrides` raises with the closest valid names (F-82).
 - The experiment grid lives in `ars/configuration/experiments/e2__detector.py`;
   `detector.experiments/epochs/patience` in config override it. The grid is
   BUILT from the requested codes (any well-formed code, not only `CODES`;
@@ -118,9 +127,12 @@ wraparound crashing the injector at scale (F-36). Full list: AUDIT_01.
 ## Remaining known work (see PLAN.md "Active threads" + "Remaining work")
 
 CURRENT FRONTIER: detection quality on the operator's real corpus (first
-500-epoch run was near-chance — diagnosis and the agreed next experiment are
-in PLAN.md "Active threads"). Feature work queued: expose
-`data.injection_fractions`, wire the dead `scale_floor`/`norm_z_clip` knobs
-(OQ-8). Longer-term: out-of-core s1 for 56 GB corpora; experiment-grid
+500-epoch run was near-chance). AUDIT_05 found and fixed the main suspect —
+EPI feature selection collapsed to an alphabet prefix (F-75) — plus the
+grid ignoring `threshold_metric` (F-77) and dropping non-catalogue codes
+(F-78); the next real-corpus run is described in PLAN.md "Active threads".
+OQ-8 is done (`data.injection_fractions`, `scale_floor`/`norm_z_clip` wired).
+Open: F-80 (report hides flags with p_anomaly < 0.75 — needs a product
+decision). Longer-term: out-of-core s1 for 56 GB corpora; experiment-grid
 parallelism (no-spawn/no-fork constraint, D-4 addendum); s3 stacking CV
 redesign (F-33); drift metrics.
