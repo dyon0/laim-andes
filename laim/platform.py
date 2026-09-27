@@ -653,9 +653,10 @@ def _read_html_reports(s1_meta, s2_meta) -> dict:
 
 
 def run_train(cfg, params: dict[str, Any]) -> dict:
-    from laim.pipeline import (Manifest, _apply_runtime, check_detector_config,
-                               cmd_eval, cmd_infer, cmd_prepare, cmd_train,
-                               make_run_dir, setup_logging)
+    from laim.pipeline import (Manifest, _apply_runtime, check_data_config,
+                               check_detector_config, cmd_eval, cmd_infer,
+                               cmd_prepare, cmd_train, make_run_dir, setup_logging)
+    check_data_config(cfg)
     check_detector_config(cfg)
     _apply_runtime(cfg)
     run_dir = make_run_dir(cfg, 'platform_train')

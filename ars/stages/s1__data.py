@@ -687,8 +687,12 @@ def refresh_text_features(
     EPI text counters (char/word/digit/... counts and their aggregates) stayed
     those of the ORIGINAL text. The affected traces get their features
     recomputed from the corrupted text. Features are computed per (trace,
-    agent), so recomputing a subset of traces is exact. Compound classes are
-    left alone (recomputing would erase their EPI perturbation)."""
+    agent), so recomputing a subset of traces reproduces the full computation
+    — except where spans share a start time: the sort keys (agent, trace,
+    start_time_ns) leave their order open, and duration_diff-type features of
+    such ties can differ slightly (~1e-3 in log1p scale on the sample).
+    Compound classes are left alone (recomputing would erase their EPI
+    perturbation)."""
     if not {'output_text', 'sem_text', DataObject.sublabel} <= set(spans.columns):
         return spans
     source  = pl.col('output_text').cast(pl.Utf8).fill_null('')

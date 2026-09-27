@@ -88,6 +88,14 @@ def check_detector_config(cfg: RunConfig) -> None:
         raise ValueError(f'detector.select_on={det.select_on!r}: допустимо val | test')
 
 
+def check_data_config(cfg: RunConfig) -> None:
+    """Fail before loading spans on s1 settings that would otherwise surface
+    only after the (possibly huge) load: the injection plan (OQ-8)."""
+    if cfg.data.inject_anomalies:
+        from ars.data.anomalies_injection import injection_plan
+        injection_plan(cfg.runtime.seed, cfg.data.injection_fractions)
+
+
 def _apply_runtime(cfg: RunConfig) -> None:
     if cfg.runtime.device == 'gpu':
         # the torch embedder and JAX share the GPU in prepare AND infer (F-76);
@@ -417,6 +425,10 @@ def cmd_infer(cfg: RunConfig, run_dir: Path, manifest: Manifest,
 
 def run(cfg: RunConfig, command: str, spans: str | None = None,
         model_dir: str | None = None) -> dict:
+    if command in ('prepare', 'train', 'eval', 'all'):
+        check_data_config(cfg)
+    if command in ('train', 'eval', 'all'):
+        check_detector_config(cfg)
     run_dir = make_run_dir(cfg, command)
     setup_logging(run_dir, cfg.runtime.log_level)
     manifest = Manifest(run_dir, cfg)
@@ -435,8 +447,6 @@ def run(cfg: RunConfig, command: str, spans: str | None = None,
                 **cmd_infer(cfg, run_dir, manifest, Path(model_dir),
                             spans or cfg.paths.infer_spans)}
     if command in ('prepare', 'train', 'eval', 'all'):
-        if command != 'prepare':
-            check_detector_config(cfg)
         prep = cmd_prepare(cfg, run_dir, manifest)
         if command == 'prepare':
             return {'run_dir': str(run_dir)}

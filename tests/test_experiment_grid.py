@@ -79,6 +79,17 @@ def test_pipeline_rejects_bad_detector_config_before_s1():
         check_detector_config(load_config(None, ['detector.threshold_metric=auc']))
 
 
+def test_bad_config_fails_before_a_run_directory_exists(tmp_path):
+    from laim.config import load_config
+    from laim.pipeline import run
+    root = tmp_path / 'runs'
+    for bad in ('detector.experiments=["hub_mse_mse"]',
+                'data.injection_fractions={"halucination": 0.1}'):
+        with pytest.raises(ValueError):
+            run(load_config(None, [bad, f'paths.output_root={root}']), 'train')
+    assert not root.exists()
+
+
 @pytest.mark.slow
 def test_threshold_metric_from_config_reaches_every_experiment(
         standin_embedder, fixture_spans, tmp_path):  # noqa: F811
