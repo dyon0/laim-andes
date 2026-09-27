@@ -115,7 +115,15 @@ for bundles over 256 MB (payload embedding is skipped with a warning) and for
 the `model_path` pattern; legacy path-only payloads fail with an actionable
 message instead of `BadZipFile`.
 
-## OQ-8: Two dead UI knobs; injection fractions not exposed
+## OQ-8: Two dead UI knobs; injection fractions not exposed — RESOLVED (AUDIT_05)
+
+**Resolved on branch `claude/audit-05-fixes`:** `scale_floor` / `norm_z_clip`
+are forwarded by `to_s1_overrides()` (laim defaults now equal the S1Config
+F-05 values 1e-2 / 20, so default runs are numerically unchanged;
+`data.norm_z_clip` did not even exist in the laim config — the form value was
+dropped), unknown config keys are now an error (F-82), and
+`data.injection_fractions` replaces the default plan shares (F-81 commit).
+
 
 **Found 2026-08-14 during the detector-quality analysis.** (1) The UI/descriptor
 parameters `scale_floor` and `norm_z_clip` map into `laim` config but are NOT

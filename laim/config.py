@@ -8,6 +8,7 @@ behavior-preserving; fixes change `ars/`, not this mapping).
 from __future__ import annotations
 
 import dataclasses
+import difflib
 import hashlib
 import json
 import tomllib
@@ -71,7 +72,9 @@ class DataConfig:
     # bias .04); a non-empty dict REPLACES it (unlisted classes: not injected)
     injection_fractions: dict[str, float] = field(default_factory=dict)
     validation_gate: str = 'warn'         # 'off' | 'warn' | 'strict'  (wired in Phase 5)
-    scale_floor: float = 0.0              # 0.0 = legacy behavior (F-05 fix raises it)
+    # F-05 knobs, forwarded to s1 since AUDIT_05 F-82 / OQ-8 (they were dead):
+    scale_floor: float = 1e-2             # floor of the robust/z scale; 0.0 = legacy (no floor)
+    norm_z_clip: float = 20.0             # symmetric clip of normalized EPI; 0.0 = unbounded
 
 
 @dataclass(frozen=True)
@@ -148,6 +151,8 @@ class RunConfig:
             'max_correlation': d.max_correlation,
             'winsorize_epi': d.winsorize_epi,
             'epi_normalization': d.epi_normalization,
+            'scale_floor': d.scale_floor,
+            'norm_z_clip': d.norm_z_clip,
             'norm_train_ratio': d.norm_train_ratio,
             'norm_val_ratio': d.norm_val_ratio,
             'anom_val_ratio': d.anom_val_ratio,
@@ -174,15 +179,32 @@ class RunConfig:
         }
 
 
-def _merge(base: Any, patch: dict) -> Any:
-    """Rebuild a frozen dataclass with a nested dict patch applied."""
+def _merge(base: Any, patch: dict, path: str = '') -> Any:
+    """Rebuild a frozen dataclass with a nested dict patch applied.
+
+    F-82: an unknown key is an error (it used to be skipped silently, so a
+    typo in --set / config_overrides had neither effect nor message)."""
+    names = [f.name for f in fields(base)]
+    unknown = [k for k in patch if k not in names]
+    if unknown:
+        where = path.rstrip('.') or 'top level'
+        hints = []
+        for k in unknown:
+            close = difflib.get_close_matches(k, names, n=3, cutoff=0.5)
+            hints.append(f'{path}{k}' + (f' (did you mean: {", ".join(path + c for c in close)}?)'
+                                         if close else ''))
+        raise ValueError(f'unknown config key(s) in {where}: {"; ".join(hints)}. '
+                         f'Known: {", ".join(path + n for n in names)}')
     kwargs = {}
     for f in fields(base):
         val = getattr(base, f.name)
         if f.name in patch:
             p = patch[f.name]
-            if dataclasses.is_dataclass(val) and isinstance(p, dict):
-                kwargs[f.name] = _merge(val, p)
+            if dataclasses.is_dataclass(val):
+                if not isinstance(p, dict):
+                    raise ValueError(f'{path}{f.name} is a config section, not a value '
+                                     f'(use {path}{f.name}.<key>=...), got {p!r}')
+                kwargs[f.name] = _merge(val, p, f'{path}{f.name}.')
             elif isinstance(val, tuple):
                 if isinstance(p, (list, tuple)):
                     kwargs[f.name] = tuple(p)

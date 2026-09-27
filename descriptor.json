@@ -225,7 +225,7 @@
                                     "label": "config_overrides — доп. параметры, по одному section.key=value на строку (или через ';')",
                                     "type": "string",
                                     "defaultValue": "",
-                                    "placeholder": "например: detector.cal_min_pos=10; data.max_correlation=0.995",
+                                    "placeholder": "например: data.max_correlation=0.99; data.min_fill_rate=0.3; data.injection_fractions={\"hallucination\": 0.2}",
                                     "uiComponent": "input"
                                 }
                             ]

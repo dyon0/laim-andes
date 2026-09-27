@@ -86,7 +86,7 @@ def test_build_config_maps_params_and_ports(tmp_path):
         'path_traces_train': '/tmp/a.parquet',
         'path_traces_infer': '/tmp/b.parquet',
         'path_embedder': '/models/emb',
-        'config_overrides': 'detector.cal_min_pos=9; data.max_correlation=0.99',
+        'config_overrides': 'data.min_fill_rate=0.3; data.max_correlation=0.99',
     })
     assert cfg.runtime.device == 'gpu' and cfg.runtime.seed == 7
     assert cfg.detector.epochs == 3
@@ -96,6 +96,71 @@ def test_build_config_maps_params_and_ports(tmp_path):
     assert cfg.paths.infer_spans == '/tmp/b.parquet'
     assert cfg.paths.embedder == '/models/emb'
     assert cfg.data.max_correlation == 0.99
+    assert cfg.data.min_fill_rate == 0.3
+
+
+def test_config_overrides_typo_fails_loudly():
+    """F-82 FIXED: an unknown key used to be skipped silently — the old
+    descriptor placeholder itself suggested the non-existent
+    detector.cal_min_pos."""
+    with pytest.raises(ValueError, match='detector.cal_min_pos'):
+        platform.build_config({'config_overrides': 'detector.cal_min_pos=9'})
+    with pytest.raises(ValueError, match='did you mean: data.max_correlation'):
+        platform.build_config({'config_overrides': 'data.max_corelation=0.9'})
+
+
+def test_descriptor_placeholder_example_parses(descriptor):
+    """F-82: the config_overrides hint shown in the node form must be valid."""
+    field = _form_field(descriptor, 'config_overrides')
+    example = field['placeholder'].split(':', 1)[1].strip()
+    cfg = platform.build_config({'config_overrides': example})
+    assert cfg.data.max_correlation == 0.99
+    assert cfg.data.min_fill_rate == 0.3
+    assert cfg.data.injection_fractions == {'hallucination': 0.2}
+
+
+def test_every_ui_parameter_maps_to_a_real_config_key(descriptor):
+    """F-82: with unknown keys now fatal, a PARAM_MAP target that is not a
+    config key would break EVERY platform run (norm_z_clip was one: the form
+    sent it, the config silently dropped it)."""
+    from laim.config import RunConfig
+    import dataclasses
+    cfg = RunConfig()
+    for param, target in platform.PARAM_MAP.items():
+        section, key = target.split('.')
+        assert key in {f.name for f in dataclasses.fields(getattr(cfg, section))}, (param, target)
+    defaults = {f['parameter']: f['defaultValue'] for f in _all_form_fields(descriptor)
+                if f.get('parameter') in platform.PARAM_MAP and 'defaultValue' in f}
+    platform.build_config(defaults)                     # the form defaults load cleanly
+
+
+def test_scale_knobs_reach_s1():
+    """F-82 / OQ-8: scale_floor and norm_z_clip were dead UI knobs."""
+    from ars.configuration.c1__data import S1Config
+    cfg = platform.build_config({'scale_floor': 0.05, 'norm_z_clip': 8.0})
+    s1 = cfg.to_s1_overrides()
+    assert s1['scale_floor'] == 0.05 and s1['norm_z_clip'] == 8.0
+    # defaults stay the F-05 values S1Config uses (no numeric change)
+    from laim.config import RunConfig
+    d = RunConfig().to_s1_overrides()
+    assert d['scale_floor'] == S1Config.scale_floor and d['norm_z_clip'] == S1Config.norm_z_clip
+
+
+def _all_form_fields(descriptor):
+    def walk(node):
+        if isinstance(node, dict):
+            if 'parameter' in node:
+                yield node
+            for v in node.values():
+                yield from walk(v)
+        elif isinstance(node, list):
+            for v in node:
+                yield from walk(v)
+    return list(walk(descriptor))
+
+
+def _form_field(descriptor, name):
+    return next(f for f in _all_form_fields(descriptor) if f['parameter'] == name)
 
 
 def test_build_config_ignores_empty_params():

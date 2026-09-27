@@ -39,3 +39,31 @@ def test_config_hash_stable_and_sensitive():
     assert a.config_hash() == b.config_hash()
     c = load_config(None, ['runtime.seed=1'])
     assert c.config_hash() != a.config_hash()
+
+
+def test_unknown_key_is_rejected_with_a_suggestion():
+    """F-82 FIXED: unknown keys were skipped silently (no effect, no error)."""
+    with pytest.raises(ValueError, match='detector.typo'):
+        load_config(None, ['detector.typo=1'])
+    with pytest.raises(ValueError, match='did you mean: detector.epochs'):
+        load_config(None, ['detector.epoch=5'])
+    with pytest.raises(ValueError, match='did you mean: detector'):
+        load_config(None, ['detectr.epochs=5'])
+
+
+def test_unknown_key_in_toml_is_rejected(tmp_path):
+    f = tmp_path / 'c.toml'
+    f.write_text('[data]\nmax_corelation = 0.9\n')
+    with pytest.raises(ValueError, match='data.max_correlation'):
+        load_config(f)
+
+
+def test_section_given_a_scalar_is_rejected():
+    with pytest.raises(ValueError, match='config section'):
+        load_config(None, ['detector=5'])
+
+
+def test_shipped_configs_load():
+    from pathlib import Path
+    for f in sorted((Path(__file__).parents[1] / 'configs').glob('*.toml')):
+        load_config(f)

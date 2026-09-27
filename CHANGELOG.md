@@ -73,6 +73,17 @@ fails before and passes after.
   `data.injection_fractions` (e.g. `{"hallucination": 0.2}`) replaces the
   default per-class shares — validated (known classes, >= 0, sum <= 1).
 
+- **F-82 (P2)** unknown config keys were skipped silently — a typo in
+  `--set`, a TOML file or the node's `config_overrides` had neither effect
+  nor error, and the form's own hint suggested the non-existent
+  `detector.cal_min_pos`. `_merge` now raises on unknown keys with the
+  closest valid names (and on a scalar given to a section); the descriptor
+  hint uses real keys and is parsed by a test. OQ-8 item 1: `scale_floor`
+  and `norm_z_clip` reach s1 (`data.norm_z_clip` did not exist in the
+  config, so the form value was dropped); laim defaults now equal the
+  S1Config F-05 values (1e-2 / 20), so default runs are unchanged. A test
+  pins that every UI parameter maps to a real config key.
+
 ## Fixed (P0s, each with the test that failed before / passes after)
 
 - **F-36** injector text-noise crashed on ~5% of spans (u64 hash → i64 wrap in
