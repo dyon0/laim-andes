@@ -24,6 +24,16 @@ fails before and passes after.
   `ars`/`laim` import initializes a backend; the device is applied before any
   backend exists, on the platform and CLI paths).
 
+- CPU cost of the wider EPI set (F-75, ~45 -> ~1000 dims), measured on a
+  70k-span single-agent corpus (same device, CPU): `pl.concat_list` over
+  ~1000 columns took 14 s — replaced by `epi_vector_expr` (`concat_arr` with
+  an explicit Float64 cast, identical values, ~0.9 s; also in inference and
+  the hallucination refresh); the per-feature columns are dropped once
+  `epi_vector` exists (after the optional export), so they no longer ride
+  through injection (peak RSS was 5.7 -> 10.9 GB); the normalization chart
+  plots the 100 widest-scale dimensions instead of one bar pair per
+  dimension (~4.5 s of rendering). s1 outputs are bit-identical.
+
 - **F-75 (P0)** EPI feature selection collapsed to an alphabetical prefix:
   `select_features` correlated columns BEFORE filling nulls, `DataFrame.corr()`
   returns NaN for any column with a null (every `*_rolling_std_w*`), and in

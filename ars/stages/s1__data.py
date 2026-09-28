@@ -179,6 +179,14 @@ def load_spans(cfg: S1Config, raw_schema: RawSchema) -> pl.DataFrame:
     return df #.head(100)
 
 
+def epi_vector_expr(names) -> pl.Expr:
+    '''the span's EPI vector (List[Float64]) from the selected feature columns.
+    Same values as pl.concat_list(names) — which up-casts to Float64 — but
+    ~15x faster at the ~1000 dims F-75 restored (70k spans: 0.85 s vs 14 s);
+    concat_arr needs one dtype, hence the explicit cast.'''
+    return pl.concat_arr([pl.col(c).cast(pl.Float64) for c in names]).arr.to_list().alias('epi_vector')
+
+
 def selection_correlation(frame: pl.DataFrame, cols: list[str], fill_value: float | str) -> pl.DataFrame:
     '''F-75: корреляции для отбора — на тех значениях, которые увидит детектор.
 
@@ -418,8 +426,7 @@ def calculate_features(
     # 8. формирование epi_sequence и финальная статистика
     epi_feature_names       = tuple(sorted(epi_feature_names))
     len_epi_feature_names   = len(epi_feature_names)
-    result = filled.with_columns(
-        pl.concat_list(epi_feature_names).alias('epi_vector'))
+    result = filled.with_columns(epi_vector_expr(epi_feature_names))
     
     stats = (
         ('Всего признаков сгенерировано',   len_features),
@@ -708,7 +715,7 @@ def refresh_text_features(
         .with_columns(pl.col('sem_text').cast(spans.schema['output_text']).alias('output_text')))
     recomputed  = fill_missing_values(FeaturesSpan().make_features(victims, FeaturePatterns()), cfg)
     recomputed  = (recomputed
-        .with_columns(pl.concat_list(epi_feature_names).alias('epi_vector'))
+        .with_columns(epi_vector_expr(epi_feature_names))
         .select(spans.columns)
         .cast(dict(spans.schema)))
     sprint(f'EPI-признаки пересчитаны по искажённому тексту: {changed.height} трасс {anomaly_class}',
@@ -1040,12 +1047,17 @@ def normalize_epi_features(
         'z_clip'            : cfg.norm_z_clip,
     }
 
+    # one bar pair per dimension is unreadable — and ~4.5 s of CPU rendering —
+    # at the ~1000 EPI dims F-75 restored: plot the widest-scale dimensions
     _viz_dir = cfg.output_dir / 'visualizations'
-    _dims    = map(lambda i: f'd{i}', range(epi_dim))
-    _norm    = pl.DataFrame({'dim': _dims, 'shift': shift_row, 'scale': scale_row})
+    _top     = min(epi_dim, 100)
+    _norm    = (pl.DataFrame({'dim': [f'd{i}' for i in range(epi_dim)], 'shift': shift_row, 'scale': scale_row})
+                .sort('scale', descending = True, maintain_order = True)
+                .head(_top))
     viz.save_grouped_bars(
         _norm.unpivot(index = 'dim', on = ['shift', 'scale'], variable_name = 'param', value_name = 'value'),
-        'dim', 'value', 'param', _viz_dir, 'norm_params', 'Параметры нормализации по измерениям')
+        'dim', 'value', 'param', _viz_dir, 'norm_params',
+        'Параметры нормализации по измерениям' + (f' (топ-{_top} по scale из {epi_dim})' if _top < epi_dim else ''))
 
     return (train_norm_out, val_norm_out, test_norm_out), norm_params
 
@@ -1236,6 +1248,12 @@ def main(
 
     if cfg.export_features:
         spans.write_parquet((cfg.output_dir / 'spans_features.parquet').as_posix())
+
+    # from here on only epi_vector carries the EPI features: the ~1000
+    # per-feature columns (F-75) would ride through injection, its copies and
+    # merges, doubling peak RAM (70k spans: 5.7 -> 10.9 GB) and slowing the
+    # merges; refresh_text_features recomputes from the raw columns anyway
+    spans = spans.drop(epi_feature_names, strict = False)
     
     coverage = None
     if cfg.inject_anomalies:
@@ -1371,9 +1389,7 @@ def prepare_test_data(
     
     spans_filled        = fill_missing_values(spans_enriched, cfg_test)
 
-    spans_epi           = spans_filled.with_columns(
-        pl.concat_list(s1_meta.epi_features).alias('epi_vector')
-    )
+    spans_epi           = spans_filled.with_columns(epi_vector_expr(s1_meta.epi_features))
     
     spans_sem           = compute_semantic_embeddings(
         spans_epi, cfg_test, text_col = 'sem_text', out_col = 'sem_vector'
