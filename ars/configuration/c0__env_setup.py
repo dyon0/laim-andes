@@ -9,10 +9,11 @@ from    dataclasses import dataclass
 environ.setdefault('XLA_PYTHON_CLIENT_PREALLOCATE',  'false')
 environ.setdefault('XLA_PYTHON_CLIENT_MEM_FRACTION', '0.80')
 #environ.setdefault('XLA_PYTHON_CLIENT_ALLOCATOR',    'platform')
-environ.setdefault('XLA_FLAGS',
-    '--xla_gpu_autotune_level=3 '
-    '--xla_dump_to=/tmp/xla_hlo_dump '
-)
+# no --xla_dump_to here: it was left on from debugging and dumped every one of
+# the ~1200 modules a training compiles (HLO, and on GPU also LLVM IR / PTX) —
+# CPU and disk spent for nothing on every run (171k files / 2.3 GB locally).
+# Set XLA_FLAGS in the environment to get dumps when debugging.
+environ.setdefault('XLA_FLAGS', '--xla_gpu_autotune_level=3')
 
 environ.setdefault('JAX_NUM_COMPILATION_THREADS',    '20')
 

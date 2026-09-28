@@ -8,6 +8,20 @@ All notable changes on branch `claude/lumimas-anomaly-refactor-7stpda`
 Finding IDs refer to AUDIT_05_findings.md; each fix lands with the test that
 fails before and passes after.
 
+- Resource attribution (operator report after the device fix: run 1035 s,
+  CPU 56% of the 4-core quota, GPU avg SM 27% — whole-run averages only, which
+  cannot say which step burns CPU while the GPU idles). `manifest.metrics
+  .resources` (and `resources …` log lines) now give, per stage and per
+  `@benchmark` step: wall s, CPU core-s and average busy cores, GPU
+  utilization / memory (one streaming `nvidia-smi`, no in-process CUDA call),
+  peak RSS, XLA compile s / count (`jax.monitoring`). Same corpus on the same
+  device (CPU, 35k spans, classifier on): master 526 s / 1352 core-s, this
+  branch 562 s / 1427 core-s; the anomaly-type classifier (s3) is ~60% of all
+  CPU in both (337 s vs 338 s) — no new CPU-heavy step. The debug flag
+  `--xla_dump_to=/tmp/xla_hlo_dump` is gone from the default `XLA_FLAGS`: it
+  dumped every one of the ~1200 compiled modules per training run (171k
+  files / 2.3 GB locally; on GPU also LLVM IR / PTX).
+
 - **REGRESSION of this branch, fixed:** a platform training with
   `device=gpu` ran entirely on CPU (operator report: zero GPU utilization,
   20 min -> ~6 h). The early config checks added for F-77/F-78/OQ-8 imported

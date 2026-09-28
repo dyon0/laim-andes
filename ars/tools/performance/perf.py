@@ -83,6 +83,11 @@ def measure_during_call(
     return result, elapsed, reduce(folder, map(lambda s: s[0], taken), None), reduce(folder, map(lambda s: s[1], taken), None)
 
 
+# callbacks (name, entering) around every @benchmark call — laim's resource
+# monitor uses them to attribute CPU/GPU/compile time to pipeline steps
+PHASE_HOOKS: list[Callable[[str, bool], None]] = []
+
+
 @composable
 def benchmark(name: None | str = None):
     def decorate(func: Callable) -> Callable:
@@ -90,7 +95,11 @@ def benchmark(name: None | str = None):
 
         @wraps(func)
         def wrapper(*args, **kwargs):
-            result, elapsed, peak_cpu, peak_gpu = measure_during_call(func, args, kwargs)
+            for hook in PHASE_HOOKS: hook(display, True)
+            try:
+                result, elapsed, peak_cpu, peak_gpu = measure_during_call(func, args, kwargs)
+            finally:
+                for hook in PHASE_HOOKS: hook(display, False)
             setattr(wrapper, 'elapsed',     elapsed)
             setattr(wrapper, 'peak_cpu',    peak_cpu)
             setattr(wrapper, 'peak_gpu',    peak_gpu)

@@ -19,7 +19,7 @@ from pathlib import Path, PurePath
 from typing import Any
 
 from laim.config import RunConfig, spans_scan_source
-from laim.runlog import Manifest, StageTimer, early_logging, setup_logging
+from laim.runlog import Manifest, StageTimer, early_logging, monitored, setup_logging
 
 log = logging.getLogger('laim.pipeline')
 
@@ -490,7 +490,12 @@ def run(cfg: RunConfig, command: str, spans: str | None = None,
     log.info('run dir: %s | command: %s | config hash: %s',
              run_dir, command, cfg.config_hash())
     log.info('runtime device: %s', device)
+    with monitored(manifest, log):
+        return _dispatch(cfg, command, run_dir, manifest, spans, model_dir)
 
+
+def _dispatch(cfg: RunConfig, command: str, run_dir: Path, manifest: Manifest,
+              spans: str | None, model_dir: str | None) -> dict:
     if command == 'synth':
         return {'run_dir': str(run_dir), **cmd_synth(cfg, run_dir, manifest)}
     if command == 'validate':

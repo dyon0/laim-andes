@@ -664,29 +664,32 @@ def run_train(cfg, params: dict[str, Any]) -> dict:
     manifest = Manifest(run_dir, cfg)
     manifest.record_metrics('runtime_device', device)
     log.info('runtime device: %s', device)
-    from laim.runlog import gpu_topology
+    from laim.runlog import gpu_topology, monitored
     manifest.record_metrics('gpu_topology', gpu_topology())
-
-    prep = cmd_prepare(cfg, run_dir, manifest)
-    trained = cmd_train(cfg, run_dir, manifest, prep['s1_meta'])
-    report = cmd_eval(cfg, run_dir, manifest, prep['s1_meta'], trained['s2_meta'])
-
-    store = Path(params.get('model_store_dir') or '/mnt/data/laim/models')
-    store = _writable_store(store)
-    bundle = create_bundle(run_dir, store)
-    manifest.record_artifact('model_bundle', bundle)
 
     import pandas as pd
     anomaly_traces = pd.DataFrame()
     test_anomalies = json.dumps({'anomalies': []}, ensure_ascii=False)
     contract_notes: dict = {}
-    if cfg.paths.infer_spans:
-        cmd_infer(cfg, run_dir, manifest, run_dir, cfg.paths.infer_spans)
-        import polars as pl
-        scored = pl.read_parquet(run_dir / 'detections.parquet')
-        anomaly_traces, test_anomalies, contract_notes = build_product_contract(
-            scored, cfg.paths.infer_spans, cfg.runtime.recast,
-            s3_meta=_load_s3_meta(run_dir))
+    # per-stage/step CPU, GPU and XLA-compile attribution -> manifest.metrics
+    # .resources (the platform itself reports whole-run averages only)
+    with monitored(manifest, log):
+        prep = cmd_prepare(cfg, run_dir, manifest)
+        trained = cmd_train(cfg, run_dir, manifest, prep['s1_meta'])
+        report = cmd_eval(cfg, run_dir, manifest, prep['s1_meta'], trained['s2_meta'])
+
+        store = Path(params.get('model_store_dir') or '/mnt/data/laim/models')
+        store = _writable_store(store)
+        bundle = create_bundle(run_dir, store)
+        manifest.record_artifact('model_bundle', bundle)
+
+        if cfg.paths.infer_spans:
+            cmd_infer(cfg, run_dir, manifest, run_dir, cfg.paths.infer_spans)
+            import polars as pl
+            scored = pl.read_parquet(run_dir / 'detections.parquet')
+            anomaly_traces, test_anomalies, contract_notes = build_product_contract(
+                scored, cfg.paths.infer_spans, cfg.runtime.recast,
+                s3_meta=_load_s3_meta(run_dir))
 
     manifest_data = json.loads((run_dir / 'manifest.json').read_text())
     s3_metrics = manifest_data['metrics'].get('train_classifier', {})
@@ -722,10 +725,31 @@ def run_inference(cfg, params: dict[str, Any]) -> dict:
     manifest = Manifest(run_dir, cfg)
     manifest.record_metrics('runtime_device', device)
     log.info('runtime device: %s', device)
-    from laim.runlog import gpu_topology
+    from laim.runlog import gpu_topology, monitored
     manifest.record_metrics('gpu_topology', gpu_topology())
     manifest.record_input('model_bundle', source)
+    with monitored(manifest, log):
+        cfg, bundle_root, scored, anomaly_traces, test_anomalies, contract_notes = \
+            _score_with_bundle(cfg, source, run_dir, manifest)
 
+    manifest_data = json.loads((run_dir / 'manifest.json').read_text())
+    return {
+        'model_out':                    model_out_echo(source),
+        'detector_metrics_holdout':     {},   # no labels at inference
+        'classifier_metrics_holdout':   {},
+        'eval_report':                  {'n_traces_scored': scored.height,
+                                         'n_detected': int(scored['detector_is_anomaly'].sum()),
+                                         'n_truncated': int(scored['detector_truncated'].sum()),
+                                         **contract_notes},
+        'anomaly_traces':               anomaly_traces,
+        'test_anomalies':               test_anomalies,
+        'html_reports':                 {},
+        'manifest':                     manifest_data,
+    }
+
+
+def _score_with_bundle(cfg, source, run_dir: Path, manifest) -> tuple:
+    from laim.pipeline import cmd_infer
     bundle_root = resolve_bundle(source, run_dir)
 
     # embedding params must match training — the bundle's manifest is the truth
@@ -756,21 +780,7 @@ def run_inference(cfg, params: dict[str, Any]) -> dict:
     anomaly_traces, test_anomalies, contract_notes = build_product_contract(
         scored, cfg.paths.infer_spans, cfg.runtime.recast,
         s3_meta=_load_s3_meta(bundle_root))
-
-    manifest_data = json.loads((run_dir / 'manifest.json').read_text())
-    return {
-        'model_out':                    model_out_echo(source),
-        'detector_metrics_holdout':     {},   # no labels at inference
-        'classifier_metrics_holdout':   {},
-        'eval_report':                  {'n_traces_scored': scored.height,
-                                         'n_detected': int(scored['detector_is_anomaly'].sum()),
-                                         'n_truncated': int(scored['detector_truncated'].sum()),
-                                         **contract_notes},
-        'anomaly_traces':               anomaly_traces,
-        'test_anomalies':               test_anomalies,
-        'html_reports':                 {},
-        'manifest':                     manifest_data,
-    }
+    return cfg, bundle_root, scored, anomaly_traces, test_anomalies, contract_notes
 
 
 def run_node(**params: Any) -> dict:

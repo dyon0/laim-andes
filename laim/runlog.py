@@ -14,6 +14,7 @@ import logging
 import platform
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
@@ -219,11 +220,273 @@ class StageTimer:
 
     def __enter__(self) -> 'StageTimer':
         self.t0 = time.time()
+        push_phase(self.name, stage=True)
         self.log.info('stage %s: start', self.name)
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
         dt = time.time() - self.t0
+        pop_phase(self.name, stage=True)
         status = 'ok' if exc_type is None else f'failed: {exc_type.__name__}: {exc}'
         self.manifest.record_stage(self.name, dt, status=status)
         self.log.info('stage %s: %s (%.1fs)', self.name, status, dt)
+
+
+# ------------------------------------------------------ resource attribution
+#
+# The platform reports only whole-run averages (e.g. "cpu usage 56%, avg sm
+# load 27%"), which cannot say WHICH step burns CPU while the GPU idles. The
+# monitor below attributes every sample to the current stage (StageTimer) and
+# step (the innermost ars @benchmark), and XLA compile time via jax.monitoring.
+
+_PHASE_LOCK = threading.Lock()
+_STAGE: list[str] = []
+_STEPS: list[str] = []
+
+
+_MONITORS: list['ResourceMonitor'] = []
+
+
+def _tick_monitors() -> None:
+    for mon in tuple(_MONITORS):              # close the running phase exactly
+        mon.tick()
+
+
+def push_phase(name: str, stage: bool = False) -> None:
+    _tick_monitors()
+    with _PHASE_LOCK:
+        (_STAGE if stage else _STEPS).append(name)
+
+
+def pop_phase(name: str, stage: bool = False) -> None:
+    _tick_monitors()
+    with _PHASE_LOCK:
+        stack = _STAGE if stage else _STEPS
+        if name in stack:                       # tolerate unbalanced exits
+            del stack[len(stack) - 1 - stack[::-1].index(name)]
+        if stage:
+            _STEPS.clear()
+
+
+def current_phase() -> tuple[str, str]:
+    with _PHASE_LOCK:
+        stage = _STAGE[-1] if _STAGE else 'setup'
+        step = _STEPS[-1] if _STEPS else '-'
+    return stage, step
+
+
+def _benchmark_hook(name: str, entering: bool) -> None:
+    (push_phase if entering else pop_phase)(name)
+
+
+def cpu_quota_cores() -> float | None:
+    """The container's CPU budget (cgroup v2, then v1); None if unlimited."""
+    try:
+        raw = Path('/sys/fs/cgroup/cpu.max').read_text().split()
+        if raw[0] != 'max':
+            return int(raw[0]) / int(raw[1])
+    except (OSError, ValueError, IndexError):
+        pass
+    try:
+        quota = int(Path('/sys/fs/cgroup/cpu/cpu.cfs_quota_us').read_text())
+        period = int(Path('/sys/fs/cgroup/cpu/cpu.cfs_period_us').read_text())
+        if quota > 0:
+            return quota / period
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+class ResourceMonitor:
+    """Per stage and per step: wall seconds, process CPU core-seconds (all
+    threads; child processes excluded), average busy cores, peak RSS, GPU
+    utilization / memory (one long-running `nvidia-smi -lms`, never an
+    in-process CUDA call — it must not touch the device set, see
+    tests/test_runtime_device.py) and XLA compile seconds / count
+    (jax.monitoring). Start it after the runtime device is applied."""
+
+    _COMPILE_EVENT = '/jax/core/compile/backend_compile_duration'
+
+    def __init__(self, interval: float = 1.0) -> None:
+        self.interval = interval
+        self._acc: dict[tuple[str, str], dict[str, float]] = {}
+        self._gpu: dict[int, tuple[float, float]] = {}
+        self._stop = threading.Event()
+        self._threads: list[threading.Thread] = []
+        self._smi: subprocess.Popen | None = None
+        self._listener = None
+        self._lock = threading.Lock()
+
+    def _bucket(self, key: tuple[str, str]) -> dict[str, float]:   # call under self._lock
+        return self._acc.setdefault(key, {
+            'wall_s': 0.0, 'cpu_core_s': 0.0, 'gpu_util_x_s': 0.0, 'gpu_s': 0.0,
+            'gpu_mem_max_mib': 0.0, 'rss_max_mb': 0.0, 'xla_compile_s': 0.0,
+            'xla_compiles': 0.0})
+
+    def start(self) -> 'ResourceMonitor':
+        try:
+            self._smi = subprocess.Popen(
+                ['nvidia-smi', '--query-gpu=index,utilization.gpu,memory.used',
+                 '--format=csv,noheader,nounits', '-lms', str(int(self.interval * 1000))],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+            t = threading.Thread(target=self._read_smi, name='laim-smi', daemon=True)
+            t.start()
+            self._threads.append(t)
+        except OSError:
+            self._smi = None                    # no nvidia-smi: CPU-only host
+        try:
+            import jax.monitoring as jm
+
+            def on_duration(event: str, duration: float, **_: Any) -> None:
+                if event == self._COMPILE_EVENT:
+                    key = current_phase()
+                    with self._lock:
+                        b = self._bucket(key)
+                        b['xla_compile_s'] += duration
+                        b['xla_compiles'] += 1
+            jm.register_event_duration_secs_listener(on_duration)
+            self._listener = on_duration
+        except Exception:                        # monitoring must never break a run
+            self._listener = None
+        try:
+            from ars.tools.performance import perf
+            if _benchmark_hook not in perf.PHASE_HOOKS:
+                perf.PHASE_HOOKS.append(_benchmark_hook)
+        except Exception:
+            pass
+        import psutil
+        self._proc = psutil.Process()
+        self._last = (time.monotonic(), self._cpu())
+        _MONITORS.append(self)
+        t = threading.Thread(target=self._sample, name='laim-monitor', daemon=True)
+        t.start()
+        self._threads.append(t)
+        return self
+
+    def _cpu(self) -> float:
+        return sum(self._proc.cpu_times()[:2])   # user + system, all threads
+
+    def _read_smi(self) -> None:
+        assert self._smi is not None and self._smi.stdout is not None
+        for line in self._smi.stdout:
+            try:
+                idx, util, mem = (float(x) for x in line.split(','))
+                self._gpu[int(idx)] = (util, mem)
+            except ValueError:
+                continue
+
+    def tick(self) -> None:
+        """Attribute everything since the previous tick to the CURRENT phase —
+        called periodically and at every phase boundary (push/pop_phase), so
+        short steps are measured exactly, not missed between samples."""
+        key = current_phase()
+        rss = self._proc.memory_info().rss / 2**20
+        gpu = dict(self._gpu)
+        with self._lock:
+            now, c = time.monotonic(), self._cpu()
+            dt, dc = now - self._last[0], c - self._last[1]
+            self._last = (now, c)
+            b = self._bucket(key)
+            b['wall_s'] += dt
+            b['cpu_core_s'] += dc
+            b['rss_max_mb'] = max(b['rss_max_mb'], rss)
+            if gpu:
+                utils = [u for u, _ in gpu.values()]
+                b['gpu_util_x_s'] += sum(utils) / len(utils) * dt
+                b['gpu_s'] += dt
+                b['gpu_mem_max_mib'] = max(b['gpu_mem_max_mib'], max(m for _, m in gpu.values()))
+
+    def _sample(self) -> None:
+        while not self._stop.wait(self.interval):
+            self.tick()
+
+    def stop(self) -> dict:
+        if self in _MONITORS:
+            _MONITORS.remove(self)
+        self.tick()                               # the tail since the last sample
+        self._stop.set()
+        if self._smi is not None:
+            self._smi.terminate()
+        for t in self._threads:
+            t.join(timeout=5)
+        if self._listener is not None:
+            try:
+                import jax.monitoring as jm
+                jm.unregister_event_duration_listener(self._listener)
+            except Exception:
+                pass
+        try:
+            from ars.tools.performance import perf
+            if _benchmark_hook in perf.PHASE_HOOKS:
+                perf.PHASE_HOOKS.remove(_benchmark_hook)
+        except Exception:
+            pass
+        return self.summary()
+
+    @staticmethod
+    def _finish(b: dict[str, float]) -> dict[str, Any]:
+        wall = b['wall_s']
+        return {
+            'wall_s': round(wall, 1),
+            'cpu_core_s': round(b['cpu_core_s'], 1),
+            'cpu_cores_avg': round(b['cpu_core_s'] / wall, 2) if wall else None,
+            'gpu_util_avg_pct': round(b['gpu_util_x_s'] / b['gpu_s'], 1) if b['gpu_s'] else None,
+            'gpu_mem_max_mib': round(b['gpu_mem_max_mib']) if b['gpu_s'] else None,
+            'rss_max_mb': round(b['rss_max_mb']),
+            'xla_compile_s': round(b['xla_compile_s'], 1),
+            'xla_compiles': int(b['xla_compiles']),
+        }
+
+    def summary(self) -> dict:
+        with self._lock:
+            acc = {k: dict(v) for k, v in self._acc.items()}
+
+        def merge(keys) -> dict[str, float]:
+            out = {k: 0.0 for k in ('wall_s', 'cpu_core_s', 'gpu_util_x_s', 'gpu_s',
+                                    'gpu_mem_max_mib', 'rss_max_mb', 'xla_compile_s',
+                                    'xla_compiles')}
+            for key in keys:
+                b = acc[key]
+                for f in out:
+                    out[f] = max(out[f], b[f]) if f.endswith('_max_mib') or f.endswith('_max_mb') else out[f] + b[f]
+            return out
+        stages = dict.fromkeys(k[0] for k in acc)
+        return {
+            'interval_s': self.interval,
+            'cpu_quota_cores': cpu_quota_cores(),
+            'gpu_sampled': self._smi is not None and bool(self._gpu),
+            'total': self._finish(merge(list(acc))),
+            'by_stage': {s: self._finish(merge([k for k in acc if k[0] == s])) for s in stages},
+            'by_step': {f'{s} / {st}': self._finish(acc[(s, st)])
+                        for (s, st) in sorted(acc, key=lambda k: -acc[k]['wall_s'])},
+        }
+
+
+def log_resource_summary(log: logging.Logger, summary: dict, top: int = 15) -> None:
+    fmt = lambda k, v: (f'{k}: wall {v["wall_s"]}s, cpu {v["cpu_core_s"]} core-s '
+                        f'({v["cpu_cores_avg"]} cores), gpu {v["gpu_util_avg_pct"]}%, '
+                        f'xla compile {v["xla_compile_s"]}s/{v["xla_compiles"]}')
+    log.info('resources total — %s', fmt('run', summary['total']))
+    for k, v in summary['by_stage'].items():
+        log.info('resources stage — %s', fmt(k, v))
+    for k, v in list(summary['by_step'].items())[:top]:
+        log.info('resources step — %s', fmt(k, v))
+
+
+class monitored:
+    """`with monitored(manifest, log):` — resource attribution for a run; the
+    summary lands in manifest.metrics.resources and the log even on failure."""
+
+    def __init__(self, manifest: Manifest, log: logging.Logger, interval: float = 1.0) -> None:
+        self.manifest, self.log, self.monitor = manifest, log, ResourceMonitor(interval)
+
+    def __enter__(self) -> ResourceMonitor:
+        return self.monitor.start()
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        try:
+            summary = self.monitor.stop()
+            self.manifest.record_metrics('resources', summary)
+            log_resource_summary(self.log, summary)
+        except Exception as e:                   # never mask the run's own error
+            self.log.warning('resource monitor failed: %s', e)

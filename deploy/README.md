@@ -90,6 +90,14 @@ to CPU); the device report is in the log and in `manifest.metrics
 own `CUDA_VISIBLE_DEVICES` is respected. `device=cpu` (or an empty form field)
 while GPUs are visible is logged as a warning.
 
+Where the time goes: the platform only reports whole-run averages (`cpu usage
+percent`, `avg sm load`). The `manifest` out-port has `metrics.resources`:
+per stage (`prepare`, `train_detector`, `train_classifier`, `eval`, `infer`)
+and per step (the Russian step names of the node log) — wall seconds, CPU
+core-seconds and average busy cores, GPU utilization and memory, peak RSS,
+XLA compile seconds. A step with high `cpu_cores_avg` and low
+`gpu_util_avg_pct` is where the GPU waits for the CPU.
+
 ### Multi-GPU
 
 Embedding — 80–95 % of the GPU wall time on large corpora — is
