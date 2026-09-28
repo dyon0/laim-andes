@@ -659,6 +659,13 @@ def test_platform_train_then_inference(standin_embedder, fixture_spans, tmp_path
     assert 'per_anomaly_type' in result['eval_report']['test']
     assert result['html_reports']['data']          # s1 HTML present
     assert result['manifest']['config_hash']
+    # the `manifest` out-port carries the actual device and the per-stage /
+    # per-step resource attribution (CPU, GPU, XLA compile)
+    assert result['manifest']['metrics']['runtime_device']['jax_backend'] == 'cpu'
+    train_res = result['manifest']['metrics']['resources']
+    assert {'prepare', 'train_detector', 'eval'} <= set(train_res['by_stage'])
+    assert train_res['total']['cpu_core_s'] > 0
+    assert any(k.startswith('prepare / ') for k in train_res['by_step'])
 
     # the hand-off exactly as the platform does it: pywrapper json.dump()s the
     # model_out payload to a file, and model_in delivers that file's path.
@@ -678,6 +685,7 @@ def test_platform_train_then_inference(standin_embedder, fixture_spans, tmp_path
     )
     assert set(inference) == set(platform.OUT_PORTS)
     assert inference['eval_report']['n_traces_scored'] == 4
+    assert 'infer' in inference['manifest']['metrics']['resources']['by_stage']
     payload = json.loads(inference['test_anomalies'])
     assert 'anomalies' in payload
     for rec in payload['anomalies']:      # legacy product contract fields

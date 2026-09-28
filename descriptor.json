@@ -112,7 +112,7 @@
             "in": false,
             "name": "manifest",
             "label": "manifest",
-            "description": "Манифест запуска: хэши входов, сиды, тайминги, метрики.",
+            "description": "Манифест запуска: хэши входов, сиды, тайминги, метрики. metrics.runtime_device — фактическое устройство JAX/torch; metrics.resources — по этапам и шагам: время, ядра CPU, загрузка GPU, память, компиляция XLA.",
             "type": "default",
             "order": 12
         }
