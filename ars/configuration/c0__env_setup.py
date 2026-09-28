@@ -1,11 +1,12 @@
 from    os          import environ
 from    dataclasses import dataclass
 
-# defaults only — a value already present in the environment wins, so the
-# platform adapter (laim/platform.py) can pre-set PREALLOCATE=false when the
-# torch embedder pool and JAX must share the GPUs (preallocating 80% of every
-# device would starve the encoding workers)
-environ.setdefault('XLA_PYTHON_CLIENT_PREALLOCATE',  'true')
+# defaults only — a value already present in the environment wins. JAX shares
+# the GPUs with the torch embedder in every entry point (laim sets false
+# itself; the legacy ars/main.py and injection nodes rely on this default):
+# preallocating 80% of every device would starve the encoder. Before the lazy
+# perf.Hardware fix those legacy nodes never reached the GPU with JAX at all.
+environ.setdefault('XLA_PYTHON_CLIENT_PREALLOCATE',  'false')
 environ.setdefault('XLA_PYTHON_CLIENT_MEM_FRACTION', '0.80')
 #environ.setdefault('XLA_PYTHON_CLIENT_ALLOCATOR',    'platform')
 environ.setdefault('XLA_FLAGS',

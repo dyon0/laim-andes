@@ -23,6 +23,22 @@ fails before and passes after.
   `manifest.metrics.runtime_device`. Subprocess tests guard the invariant (no
   `ars`/`laim` import initializes a backend; the device is applied before any
   backend exists, on the platform and CLI paths).
+  Related device behavior changes: `runtime.device` accepts only cpu | gpu
+  (case-insensitive; `cuda` used to be accepted and put JAX on CPU);
+  `device=gpu` on an instance without a usable GPU stops before the run
+  directory exists (master died later with an opaque AssertionError, `283eb7b`
+  silently used the CPU); an operator's own `CUDA_VISIBLE_DEVICES` (e.g. `2`)
+  is kept — it used to be dropped, exposing every GPU of the host;
+  `eval_report.latency_per_trace.device` is the measured backend;
+  `s1__data` imports `sentence_transformers` lazily (with flash-attn — present
+  on the platform image — that import probes CUDA and would freeze the GPU set
+  if it ever ran before the device is applied; the tests use a flash-attn stub
+  and count every `torch.cuda` probe); the platform logs a warning when the
+  form device is cpu/empty while GPUs are visible. Legacy entry points
+  (`ars/main.py`, the injection node) were pinned to JAX CPU by the same
+  import-time init; they now honor `device=gpu`, and `c0__env_setup` defaults
+  `XLA_PYTHON_CLIENT_PREALLOCATE` to false so JAX does not starve their torch
+  embedder.
 
 - CPU cost of the wider EPI set (F-75, ~45 -> ~1000 dims), measured on a
   70k-span single-agent corpus (same device, CPU): `pl.concat_list` over
@@ -33,6 +49,13 @@ fails before and passes after.
   through injection (peak RSS was 5.7 -> 10.9 GB); the normalization chart
   plots the 100 widest-scale dimensions instead of one bar pair per
   dimension (~4.5 s of rendering). s1 outputs are bit-identical.
+  Re-measured after the change (best of 3, same corpus, CPU, 3 epochs):
+  master 324 s, `283eb7b` 395 s, fixed 363 s (+12% over master; s1 +16 s,
+  s2 +24 s — the s2 part is the 982-wide EPI LSTM on CPU and is negligible on
+  a GPU). Peak RSS 5.7-6.0 GB (master) / 10.9 GB (`283eb7b`) / 8.1 GB (fixed:
+  the 982-float `epi_vector` itself still travels through injection). The
+  column drop saved ~3-5 s and the chart cap ~2.6 s — less than the commit
+  message estimated (~7.7 s / ~4.5 s).
 
 - **F-75 (P0)** EPI feature selection collapsed to an alphabetical prefix:
   `select_features` correlated columns BEFORE filling nulls, `DataFrame.corr()`

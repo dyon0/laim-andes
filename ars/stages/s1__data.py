@@ -18,7 +18,6 @@ import  jax.numpy                       as jp
 
 import  torch                           as tr
 
-from    sentence_transformers           import SentenceTransformer
 
 from    ars.configuration.c1__data      import S1Config
 from    ars.specification.spec          import DataObject, Recast
@@ -564,6 +563,12 @@ def make_embedder(cfg: S1Config) -> Callable[[tuple[str, ...]], jp.ndarray]:
     passes release the GIL, so per-device replicas scale in-process.
     """
     import torch as _torch
+    # imported HERE, not at module level: with flash-attn installed (the
+    # platform image has it) `import sentence_transformers` probes
+    # torch.cuda.is_available() -> cuInit, which freezes the visible GPU set of
+    # the process; a module-level import that ran before the runtime device was
+    # applied would pin torch to 0 GPUs (tests/test_runtime_device.py)
+    from sentence_transformers import SentenceTransformer
 
     devices = embedding_device_plan(
         cfg, _torch.cuda.device_count() if _torch.cuda.is_available() else 0)

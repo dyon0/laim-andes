@@ -663,6 +663,7 @@ def run_train(cfg, params: dict[str, Any]) -> dict:
     setup_logging(run_dir, cfg.runtime.log_level)
     manifest = Manifest(run_dir, cfg)
     manifest.record_metrics('runtime_device', device)
+    log.info('runtime device: %s', device)
     from laim.runlog import gpu_topology
     manifest.record_metrics('gpu_topology', gpu_topology())
 
@@ -720,6 +721,7 @@ def run_inference(cfg, params: dict[str, Any]) -> dict:
     setup_logging(run_dir, cfg.runtime.log_level)
     manifest = Manifest(run_dir, cfg)
     manifest.record_metrics('runtime_device', device)
+    log.info('runtime device: %s', device)
     from laim.runlog import gpu_topology
     manifest.record_metrics('gpu_topology', gpu_topology())
     manifest.record_input('model_bundle', source)
@@ -810,6 +812,10 @@ def run_node(**params: Any) -> dict:
     params = _normalize_port_params(params)
     mode = str(params.get('mode') or 'train').strip().lower()
     cfg = build_config(params)
+    if cfg.runtime.device == 'cpu' and topo.get('available'):
+        log.warning('runtime.device=cpu although %d GPU(s) are visible — the form '
+                    'field "device" is cpu or empty; everything will run on CPU',
+                    len(topo.get('gpus', [])))
     if mode == 'train':
         if not cfg.paths.train_spans:
             raise ValueError('режим train: подключите порт path_traces_train')

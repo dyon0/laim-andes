@@ -83,7 +83,12 @@ instance's own `embedding_gpus` / `embedding_pool_chunk` apply to its
 encoding; the embedding shape parameters (`embedding_batch_size`,
 `embedding_max_length`) still come from the bundle. CPU works everywhere
 (validated); GPU is the production target for the real `deepvk/USER-bge-m3`
-embedder.
+embedder. With `device=gpu` the node verifies at start that JAX and torch
+really see a GPU and STOPS with an explanation otherwise (it never falls back
+to CPU); the device report is in the log and in `manifest.metrics
+.runtime_device` — check `jax_backend: gpu` there after a run. An operator's
+own `CUDA_VISIBLE_DEVICES` is respected. `device=cpu` (or an empty form field)
+while GPUs are visible is logged as a warning.
 
 ### Multi-GPU
 

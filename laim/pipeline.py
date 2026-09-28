@@ -110,6 +110,7 @@ def _apply_runtime(cfg: RunConfig) -> dict:
     before the first `ars` import, Device.force() re-asserts the platform, and
     verify_runtime_device() refuses to continue on CPU when the GPU was asked
     for. Returns the device report (logged and put into the manifest)."""
+    visible_at_start = os.environ.get('CUDA_VISIBLE_DEVICES')
     os.environ['ARS_DEVICE'] = cfg.runtime.device
     if cfg.runtime.device == 'gpu':
         # the torch embedder and JAX share the GPU in prepare AND infer (F-76);
@@ -122,10 +123,10 @@ def _apply_runtime(cfg: RunConfig) -> dict:
     Runtime.apply(track_peak=False, disable_progress=not cfg.runtime.progress,
                   progress_every=0.0)
     Device.of(cfg.runtime.device).force()
-    return verify_runtime_device(cfg)
+    return verify_runtime_device(cfg, visible_at_start)
 
 
-def verify_runtime_device(cfg: RunConfig) -> dict:
+def verify_runtime_device(cfg: RunConfig, visible_at_start: str | None = None) -> dict:
     """What JAX and torch actually run on; device=gpu with either of them
     on CPU is an error, never a silent fallback."""
     import jax
@@ -136,7 +137,9 @@ def verify_runtime_device(cfg: RunConfig) -> dict:
             raise                         # xla_bridge on a GPU-less machine
         backend, devices = f'unavailable ({type(exc).__name__}: {exc})', []
     report: dict[str, Any] = {
-        'requested': cfg.runtime.device, 'jax_backend': backend, 'jax_devices': devices}
+        'requested': cfg.runtime.device, 'jax_backend': backend, 'jax_devices': devices,
+        'cuda_visible_devices': os.environ.get('CUDA_VISIBLE_DEVICES'),
+        'cuda_visible_devices_at_start': visible_at_start}
     if cfg.runtime.device == 'gpu':
         import torch
         report['torch_cuda_devices'] = torch.cuda.device_count() if torch.cuda.is_available() else 0
@@ -154,9 +157,9 @@ def verify_runtime_device(cfg: RunConfig) -> dict:
                 'import ahead of laim.pipeline._apply_runtime), CUDA_VISIBLE_DEVICES '
                 'is empty, the jax CUDA plugin is missing, or the node has no GPU. '
                 f"Environment: JAX_PLATFORMS={os.environ.get('JAX_PLATFORMS')!r}, "
-                f"CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES')!r}.")
-    log.info('runtime device: %s', report)
-    return report
+                f"CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES')!r} "
+                f'(at start: {visible_at_start!r}).')
+    return report                     # callers log it once their run.log exists
 
 
 def cmd_synth(cfg: RunConfig, run_dir: Path, manifest: Manifest) -> dict:
@@ -486,6 +489,7 @@ def run(cfg: RunConfig, command: str, spans: str | None = None,
     manifest.record_metrics('runtime_device', device)
     log.info('run dir: %s | command: %s | config hash: %s',
              run_dir, command, cfg.config_hash())
+    log.info('runtime device: %s', device)
 
     if command == 'synth':
         return {'run_dir': str(run_dir), **cmd_synth(cfg, run_dir, manifest)}
