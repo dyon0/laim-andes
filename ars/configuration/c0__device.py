@@ -29,7 +29,11 @@ class Device:
     def force(self) -> None:
         environ['JAX_PLATFORMS'] = self.jax
 
-        if self.name == 'gpu': environ.pop('CUDA_VISIBLE_DEVICES', None)
+        # gpu: undo only the BLANKING done for cpu (c0__env_setup / force('cpu'));
+        # an operator's own selection (e.g. CUDA_VISIBLE_DEVICES=2) is kept —
+        # it used to be popped, exposing every GPU of the host
+        if self.name == 'gpu':
+            if environ.get('CUDA_VISIBLE_DEVICES') == '': environ.pop('CUDA_VISIBLE_DEVICES')
         else: environ['CUDA_VISIBLE_DEVICES'] = ''
 
         import jax as jx

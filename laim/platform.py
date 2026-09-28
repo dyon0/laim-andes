@@ -656,12 +656,13 @@ def run_train(cfg, params: dict[str, Any]) -> dict:
     from laim.pipeline import (Manifest, _apply_runtime, check_data_config,
                                check_detector_config, cmd_eval, cmd_infer,
                                cmd_prepare, cmd_train, make_run_dir, setup_logging)
+    device = _apply_runtime(cfg)          # FIRST: before any `ars` import
     check_data_config(cfg)
     check_detector_config(cfg)
-    _apply_runtime(cfg)
     run_dir = make_run_dir(cfg, 'platform_train')
     setup_logging(run_dir, cfg.runtime.log_level)
     manifest = Manifest(run_dir, cfg)
+    manifest.record_metrics('runtime_device', device)
     from laim.runlog import gpu_topology
     manifest.record_metrics('gpu_topology', gpu_topology())
 
@@ -706,7 +707,7 @@ def run_train(cfg, params: dict[str, Any]) -> dict:
 def run_inference(cfg, params: dict[str, Any]) -> dict:
     from laim.pipeline import (Manifest, _apply_runtime, cmd_infer, make_run_dir,
                                setup_logging)
-    _apply_runtime(cfg)
+    device = _apply_runtime(cfg)          # FIRST: before any `ars` import
     if not cfg.paths.infer_spans:
         raise ValueError('режим inference: подключите порт path_traces_infer '
                          '(parquet со спанами для скоринга)')
@@ -718,6 +719,7 @@ def run_inference(cfg, params: dict[str, Any]) -> dict:
     run_dir = make_run_dir(cfg, 'platform_infer')
     setup_logging(run_dir, cfg.runtime.log_level)
     manifest = Manifest(run_dir, cfg)
+    manifest.record_metrics('runtime_device', device)
     from laim.runlog import gpu_topology
     manifest.record_metrics('gpu_topology', gpu_topology())
     manifest.record_input('model_bundle', source)
@@ -799,6 +801,12 @@ def run_node(**params: Any) -> dict:
     else:
         log.info('no GPUs visible to nvidia-smi (%s)', topo.get('reason', 'n/a'))
 
+    # c0__env_setup (imported by every `ars` stage) keys on ARS_DEVICE; set it
+    # from the form before the first possible `ars` import (in-memory port
+    # staging below imports ars.specification). _apply_runtime re-sets it from
+    # the final config.
+    if str(params.get('device') or '').strip():
+        os.environ['ARS_DEVICE'] = str(params['device']).strip().lower()
     params = _normalize_port_params(params)
     mode = str(params.get('mode') or 'train').strip().lower()
     cfg = build_config(params)

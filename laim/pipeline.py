@@ -13,12 +13,13 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 from pathlib import Path, PurePath
 from typing import Any
 
 from laim.config import RunConfig, spans_scan_source
-from laim.runlog import Manifest, StageTimer, setup_logging
+from laim.runlog import Manifest, StageTimer, early_logging, setup_logging
 
 log = logging.getLogger('laim.pipeline')
 
@@ -96,12 +97,24 @@ def check_data_config(cfg: RunConfig) -> None:
         injection_plan(cfg.runtime.seed, cfg.data.injection_fractions)
 
 
-def _apply_runtime(cfg: RunConfig) -> None:
+def _apply_runtime(cfg: RunConfig) -> dict:
+    """Apply the runtime device. MUST run before anything imports `ars`.
+
+    Every `ars` stage module first imports ars.configuration.c0__env_setup,
+    which — keyed on ARS_DEVICE, default cpu — sets JAX_PLATFORMS and hides
+    the GPUs (CUDA_VISIBLE_DEVICES=''); and once any code initializes the JAX
+    backend, its platform is fixed for the process. The AUDIT_05 pre-checks
+    imported `ars` before this function and ars.tools.performance.perf
+    initialized JAX at import, so a device=gpu training silently ran on CPU
+    (20 min -> ~6 h on the platform). Hence: ARS_DEVICE is set from the config
+    before the first `ars` import, Device.force() re-asserts the platform, and
+    verify_runtime_device() refuses to continue on CPU when the GPU was asked
+    for. Returns the device report (logged and put into the manifest)."""
+    os.environ['ARS_DEVICE'] = cfg.runtime.device
     if cfg.runtime.device == 'gpu':
         # the torch embedder and JAX share the GPU in prepare AND infer (F-76);
         # JAX's default 80% preallocation would starve the encoder. Same policy
         # as the platform node; an operator value in the environment wins.
-        import os
         os.environ.setdefault('XLA_PYTHON_CLIENT_PREALLOCATE', 'false')
     import ars.configuration.c0__env_setup  # noqa: F401  (env side effects, legacy)
     from ars.configuration.c0__device import Device
@@ -109,6 +122,41 @@ def _apply_runtime(cfg: RunConfig) -> None:
     Runtime.apply(track_peak=False, disable_progress=not cfg.runtime.progress,
                   progress_every=0.0)
     Device.of(cfg.runtime.device).force()
+    return verify_runtime_device(cfg)
+
+
+def verify_runtime_device(cfg: RunConfig) -> dict:
+    """What JAX and torch actually run on; device=gpu with either of them
+    on CPU is an error, never a silent fallback."""
+    import jax
+    try:
+        backend, devices = jax.default_backend(), [str(d) for d in jax.devices()]
+    except Exception as exc:          # RuntimeError "Unable to initialize backend
+        if cfg.runtime.device != 'gpu':   # 'cuda'", or an AssertionError from
+            raise                         # xla_bridge on a GPU-less machine
+        backend, devices = f'unavailable ({type(exc).__name__}: {exc})', []
+    report: dict[str, Any] = {
+        'requested': cfg.runtime.device, 'jax_backend': backend, 'jax_devices': devices}
+    if cfg.runtime.device == 'gpu':
+        import torch
+        report['torch_cuda_devices'] = torch.cuda.device_count() if torch.cuda.is_available() else 0
+        problems = []
+        if report['jax_backend'] != 'gpu':
+            problems.append(f"the JAX backend is {report['jax_backend']!r} "
+                            f"(devices {report['jax_devices']})")
+        if not report['torch_cuda_devices']:
+            problems.append('torch sees no CUDA device (the embedder would run on CPU)')
+        if problems:
+            raise RuntimeError(
+                'runtime.device=gpu, but ' + '; '.join(problems) + '. Refusing to '
+                'train/score on CPU instead. Causes seen or possible: the JAX '
+                'backend was initialized before the device was applied (an `ars` '
+                'import ahead of laim.pipeline._apply_runtime), CUDA_VISIBLE_DEVICES '
+                'is empty, the jax CUDA plugin is missing, or the node has no GPU. '
+                f"Environment: JAX_PLATFORMS={os.environ.get('JAX_PLATFORMS')!r}, "
+                f"CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES')!r}.")
+    log.info('runtime device: %s', report)
+    return report
 
 
 def cmd_synth(cfg: RunConfig, run_dir: Path, manifest: Manifest) -> dict:
@@ -344,9 +392,10 @@ def cmd_eval(cfg: RunConfig, run_dir: Path, manifest: Manifest,
                 out = Predict.batch(meta, models, epi[i:i+1], epi_m[i:i+1],
                                     sem[i:i+1], sem_m[i:i+1])
                 float(out.p_anomaly[0])  # force device sync
+            import jax
             report['latency_per_trace'] = {
                 **evaluation.measure_latency(predict_one, n, cfg.eval.latency_reps),
-                'device': cfg.runtime.device, 'batch': 1}
+                'device': jax.default_backend(), 'batch': 1}   # measured, not requested
 
     (run_dir / 'eval_report.json').write_text(
         json.dumps(report, indent=2, ensure_ascii=False, default=str))
@@ -425,6 +474,8 @@ def cmd_infer(cfg: RunConfig, run_dir: Path, manifest: Manifest,
 
 def run(cfg: RunConfig, command: str, spans: str | None = None,
         model_dir: str | None = None) -> dict:
+    early_logging(cfg.runtime.log_level)
+    device = _apply_runtime(cfg)          # FIRST: before any `ars` import
     if command in ('prepare', 'train', 'eval', 'all'):
         check_data_config(cfg)
     if command in ('train', 'eval', 'all'):
@@ -432,9 +483,9 @@ def run(cfg: RunConfig, command: str, spans: str | None = None,
     run_dir = make_run_dir(cfg, command)
     setup_logging(run_dir, cfg.runtime.log_level)
     manifest = Manifest(run_dir, cfg)
+    manifest.record_metrics('runtime_device', device)
     log.info('run dir: %s | command: %s | config hash: %s',
              run_dir, command, cfg.config_hash())
-    _apply_runtime(cfg)
 
     if command == 'synth':
         return {'run_dir': str(run_dir), **cmd_synth(cfg, run_dir, manifest)}

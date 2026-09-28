@@ -240,6 +240,18 @@ def _coerce(raw: str) -> Any:
     return raw
 
 
+def _normalized_device(cfg: RunConfig) -> RunConfig:
+    """runtime.device is cpu | gpu (case-insensitive). Anything else used to
+    slip through: 'cuda' put JAX on CPU while torch got 'cuda', 'GPU' skipped
+    the GPU memory policy."""
+    device = str(cfg.runtime.device).strip().lower()
+    if device not in ('cpu', 'gpu'):
+        raise ValueError(f'runtime.device={cfg.runtime.device!r}: допустимо cpu | gpu')
+    if device == cfg.runtime.device:
+        return cfg
+    return dataclasses.replace(cfg, runtime=dataclasses.replace(cfg.runtime, device=device))
+
+
 def load_config(config_file: str | Path | None = None,
                 overrides: list[str] | None = None) -> RunConfig:
     """defaults ← TOML ← `section.key=value` overrides."""
@@ -258,4 +270,4 @@ def load_config(config_file: str | Path | None = None,
             node = node.setdefault(p, {})
         node[parts[-1]] = _coerce(raw)
         cfg = _merge(cfg, nest)
-    return cfg
+    return _normalized_device(cfg)

@@ -97,6 +97,13 @@ authoritative: 46 fields, sentinels instead of NULL (-1 / -1.0 / False / '' /
   `eval_report.injection_coverage`; labeled-but-unchanged traces are dropped.
 - Config keys are strict: an unknown key in TOML / `--set` /
   `config_overrides` raises with the closest valid names (F-82).
+- DEVICE TRAP: `laim.pipeline._apply_runtime` must run before ANYTHING imports
+  `ars` (stages import `c0__env_setup`, which hides the GPUs unless
+  `ARS_DEVICE=gpu`), and no module may initialize JAX/torch CUDA at import —
+  once the JAX backend exists its platform is fixed. Breaking this made a
+  `device=gpu` training run silently on CPU (20 min -> ~6 h).
+  `tests/test_runtime_device.py` guards it; `device=gpu` without a working GPU
+  now fails loudly (`verify_runtime_device`).
 - The experiment grid lives in `ars/configuration/experiments/e2__detector.py`;
   `detector.experiments/epochs/patience` in config override it. The grid is
   BUILT from the requested codes (any well-formed code, not only `CODES`;

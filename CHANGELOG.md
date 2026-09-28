@@ -8,6 +8,22 @@ All notable changes on branch `claude/lumimas-anomaly-refactor-7stpda`
 Finding IDs refer to AUDIT_05_findings.md; each fix lands with the test that
 fails before and passes after.
 
+- **REGRESSION of this branch, fixed:** a platform training with
+  `device=gpu` ran entirely on CPU (operator report: zero GPU utilization,
+  20 min -> ~6 h). The early config checks added for F-77/F-78/OQ-8 imported
+  `ars` BEFORE `_apply_runtime`; `ars` stages import `c0__env_setup`
+  (`JAX_PLATFORMS=cpu`, `CUDA_VISIBLE_DEVICES=''` unless `ARS_DEVICE=gpu`), and
+  `ars.tools.performance.perf` evaluated `jax.default_backend()` at IMPORT,
+  which initializes the JAX backend — after that `Device.force('gpu')` cannot
+  move JAX. Fix: `_apply_runtime` runs first on every entry path and sets
+  `ARS_DEVICE` from the config before the first `ars` import (`run_node` also
+  sets it from the form before port staging); `perf.Hardware.gpu()` is lazy;
+  `verify_runtime_device` refuses to continue when `device=gpu` but JAX or
+  torch is not on a GPU, and the device report goes to the log and
+  `manifest.metrics.runtime_device`. Subprocess tests guard the invariant (no
+  `ars`/`laim` import initializes a backend; the device is applied before any
+  backend exists, on the platform and CLI paths).
+
 - **F-75 (P0)** EPI feature selection collapsed to an alphabetical prefix:
   `select_features` correlated columns BEFORE filling nulls, `DataFrame.corr()`
   returns NaN for any column with a null (every `*_rolling_std_w*`), and in

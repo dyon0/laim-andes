@@ -1,6 +1,6 @@
-from    typing                              import Any, Callable, ClassVar, Literal
+from    typing                              import Any, Callable, Literal
 from    dataclasses                         import dataclass
-from    functools                           import reduce, wraps
+from    functools                           import cache, reduce, wraps
 from    itertools                           import takewhile, repeat
 
 from    os                                  import environ
@@ -20,7 +20,17 @@ type Sample = tuple[None | Metric, None | Metric]
 
 @dataclass(frozen = True)
 class Hardware:
-    gpu: ClassVar[bool] = jx.default_backend() == 'gpu'
+    @staticmethod
+    @cache
+    def gpu() -> bool:
+        '''LAZY on purpose: this used to be a class attribute evaluated at
+        IMPORT, and jx.default_backend() initializes the JAX backend — with
+        whatever platform the environment named at that moment. An `ars`
+        import before the runtime device was applied (laim.pipeline.
+        _apply_runtime) thereby pinned JAX to CPU for the whole process, and a
+        device=gpu run trained on CPU (20 min -> ~6 h). Only called while a
+        benchmarked function runs, i.e. after the device is applied.'''
+        return jx.default_backend() == 'gpu'
 
 
 def cpu_memory(cmd: Literal['free', 'used'], prec: int = 5) -> Metric:
@@ -31,7 +41,7 @@ def cpu_memory(cmd: Literal['free', 'used'], prec: int = 5) -> Metric:
 
 
 def nvs_memory(cmd: Literal['free', 'used'], prec: int = 5) -> None | Metric:
-    stats = (jx.devices()[0].memory_stats() or None) if Hardware.gpu else None
+    stats = (jx.devices()[0].memory_stats() or None) if Hardware.gpu() else None
 
     match (cmd, stats):
         case (_, None):     return None
@@ -51,7 +61,7 @@ def measure_during_call(
         interval_sec    : float = 0.05,
         prec            : int = 5,
 ) -> tuple[Any, Metric, None | Metric, None | Metric]:
-    read    = lambda  : (cpu_memory('used', prec), nvs_memory('used', prec) if Hardware.gpu else None)
+    read    = lambda  : (cpu_memory('used', prec), nvs_memory('used', prec) if Hardware.gpu() else None)
     tick    = lambda _: (sleep(interval_sec), read())[1]
 
     if environ.get('ARS_BENCH_PEAK', 'on').strip().lower() in ('off', 'false', '0', 'no'):
