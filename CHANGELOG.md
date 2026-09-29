@@ -8,6 +8,31 @@ All notable changes on branch `claude/lumimas-anomaly-refactor-7stpda`
 Finding IDs refer to AUDIT_05_findings.md; each fix lands with the test that
 fails before and passes after.
 
+- Eval / scoring forwards reuse the training run's row count
+  (`S2Meta.infer_rows`, None in older bundles = the input's own bucket).
+  The operator's next run (same 127-trace corpus, commit `a397acb`) showed
+  why it matters on GPU: total compile 176 -> 156 s, `train_detector` 155 ->
+  117 s, but eval 12.9 -> 22.8 s — eval's `from_branches` compiled on 32-row
+  blocks while every training-time forward ran on 128-row blocks, and the
+  compile took 18.1 s. XLA's GPU compile cost depends on shapes compiled
+  earlier in the process (per-fusion autotune cache): the same program took
+  1.7 s when calibration had already run the branch forwards at its row
+  count (run before `a397acb`, val N=32; master on the 3,776-trace corpus:
+  3.0 s for val N=968 vs 23.1 s for test N=681). `cmd_eval`,
+  `detect_anomalies` (scores + attribution) and the s3 feature pass now pass
+  `S2Meta.infer_rows`; `tests/test_platform.py` spies on every scoring
+  forward and fails on another row count (latency stays batch 1).
+  Expected (not yet measured on GPU): eval compile ~4-5 s instead of 20.9 s
+  (the batch-1 latency program, ~2.6 s, stays). A separate inference
+  container starts with a cold cache, so its first scoring forward is a full
+  compile whatever the row count; there the shared row count only lets the
+  attribution forwards reuse the scoring forward's shapes.
+  Also measured: the one-program init cut ~360 compiles but only ~2 s of GPU
+  compile time (its single program costs what the op-by-op ones did);
+  GPU runs are not bit-reproducible (the autotuner picks kernels by timing),
+  so two GPU runs of the same code can differ slightly in threshold and
+  calibration.
+
 - XLA compile overhead (operator report 2026-09-29: 127-trace corpus, 10
   epochs, one experiment, GPU avg 7-9%, CPU 61% of 4 cores). The run's
   `metrics.resources`: 176 of 220 s were XLA compilation (981 programs;

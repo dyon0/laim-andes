@@ -633,8 +633,20 @@ def test_model_out_echo_is_transportable(tmp_path):
 # ------------------------------------------------------ end-to-end (slow)
 
 @pytest.mark.slow
-def test_platform_train_then_inference(standin_embedder, fixture_spans, tmp_path):  # noqa: F811
+def test_platform_train_then_inference(standin_embedder, fixture_spans, tmp_path, monkeypatch):  # noqa: F811
     import run as run_module
+    from ars.models.m2__detector.confidence import Predict
+
+    # rows of every scoring forward: eval / inference must reuse the training
+    # run's row count (S2Meta.infer_rows) — on GPU a forward over shapes the
+    # process already compiled compiles in ~2 s, a new shape in up to ~20 s
+    rows_seen: list[int] = []
+    scoring_forward = Predict.from_branches
+
+    def spy(*args, **kwargs):
+        rows_seen.append(int(kwargs['epi_padded'].shape[0]))
+        return scoring_forward(*args, **kwargs)
+    monkeypatch.setattr(Predict, 'from_branches', staticmethod(spy))
 
     train_path = tmp_path / 'train.parquet'
     fixture_spans.write_parquet(train_path)
@@ -666,6 +678,10 @@ def test_platform_train_then_inference(standin_embedder, fixture_spans, tmp_path
     assert {'prepare', 'train_detector', 'eval'} <= set(train_res['by_stage'])
     assert train_res['total']['cpu_core_s'] > 0
     assert any(k.startswith('prepare / ') for k in train_res['by_step'])
+    run_dir = Path(result['manifest']['artifacts']['eval_report']).parent
+    infer_rows = json.loads((run_dir / 's2_meta.json').read_text())['infer_rows']
+    assert infer_rows in rows_seen and set(rows_seen) <= {infer_rows, 1}   # 1: latency, batch=1
+    n_train_calls = len(rows_seen)
 
     # the hand-off exactly as the platform does it: pywrapper json.dump()s the
     # model_out payload to a file, and model_in delivers that file's path.
@@ -686,6 +702,7 @@ def test_platform_train_then_inference(standin_embedder, fixture_spans, tmp_path
     assert set(inference) == set(platform.OUT_PORTS)
     assert inference['eval_report']['n_traces_scored'] == 4
     assert 'infer' in inference['manifest']['metrics']['resources']['by_stage']
+    assert set(rows_seen[n_train_calls:]) == {infer_rows}   # 4 traces, padded to the training rows
     payload = json.loads(inference['test_anomalies'])
     assert 'anomalies' in payload
     for rec in payload['anomalies']:      # legacy product contract fields

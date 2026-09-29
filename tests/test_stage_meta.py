@@ -29,7 +29,7 @@ def test_s2_meta_keeps_selection_and_test_values_apart(tmp_path):
         'epi_latent_mean': None, 'epi_latent_std': None,
         'sem_latent_mean': None, 'sem_latent_std': None, 'calibration': {}})
     cfg = S2Config(s1_meta=None, output_dir=tmp_path, output_prefix='t', run_id=None)
-    data = SimpleNamespace(max_len=3, epi_dim=2, sem_dim=8)
+    data = SimpleNamespace(max_len=3, epi_dim=2, sem_dim=8, infer_rows=lambda cap: min(cap, 16))
     # expA wins on TEST, expB on VAL: selection must follow VAL
     meta = _build_s2_meta(cfg, data, (_results('expA', 0.2, 0.9), _results('expB', 0.6, 0.3)))
     assert meta.best_experiment == 'expB'
@@ -37,6 +37,7 @@ def test_s2_meta_keeps_selection_and_test_values_apart(tmp_path):
     assert meta.selection_value == pytest.approx(0.6)
     assert meta.test_value == pytest.approx(0.3)
     assert not hasattr(meta, 'best_metric_value')
+    assert meta.infer_rows == 16            # eval / scoring reuse the training shapes
 
 
 def _s2_dict(**extra) -> dict:
@@ -81,3 +82,12 @@ def test_legacy_s3_meta_json_still_loads():
     assert meta.test_value == 0.4 and meta.selection_value is None
     assert meta.s2_meta.test_value == 0.7
     assert meta.class_names == ('a', 'b') and meta.metaparams == (1.0,)
+
+
+def test_s2_meta_without_infer_rows_still_loads():
+    """Bundles written before infer_rows: None -> every forward call uses its
+    input's own row bucket, as before."""
+    raw = _s2_dict(best_metric_value=0.7)
+    raw.pop('infer_rows')
+    assert S2Meta.from_dict(raw).infer_rows is None
+    assert S2Meta.from_dict({**raw, 'infer_rows': 128}).infer_rows == 128

@@ -30,7 +30,7 @@ from    ars.models.metrics                          import MetricName, MetricSet
 from    ars.models.m2__detector.architecture        import (
     LSTM_AE, FMLP_AE,
     TrainState, HyperParamsLSTMAE, HyperParamsFMLPAE,
-    Branch, Calibration, Models, InferenceMeta, PreparedData, Array, Params)
+    Branch, Calibration, Models, InferenceMeta, PreparedData, Array, Params, block_rows)
 from    ars.models.m2__detector.train               import Trainer
 from    ars.models.m2__detector.confidence          import Calibrate, Predict
 from    ars.configuration.experiments.e2__detector  import Experiment, resolve_grid
@@ -630,7 +630,8 @@ def _build_s2_meta(cfg: S2Config, data: PreparedData, all_results: Tuple[dict, .
         sem_latent_mean     = tuple(combined_data['sem_latent_mean']) if combined_data['sem_latent_mean'] else None,
         sem_latent_std      = tuple(combined_data['sem_latent_std'])  if combined_data['sem_latent_std']  else None,
         test_metrics        = dict(starmap(lambda k, v: (k, float(v)), best['test_metrics'].items())),
-        calibration         = dict(combined_data.get('calibration', {})))
+        calibration         = dict(combined_data.get('calibration', {})),
+        infer_rows          = data.infer_rows(cfg.encode_chunk))
 
 
 def _print_artifact_lines(mcs: ColorSchemeDataScience, cfg: S2Config, res: dict) -> None:
@@ -749,7 +750,8 @@ def _finite(value: float, digits: int = 6) -> None | float:
 def _attribution_columns(meta: InferenceMeta, models: Models, out, epi_padded: Array, epi_mask: Array,
                          sem_padded: Array, sem_mask: Array, k: int, lengths: list[int],
                          span_ids: None | list[list[str]],
-                         feature_names: None | Tuple[str, ...]) -> dict[str, pl.Series]:
+                         feature_names: None | Tuple[str, ...],
+                         infer_rows: None | int = None) -> dict[str, pl.Series]:
     '''RCA-поверхность (M11). Legacy-списки rca_top_* (спаны без паддинга) и
     rca_attribution — JSON на трассу в пространстве индексов: ошибки ветвей,
     разложение логита p_anomaly, доля EPI в комбинированной (флагующей)
@@ -775,9 +777,9 @@ def _attribution_columns(meta: InferenceMeta, models: Models, out, epi_padded: A
     if step_features is not None and not step_features.any():
         step_features = None
     epi     = explain(models.epi_model, models.epi_state.params, epi_padded, epi_mask, k, k, RCA_DRIVERS,
-                      driver_mask = step_features)
-    sem     = explain(models.sem_model, models.sem_state.params, sem_padded, sem_mask, k)
-    share   = combined_epi_share(models.combined_state, models.combined_model, out.z_epi, out.z_sem)
+                      driver_mask = step_features, rows = infer_rows)
+    sem     = explain(models.sem_model, models.sem_state.params, sem_padded, sem_mask, k, rows = infer_rows)
+    share   = combined_epi_share(models.combined_state, models.combined_model, out.z_epi, out.z_sem, infer_rows)
     cal     = meta.calibration
     e_epi, e_sem, e_comb, p_anom = map(np.asarray, (out.e_epi, out.e_sem, out.e_comb, out.p_anomaly))
     # the exact terms of Predict.from_branches: sigmoid(sum of logits) == p_anomaly
@@ -874,8 +876,12 @@ def detect_anomalies(data: pl.LazyFrame, s2_meta: S2Meta, only_anomalies: bool =
     truncated               = (lengths > s2_meta.max_len)
     epi_padded, epi_mask    = Pad.split(df, 'epi_sequence',            s2_meta.epi_dim, s2_meta.max_len, s2_meta.seq_pad_chunk)
     sem_padded, sem_mask    = Pad.split(df, 'sem_sequence_sem_vector', s2_meta.sem_dim, s2_meta.max_len, s2_meta.seq_pad_chunk)
+    # one row count for every forward of this call — the training run's
+    # (S2Meta.infer_rows: shapes the process may have compiled already), or
+    # for a legacy bundle this input's bucket, shared by scores and attribution
+    rows                    = s2_meta.infer_rows or block_rows(df.height)
     # F-27: one forward pass — Predict.batch already computes normalized latents
-    out                     = Predict.batch(meta, models, epi_padded, epi_mask, sem_padded, sem_mask)
+    out                     = Predict.batch(meta, models, epi_padded, epi_mask, sem_padded, sem_mask, rows)
     # F-21: never emit non-finite scores as if they were detections
     if df.height and not bool(jp.isfinite(out.e_comb).all() & jp.isfinite(out.p_anomaly).all()):
         raise FloatingPointError(
@@ -883,7 +889,8 @@ def detect_anomalies(data: pl.LazyFrame, s2_meta: S2Meta, only_anomalies: bool =
             'латентов и входные данные; инференс прерван')
     span_ids    = df.get_column('span_ids').to_list() if 'span_ids' in df.columns else None
     extra_cols  = (_attribution_columns(meta, models, out, epi_padded, epi_mask, sem_padded, sem_mask,
-                                        attribution_top_k, lengths.to_list(), span_ids, feature_names)
+                                        attribution_top_k, lengths.to_list(), span_ids, feature_names,
+                                        rows)
                    if attribution_top_k > 0 else {})
 
     scored = pl.concat((

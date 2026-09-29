@@ -319,7 +319,8 @@ def cmd_train(cfg: RunConfig, run_dir: Path, manifest: Manifest, s1_meta) -> dic
         'best_experiment': s2_meta.best_experiment,
         'best_threshold': s2_meta.best_threshold,
         'test_metrics_as_reported': dict(s2_meta.test_metrics),
-        'calibration': dict(s2_meta.calibration)})
+        'calibration': dict(s2_meta.calibration),
+        'infer_rows': s2_meta.infer_rows})
     manifest.record_artifact('s2_experiment_dir', s2_meta.experiment_dir)
     from dataclasses import asdict
     (run_dir / 's2_meta.json').write_text(json.dumps(asdict(s2_meta), indent=2))
@@ -374,7 +375,9 @@ def cmd_eval(cfg: RunConfig, run_dir: Path, manifest: Manifest,
         for name in ('val', 'test'):
             df = splits[name]
             epi, epi_m, sem, sem_m = tensors(df)
-            out = Predict.batch(meta, models, epi, epi_m, sem, sem_m)
+            # the training run's row count: on GPU a forward over shapes the
+            # process already compiled costs ~2 s to compile, a new one ~20 s
+            out = Predict.batch(meta, models, epi, epi_m, sem, sem_m, s2_meta.infer_rows)
             y = df['is_anomaly'].fill_null(0).to_numpy().astype(np.int32)
             report[name] = evaluation.evaluate_split(
                 y=y,
@@ -393,7 +396,7 @@ def cmd_eval(cfg: RunConfig, run_dir: Path, manifest: Manifest,
         if n:
             def predict_one(i: int) -> None:
                 out = Predict.batch(meta, models, epi[i:i+1], epi_m[i:i+1],
-                                    sem[i:i+1], sem_m[i:i+1])
+                                    sem[i:i+1], sem_m[i:i+1], 1)   # per-trace latency: batch 1 by design
                 float(out.p_anomaly[0])  # force device sync
             import jax
             report['latency_per_trace'] = {

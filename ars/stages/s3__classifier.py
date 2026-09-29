@@ -119,12 +119,13 @@ class Encode:
         return jp.asarray(tuple(map(lambda s: mapping.get(s, 0), df[DataObject.sublabel].to_list())), dtype = jp.int32)
 
     @staticmethod
-    def latents_and_signals(meta: InferenceMeta, models: Models, df: pl.DataFrame, epi_dim: int, sem_dim: int, max_len: int, chunk: int) -> Tuple[Array, Array, Signals]:
+    def latents_and_signals(meta: InferenceMeta, models: Models, df: pl.DataFrame, epi_dim: int, sem_dim: int, max_len: int, chunk: int,
+                            rows: None | int = None) -> Tuple[Array, Array, Signals]:
         epi_pad, epi_mask   = Pad.split(df, 'epi_sequence',            epi_dim, max_len, chunk)
         sem_pad, sem_mask   = Pad.split(df, 'sem_sequence_sem_vector', sem_dim, max_len, chunk)
-        out                 = Predict.batch(meta, models, epi_pad, epi_mask, sem_pad, sem_mask)
-        epi_lat             = Branch.encode(models.epi_model, models.epi_state, epi_pad, epi_mask)
-        sem_lat             = Branch.encode(models.sem_model, models.sem_state, sem_pad, sem_mask)
+        out                 = Predict.batch(meta, models, epi_pad, epi_mask, sem_pad, sem_mask, rows)
+        epi_lat             = Branch.encode(models.epi_model, models.epi_state, epi_pad, epi_mask, rows = rows)
+        sem_lat             = Branch.encode(models.sem_model, models.sem_state, sem_pad, sem_mask, rows = rows)
         z_epi               = (epi_lat - meta.epi_latent_mean) / meta.epi_latent_std if meta.normalize_latent else epi_lat
         z_sem               = (sem_lat - meta.sem_latent_mean) / meta.sem_latent_std if meta.normalize_latent else sem_lat
         return z_epi, z_sem, Signals(out.e_epi, out.e_sem, out.e_comb, out.p_anomaly, out.confidence)
@@ -178,7 +179,8 @@ def prepare_features(cfg: S3Config) -> FeatureData:
 
     def featurize(df: pl.DataFrame) -> Split:
         z_epi, z_sem, sig = Encode.latents_and_signals(
-            meta, models, df, cfg.s2_meta.epi_dim, cfg.s2_meta.sem_dim, max_len, cfg.s2_meta.seq_pad_chunk)
+            meta, models, df, cfg.s2_meta.epi_dim, cfg.s2_meta.sem_dim, max_len, cfg.s2_meta.seq_pad_chunk,
+            cfg.s2_meta.infer_rows)
         return Split(Features.assemble(cfg.s2_meta, z_epi, z_sem, sig), Encode.labels(df, class_names))
 
     train, val, test = featurize(splits.train), featurize(splits.val), featurize(splits.test)

@@ -197,7 +197,9 @@ class Predict:
         e_sem, sem_lat  = Calibrate.lstm_branch(sem_model, sem_params, sem_padded, sem_mask)
         epi_lat_n       = (epi_lat - epi_lat_mean) / epi_lat_std
         sem_lat_n       = (sem_lat - sem_lat_mean) / sem_lat_std
-        e_comb          = Branch.combined_errors(combined_state, combined_model, epi_lat_n, sem_lat_n)
+        # one block of the caller's rows (Predict.batch): without it the FMLP
+        # would be re-bucketed inside the trace (padded or split at 1024)
+        e_comb          = Branch.combined_errors(combined_state, combined_model, epi_lat_n, sem_lat_n, epi_lat_n.shape[0])
         eps_safe        = jp.asarray(1e-8, dtype = jp.float32)
         z_epi           = (e_epi - cal_epi_median) / (1.4826 * cal_epi_mad + eps_safe)
         z_sem           = (e_sem - cal_sem_median) / (1.4826 * cal_sem_mad + eps_safe)

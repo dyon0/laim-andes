@@ -82,6 +82,13 @@ class S2Meta:
     test_metrics    : Dict[str, float]
     calibration     : Dict[str, float]
 
+    # rows of every inference-style forward call of the training run
+    # (PreparedData.infer_rows). Eval, scoring, attribution and s3 reuse it:
+    # on GPU a forward whose shapes were already compiled/autotuned in the
+    # process compiles in ~2 s, a new shape in up to ~20 s. None: legacy
+    # artifact — each call then uses its input's own bucket (block_rows)
+    infer_rows      : None | int = None
+
     @classmethod
     def from_dict(cls, raw: dict) -> 'S2Meta':
         '''s2_meta.json -> S2Meta, including artifacts written before F-83'''

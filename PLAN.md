@@ -143,10 +143,19 @@ single agent, no real labels — metrics measure injected anomalies):
   TRAP") cut 1133 -> 905 compiles on CPU. Next op-by-op hotspot: the s1
   injector's per-(kind, agent)-cell statistics (~600 compiles, grows with
   cells). Judge GPU use on the real config (3216 traces, 500 epochs, three
-  experiments) from `manifest.metrics.resources` (`by_step`, `xla_top`);
-  the operator's "old version at 83%" screenshot (12 s of user code, RAM at
-  its 30 GB limit, 21 GB GPU memory) does not look like a comparable
-  training run — its log / form settings were requested.
+  experiments) from `manifest.metrics.resources` (`by_step`, `xla_top`).
+  The operator's "old version at 82-83%" (master) is a 3 h 23 min training:
+  log 2026-09-29 06:26-09:50 UTC, 70,946 spans / 3,776 traces, two
+  experiments (~500 epochs by the step times), classifier on, 2 cores; 92%
+  of its wall time is GPU work (LSTM training 10,797 s + embedding 418 s).
+  The 83% screenshot (sent 07:40 UTC, so an EARLIER run of the same
+  configuration — identical 21.39 GiB GPU peak) shows "User code total
+  execution time 12s": uc.user.work_time (~12,000 SECONDS) rendered as
+  milliseconds — an earlier note here read it as 12 s, which was wrong.
+  A fair comparison runs the branch on that corpus with the same form.
+  GPU compile cost depends on shapes seen earlier in the process (XLA
+  per-fusion autotune cache): a forward at a new row count ~18-23 s, at a
+  row count calibration already ran ~2-3 s — hence S2Meta.infer_rows.
 
 ## Remaining work (not in this engagement's budget, recorded honestly)
 * s3 nested-CV redesign (M8 long-term); currently guarded, biases documented.

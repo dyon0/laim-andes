@@ -21,7 +21,7 @@ import numpy as np
 from flax.core import FrozenDict
 
 from ars.models.m2__detector.architecture import (
-    FMLP_AE, LSTM_AE, TRAIN, Array, Params, TrainState, block_rows, row_blocks)
+    FMLP_AE, LSTM_AE, Array, Branch, Params, TrainState, block_rows, row_blocks)
 from ars.models.metrics import Loss
 
 # traces per jitted call: bounds the transient [chunk, T, D] error tensors
@@ -111,7 +111,8 @@ def _explain_chunk(params: Params, model: LSTM_AE, padded: Array, mask: Array, d
 
 def explain(model: LSTM_AE, params: Params, padded: Array, mask: Array,
             k_spans: int, k_feats: int = 0, k_drivers: int = 0,
-            driver_mask: None | np.ndarray = None, chunk: int = EXPLAIN_CHUNK) -> dict[str, np.ndarray]:
+            driver_mask: None | np.ndarray = None, chunk: int = EXPLAIN_CHUNK,
+            rows: None | int = None) -> dict[str, np.ndarray]:
     """Attribution of one branch's reconstruction error, as numpy arrays.
 
     Always: `error` [N] (equals the detector's branch error), `span_idx`,
@@ -122,25 +123,30 @@ def explain(model: LSTM_AE, params: Params, padded: Array, mask: Array,
     span) [N, kf]. With k_drivers: `drv_idx`, `drv_err`, `drv_obs`, `drv_exp`
     [N, ks, kd] — the features driving each top span, chosen among
     `driver_mask` [D] (default: all); slots with no eligible feature score -inf.
+    rows: traces per jitted call — the training run's row count
+    (S2Meta.infer_rows) when it is within `chunk`, so the forward reuses shapes
+    the process already compiled; else n's own bucket, at most `chunk`.
     """
     n, t, d = padded.shape
     ks, kf, kd = min(k_spans, t), min(k_feats, d), min(k_drivers, d)
     eligible = jp.asarray(np.ones(d, dtype=bool) if driver_mask is None else driver_mask, dtype=bool)
     # fixed-size blocks: one compile per model, not one per input size; the
     # padding is cut on the host (row_blocks in architecture.py)
+    rows = rows if rows and rows <= chunk else block_rows(n, chunk)
     parts = tuple(
         {key: v[:k] for key, v in jx.device_get(
             _explain_chunk(params, model, x, m, eligible, ks, kf, kd)).items()}
-        for (x, m), k in row_blocks((padded, mask), block_rows(n, chunk)))
+        for (x, m), k in row_blocks((padded, mask), rows))
     if not parts:
         return {}
     return {key: np.concatenate(tuple(p[key] for p in parts)) for key in parts[0]}
 
 
-def combined_epi_share(state: TrainState, model: FMLP_AE, epi_lat: Array, sem_lat: Array) -> np.ndarray:
+def combined_epi_share(state: TrainState, model: FMLP_AE, epi_lat: Array, sem_lat: Array,
+                       rows: None | int = None) -> np.ndarray:
     """[N]: fraction of the combined (flagging) error carried by the EPI
     latent block of the FMLP reconstruction; 1 - share is the SEM block's."""
-    recon = TRAIN.fmlp_ae_forward(state, model, epi_lat, sem_lat, training=False)
+    recon = Branch.combined_forward(state, model, epi_lat, sem_lat, rows)
     target = jp.concatenate((epi_lat, sem_lat), axis=-1)
     pw = np.asarray(Loss.pointwise(recon, target, model.hp.loss_type, model.hp.huber_delta))
     split = epi_lat.shape[-1]

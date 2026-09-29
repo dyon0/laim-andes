@@ -111,11 +111,16 @@ authoritative: 46 fields, sentinels instead of NULL (-1 / -1.0 / False / '' /
   op run outside jit is its own compiled program. On GPU a compile costs tens
   of ms (one op) to seconds (a forward pass): a 127-trace platform run spent
   176 of 220 s compiling. Inference-style calls go through `over_blocks` with
-  one row count per training run (`PreparedData.infer_rows`), model init is one
-  jitted program (`TRAIN.make_train_state`). Don't call a jitted forward on
+  one row count per training run (`PreparedData.infer_rows`, stored as
+  `S2Meta.infer_rows` and reused by eval / scoring / attribution / s3), model
+  init is one jitted program (`TRAIN.make_train_state`). On GPU a program's
+  compile cost depends on shapes compiled EARLIER in the process (XLA's
+  per-fusion autotune cache): the same forward took 1.7 s at a row count
+  calibration had run and 18 s at a new one. Don't call a jitted forward on
   each split's own size; check `metrics.resources.xla_top` (one name with many
   compiles = per-shape recompiles; `add`/`mul`/... = op-by-op code).
-  `tests/test_compile_reuse.py` guards it.
+  `tests/test_compile_reuse.py` and the rows spy in `tests/test_platform.py`
+  guard it.
 - The experiment grid lives in `ars/configuration/experiments/e2__detector.py`;
   `detector.experiments/epochs/patience` in config override it. The grid is
   BUILT from the requested codes (any well-formed code, not only `CODES`;
