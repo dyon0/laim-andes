@@ -47,6 +47,25 @@ def test_xla_compiles_are_attributed_to_their_step():
     assert step['xla_compiles'] >= 1 and step['xla_compile_s'] >= 0
 
 
+def test_xla_top_names_the_compiled_function():
+    import jax
+    import jax.numpy as jp
+
+    def distinctive_fn_for_top(v):
+        return jp.cos(v) * 2.5 - 0.75
+
+    mon = ResourceMonitor(interval=0.05).start()
+    try:
+        push_phase('stage_t', stage=True)
+        for n in (5, 6):                     # two shapes -> two compiles
+            jax.jit(distinctive_fn_for_top)(jp.ones((n, 3, 11)))
+        pop_phase('stage_t', stage=True)
+    finally:
+        summary = mon.stop()
+    top = [f for f in summary['xla_top'] if 'distinctive_fn_for_top' in f['fn']]
+    assert len(top) == 1 and top[0]['compiles'] == 2 and top[0]['step'] == 'stage_t / -'
+
+
 def test_benchmark_steps_become_phases():
     from ars.tools.performance.perf import PHASE_HOOKS, benchmark
 
@@ -75,4 +94,5 @@ def test_run_records_resources_in_the_manifest(tmp_path):
     res = manifest['metrics']['resources']
     assert 'validate' in res['by_stage']
     assert res['total']['wall_s'] >= 0 and 'cpu_cores_avg' in res['total']
+    assert isinstance(res['xla_top'], list)
     assert manifest['metrics']['runtime_device']['jax_backend'] == 'cpu'

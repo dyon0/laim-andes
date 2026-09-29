@@ -303,13 +303,17 @@ class ResourceMonitor:
     utilization / memory (one long-running `nvidia-smi -lms`, never an
     in-process CUDA call — it must not touch the device set, see
     tests/test_runtime_device.py) and XLA compile seconds / count
-    (jax.monitoring). Start it after the runtime device is applied."""
+    (jax.monitoring), the latter also per compiled function (`xla_top`).
+    Start it after the runtime device is applied."""
 
     _COMPILE_EVENT = '/jax/core/compile/backend_compile_duration'
+    _XLA_TOP = 15
 
     def __init__(self, interval: float = 1.0) -> None:
         self.interval = interval
         self._acc: dict[tuple[str, str], dict[str, float]] = {}
+        # compiled function name -> [compiles, seconds, {step: compiles}]
+        self._fn: dict[str, list] = {}
         self._gpu: dict[int, tuple[float, float]] = {}
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
@@ -337,13 +341,18 @@ class ResourceMonitor:
         try:
             import jax.monitoring as jm
 
-            def on_duration(event: str, duration: float, **_: Any) -> None:
+            def on_duration(event: str, duration: float, fun_name: str = '?', **_: Any) -> None:
                 if event == self._COMPILE_EVENT:
                     key = current_phase()
                     with self._lock:
                         b = self._bucket(key)
                         b['xla_compile_s'] += duration
                         b['xla_compiles'] += 1
+                        f = self._fn.setdefault(str(fun_name), [0, 0.0, {}])
+                        f[0] += 1
+                        f[1] += duration
+                        step = f'{key[0]} / {key[1]}'
+                        f[2][step] = f[2].get(step, 0) + 1
             jm.register_event_duration_secs_listener(on_duration)
             self._listener = on_duration
         except Exception:                        # monitoring must never break a run
@@ -440,6 +449,7 @@ class ResourceMonitor:
     def summary(self) -> dict:
         with self._lock:
             acc = {k: dict(v) for k, v in self._acc.items()}
+            fns = {k: (v[0], v[1], dict(v[2])) for k, v in self._fn.items()}
 
         def merge(keys) -> dict[str, float]:
             out = {k: 0.0 for k in ('wall_s', 'cpu_core_s', 'gpu_util_x_s', 'gpu_s',
@@ -459,6 +469,12 @@ class ResourceMonitor:
             'by_stage': {s: self._finish(merge([k for k in acc if k[0] == s])) for s in stages},
             'by_step': {f'{s} / {st}': self._finish(acc[(s, st)])
                         for (s, st) in sorted(acc, key=lambda k: -acc[k]['wall_s'])},
+            # the compiled programs that cost the most: one name with many
+            # compiles = recompiled per input shape; op names (add, mul, ...)
+            # = op-by-op (un-jitted) execution
+            'xla_top': [{'fn': name, 'compiles': n, 'compile_s': round(s, 2),
+                         'step': max(steps, key=steps.get)}
+                        for name, (n, s, steps) in sorted(fns.items(), key=lambda kv: -kv[1][1])[:self._XLA_TOP]],
         }
 
 
@@ -471,6 +487,9 @@ def log_resource_summary(log: logging.Logger, summary: dict, top: int = 15) -> N
         log.info('resources stage — %s', fmt(k, v))
     for k, v in list(summary['by_step'].items())[:top]:
         log.info('resources step — %s', fmt(k, v))
+    for f in summary.get('xla_top', [])[:10]:
+        log.info('resources xla — %s: %d compiles, %.1fs (mostly in %s)',
+                 f['fn'], f['compiles'], f['compile_s'], f['step'])
 
 
 class monitored:

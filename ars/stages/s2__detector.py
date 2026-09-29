@@ -311,15 +311,16 @@ def _train_sem_branch(cfg: S2Config, exp_cfg: Experiment, data: PreparedData, rn
 
 @benchmark('вычисление латентов LSTM-AE')
 def _compute_branch_latents(cfg: S2Config, epi_model: LSTM_AE, epi_state: TrainState, sem_model: LSTM_AE, sem_state: TrainState, data: PreparedData) -> Tuple[Array, Array, Array, Array, Array, Array]:
-    mcs = cfg.output_color_scheme
+    mcs     = cfg.output_color_scheme
     mcs.print_subsection('Вычисление латентных векторов')
+    rows    = data.infer_rows(cfg.encode_chunk)
     return (
-        Branch.encode(epi_model, epi_state, data.train_epi_pad,      data.train_epi_mask,      chunk = cfg.encode_chunk),
-        Branch.encode(sem_model, sem_state, data.train_sem_pad,      data.train_sem_mask,      chunk = cfg.encode_chunk),
-        Branch.encode(epi_model, epi_state, data.val_epi_pad_normal, data.val_epi_mask_normal, chunk = cfg.encode_chunk),
-        Branch.encode(sem_model, sem_state, data.val_sem_pad_normal, data.val_sem_mask_normal, chunk = cfg.encode_chunk),
-        Branch.encode(epi_model, epi_state, data.val_epi_pad_mixed,  data.val_epi_mask_mixed,  chunk = cfg.encode_chunk),
-        Branch.encode(sem_model, sem_state, data.val_sem_pad_mixed,  data.val_sem_mask_mixed,  chunk = cfg.encode_chunk))
+        Branch.encode(epi_model, epi_state, data.train_epi_pad,      data.train_epi_mask,      rows = rows),
+        Branch.encode(sem_model, sem_state, data.train_sem_pad,      data.train_sem_mask,      rows = rows),
+        Branch.encode(epi_model, epi_state, data.val_epi_pad_normal, data.val_epi_mask_normal, rows = rows),
+        Branch.encode(sem_model, sem_state, data.val_sem_pad_normal, data.val_sem_mask_normal, rows = rows),
+        Branch.encode(epi_model, epi_state, data.val_epi_pad_mixed,  data.val_epi_mask_mixed,  rows = rows),
+        Branch.encode(sem_model, sem_state, data.val_sem_pad_mixed,  data.val_sem_mask_mixed,  rows = rows))
 
 
 def _normalize_latent_arrays(train_lat: Array, others: Tuple[Array, ...], eps: float, std_floor: float = 0.0) -> Tuple[Array, Array, Tuple[Array, ...]]:
@@ -401,11 +402,14 @@ def run_experiment(exp_cls: type[Experiment], data: PreparedData, cfg: S2Config)
     rng_epi, rng_sem, rng_combined      = jx.random.split(rng, 3)
     num_train                           = int(data.train_epi_pad.shape[0])
     schedule                            = _exp_schedule(exp_cfg, num_train, target_losses)
+    # one row count for every inference-style call below: each jitted
+    # forward compiles once per run instead of once per split size
+    rows                                = data.infer_rows(cfg.encode_chunk)
 
     epi_model, epi_state, epi_losses, hp_epi    = _train_epi_branch(cfg, exp_cfg, data, rng_epi, schedule, target_epi)
     t_epi                                       = _train_epi_branch.elapsed
-    epi_train_mse                               = Branch.lstm_recon_mse(epi_model, epi_state, data.train_epi_pad,      data.train_epi_mask,      chunk = cfg.encode_chunk)
-    epi_val_mse                                 = Branch.lstm_recon_mse(epi_model, epi_state, data.val_epi_pad_normal, data.val_epi_mask_normal, chunk = cfg.encode_chunk)
+    epi_train_mse                               = Branch.lstm_recon_mse(epi_model, epi_state, data.train_epi_pad,      data.train_epi_mask,      rows = rows)
+    epi_val_mse                                 = Branch.lstm_recon_mse(epi_model, epi_state, data.val_epi_pad_normal, data.val_epi_mask_normal, rows = rows)
     sprint(f'EPI реконструкция: train MSE = {float(epi_train_mse):.4f}, val MSE = {float(epi_val_mse):.4f}', style_code = mcs.info)
     params_norm_epi = Branch.params_norm(epi_state)
     sprint(f'Норма параметров EPI: {float(params_norm_epi):.4f}', style_code = mcs.info)
@@ -436,7 +440,7 @@ def run_experiment(exp_cls: type[Experiment], data: PreparedData, cfg: S2Config)
 
     mcs.print_subsection('Подбор порога реконструкции')
     val_lbls_mixed_arr                  = jp.asarray(data.val_labels_mixed, dtype = jp.int32)
-    val_errors                          = Branch.combined_errors(combined_state, combined_model, val_epi_lat_m, val_sem_lat_m)
+    val_errors                          = Branch.combined_errors(combined_state, combined_model, val_epi_lat_m, val_sem_lat_m, rows)
     threshold_metric                    = exp_cfg.threshold_metric_or(cfg.threshold_metric)
     best_threshold, best_val_metrics    = select_threshold(
         errors = val_errors, labels = val_lbls_mixed_arr, n_thresholds = cfg.n_thresholds, target_metric = threshold_metric, eps = cfg.eps)
@@ -449,7 +453,8 @@ def run_experiment(exp_cls: type[Experiment], data: PreparedData, cfg: S2Config)
         best_threshold  = best_threshold, normalize_latent = exp_cfg.normalize_latent,
         epi_mean        = mean_epi, epi_std = std_epi, sem_mean = mean_sem, sem_std = std_sem, eps = cfg.eps,
         mad_floor_abs   = cfg.cal_mad_floor_abs, mad_floor_rel = cfg.cal_mad_floor_rel,
-        cal_min_pos     = cfg.cal_min_pos, cal_min_neg = cfg.cal_min_neg, cal_w_cap = cfg.cal_w_cap)
+        cal_min_pos     = cfg.cal_min_pos, cal_min_neg = cfg.cal_min_neg, cal_w_cap = cfg.cal_w_cap,
+        rows            = rows)
     mcs.print_subsection('Калибровка confidence')
     _ = tuple(starmap(lambda k, v: mcs.print_metric(k, f'{v:.6f}'), asdict(calibration).items()))
 
@@ -457,21 +462,21 @@ def run_experiment(exp_cls: type[Experiment], data: PreparedData, cfg: S2Config)
     sem_loss_type, sem_huber    = exp_cfg.get_sem_loss_params()
     comb_loss_type, comb_huber  = exp_cfg.get_combined_loss_params()
 
-    sem_train_mse_final = Branch.lstm_recon_mse(sem_model, sem_state, data.train_sem_pad,      data.train_sem_mask,      chunk = cfg.encode_chunk)
-    sem_val_mse_final   = Branch.lstm_recon_mse(sem_model, sem_state, data.val_sem_pad_normal, data.val_sem_mask_normal, chunk = cfg.encode_chunk)
-    comb_train_mse      = Branch.combined_recon_mse(combined_state, combined_model, train_epi_lat, train_sem_lat)
-    comb_val_mse        = Branch.combined_recon_mse(combined_state, combined_model, val_epi_lat_n, val_sem_lat_n)
+    sem_train_mse_final = Branch.lstm_recon_mse(sem_model, sem_state, data.train_sem_pad,      data.train_sem_mask,      rows = rows)
+    sem_val_mse_final   = Branch.lstm_recon_mse(sem_model, sem_state, data.val_sem_pad_normal, data.val_sem_mask_normal, rows = rows)
+    comb_train_mse      = Branch.combined_recon_mse(combined_state, combined_model, train_epi_lat, train_sem_lat, rows)
+    comb_val_mse        = Branch.combined_recon_mse(combined_state, combined_model, val_epi_lat_n, val_sem_lat_n, rows)
 
     mcs.print_subsection('Оценка на тестовых данных')
-    test_epi_lat    = Branch.encode(epi_model, epi_state, data.test_epi_pad, data.test_epi_mask, chunk = cfg.encode_chunk)
-    test_sem_lat    = Branch.encode(sem_model, sem_state, data.test_sem_pad, data.test_sem_mask, chunk = cfg.encode_chunk)
+    test_epi_lat    = Branch.encode(epi_model, epi_state, data.test_epi_pad, data.test_epi_mask, rows = rows)
+    test_sem_lat    = Branch.encode(sem_model, sem_state, data.test_sem_pad, data.test_sem_mask, rows = rows)
     if exp_cfg.normalize_latent:
         if mean_epi is not None and std_epi is not None and mean_sem is not None and std_sem is not None:
             test_epi_lat    = (test_epi_lat - mean_epi) / std_epi
             test_sem_lat    = (test_sem_lat - mean_sem) / std_sem
         else: raise ValueError('ошибка нормализации латентов')
     
-    test_errors     = Branch.combined_errors(combined_state, combined_model, test_epi_lat, test_sem_lat)
+    test_errors     = Branch.combined_errors(combined_state, combined_model, test_epi_lat, test_sem_lat, rows)
     test_preds      = (test_errors > best_threshold).astype(jp.int32)
     test_metrics    = calculate_metrics(jp.asarray(data.test_labels), test_preds, cfg.eps)
 

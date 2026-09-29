@@ -8,6 +8,30 @@ All notable changes on branch `claude/lumimas-anomaly-refactor-7stpda`
 Finding IDs refer to AUDIT_05_findings.md; each fix lands with the test that
 fails before and passes after.
 
+- XLA compile overhead (operator report 2026-09-29: 127-trace corpus, 10
+  epochs, one experiment, GPU avg 7-9%, CPU 61% of 4 cores). The run's
+  `metrics.resources`: 176 of 220 s were XLA compilation (981 programs;
+  `train_detector` 139 of 155 s) — the GPU had ~20 s of work in total, 15 of
+  them the torch embedder, ~4 s the detector training. Not a
+  regression: on the same data master compiles the same programs (local, CPU:
+  1137 vs 1133 compiles, 67 vs 61 s compiling); it is a fixed cost per run
+  and per experiment that dominates small runs, and on GPU each compile costs
+  several times more than on CPU. Cut: (1) `TRAIN.make_train_state` is ONE
+  jitted program — flax + optax init ran op by op, 70-100 single-op compiles
+  per model (values bit-identical); (2) inference-style calls (latents, branch
+  errors, recon MSE, calibration, `Predict.batch`, attribution) run over
+  fixed-size row blocks (`over_blocks`; a training run uses one row count for
+  all splits, `PreparedData.infer_rows`), so a jitted forward compiles once
+  instead of once per split size — values equal up to float32 rounding (XLA
+  picks the matmul kernel by shape), and calibration / inference GPU memory is
+  bounded by the block instead of the split. Same data, CPU: 1133 -> 905
+  compiles, 61 -> 51 s compiling, `train_detector` 76 -> 64 s; the three
+  branch trainings 253 -> 9 compiles. `resources.xla_top` (+ `resources xla`
+  log lines) names the programs that cost the most. Still op by op: the s1
+  injector's per-(kind, agent)-cell statistics and operators — ~600 compiles
+  (24 s) locally, 334 compiles / 26 s in the operator's GPU run, growing with
+  the number of cells.
+
 - Resource attribution (operator report after the device fix: run 1035 s,
   CPU 56% of the 4-core quota, GPU avg SM 27% — whole-run averages only, which
   cannot say which step burns CPU while the GPU idles). `manifest.metrics

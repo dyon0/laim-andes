@@ -12,7 +12,8 @@ from    flax.core                               import FrozenDict
 
 from    ars.models.m2__detector.architecture    import (
     LSTM_AE, FMLP_AE, LOSS,
-    TrainState, Branch, Calibration, Confidence, Models, InferenceMeta, PreparedData, Array, Params)
+    TrainState, Branch, Calibration, Confidence, Models, InferenceMeta, PreparedData, Array, Params,
+    block_rows, over_blocks)
 
 
 @dataclass(frozen = True)
@@ -94,29 +95,33 @@ class Calibrate:
             cal_min_pos         : int   = 5,
             cal_min_neg         : int   = 5,
             cal_w_cap           : float = 50.0,
+            rows                : None | int = None,
     ) -> Calibration:
-        train_epi_errs, train_epi_lat   = Calibrate.lstm_branch(
+        rows    = rows or prepared.infer_rows()
+        branch  = lambda model, params, padded, mask: over_blocks(
+            lambda x, m: Calibrate.lstm_branch(model, params, x, m), rows, padded, mask)
+        train_epi_errs, train_epi_lat   = branch(
             models.epi_model, models.epi_state.params, prepared.train_epi_pad, prepared.train_epi_mask)
-        train_sem_errs, train_sem_lat   = Calibrate.lstm_branch(
+        train_sem_errs, train_sem_lat   = branch(
             models.sem_model, models.sem_state.params, prepared.train_sem_pad, prepared.train_sem_mask)
         if normalize_latent:
             train_epi_lat   = (train_epi_lat - epi_mean) / epi_std
             train_sem_lat   = (train_sem_lat - sem_mean) / sem_std
-        train_comb_errs = Branch.combined_errors(models.combined_state, models.combined_model, train_epi_lat, train_sem_lat)
+        train_comb_errs = Branch.combined_errors(models.combined_state, models.combined_model, train_epi_lat, train_sem_lat, rows)
 
         # floored MADs are STORED, so inference math needs no changes (F-04)
         epi_median, epi_mad     = Calibrate.robust_stats(train_epi_errs,  mad_floor_abs, mad_floor_rel)
         sem_median, sem_mad     = Calibrate.robust_stats(train_sem_errs,  mad_floor_abs, mad_floor_rel)
         comb_median, comb_mad   = Calibrate.robust_stats(train_comb_errs, mad_floor_abs, mad_floor_rel)
 
-        val_epi_errs, val_epi_lat_m = Calibrate.lstm_branch(
+        val_epi_errs, val_epi_lat_m = branch(
             models.epi_model, models.epi_state.params, prepared.val_epi_pad_mixed, prepared.val_epi_mask_mixed)
-        val_sem_errs, val_sem_lat_m = Calibrate.lstm_branch(
+        val_sem_errs, val_sem_lat_m = branch(
             models.sem_model, models.sem_state.params, prepared.val_sem_pad_mixed, prepared.val_sem_mask_mixed)
         if normalize_latent:
             val_epi_lat_m   = (val_epi_lat_m - epi_mean) / epi_std
             val_sem_lat_m   = (val_sem_lat_m - sem_mean) / sem_std
-        val_comb_errs   = Branch.combined_errors(models.combined_state, models.combined_model, val_epi_lat_m, val_sem_lat_m)
+        val_comb_errs   = Branch.combined_errors(models.combined_state, models.combined_model, val_epi_lat_m, val_sem_lat_m, rows)
         val_labels      = jp.asarray(prepared.val_labels_mixed, dtype = jp.int32)
 
         norm_mask                   = val_labels == 0
@@ -212,31 +217,35 @@ class Predict:
             z_sem       = sem_lat_n)
 
     @staticmethod
-    def batch(meta: InferenceMeta, models: Models, epi_padded: Array, epi_mask: Array, sem_padded: Array, sem_mask: Array) -> Confidence:
-        cal = meta.calibration
-        return Predict.from_branches(
+    def batch(meta: InferenceMeta, models: Models, epi_padded: Array, epi_mask: Array, sem_padded: Array, sem_mask: Array,
+              rows: None | int = None) -> Confidence:
+        '''from_branches over blocks of `rows` traces (default: N's bucket) —
+        val and test of one run share a compiled program (see over_blocks)'''
+        cal     = meta.calibration
+        f32     = lambda v: jp.asarray(v, dtype = jp.float32)
+        fixed   = dict(
             epi_model       = models.epi_model,
             epi_params      = models.epi_state.params,
             sem_model       = models.sem_model,
             sem_params      = models.sem_state.params,
             combined_model  = models.combined_model,
             combined_state  = models.combined_state,
-            epi_padded      = epi_padded,
-            epi_mask        = epi_mask,
-            sem_padded      = sem_padded,
-            sem_mask        = sem_mask,
             epi_lat_mean    = meta.epi_latent_mean,
             epi_lat_std     = meta.epi_latent_std,
             sem_lat_mean    = meta.sem_latent_mean,
             sem_lat_std     = meta.sem_latent_std,
-            best_threshold  = jp.asarray(meta.best_threshold,   dtype = jp.float32),
-            cal_epi_median  = jp.asarray(cal.epi_median,        dtype = jp.float32),
-            cal_epi_mad     = jp.asarray(cal.epi_mad,           dtype = jp.float32),
-            cal_sem_median  = jp.asarray(cal.sem_median,        dtype = jp.float32),
-            cal_sem_mad     = jp.asarray(cal.sem_mad,           dtype = jp.float32),
-            cal_comb_T      = jp.asarray(cal.comb_temperature,  dtype = jp.float32),
-            cal_aux_z       = jp.asarray(cal.aux_z_anomaly,     dtype = jp.float32),
-            cal_w_epi       = jp.asarray(cal.w_epi,             dtype = jp.float32),
-            cal_w_sem       = jp.asarray(cal.w_sem,             dtype = jp.float32),
-            cal_w_comb      = jp.asarray(cal.w_comb,            dtype = jp.float32),
-            cal_bias        = jp.asarray(cal.bias,              dtype = jp.float32))
+            best_threshold  = f32(meta.best_threshold),
+            cal_epi_median  = f32(cal.epi_median),
+            cal_epi_mad     = f32(cal.epi_mad),
+            cal_sem_median  = f32(cal.sem_median),
+            cal_sem_mad     = f32(cal.sem_mad),
+            cal_comb_T      = f32(cal.comb_temperature),
+            cal_aux_z       = f32(cal.aux_z_anomaly),
+            cal_w_epi       = f32(cal.w_epi),
+            cal_w_sem       = f32(cal.w_sem),
+            cal_w_comb      = f32(cal.w_comb),
+            cal_bias        = f32(cal.bias))
+
+        return over_blocks(
+            lambda e, em, s, sm: Predict.from_branches(epi_padded = e, epi_mask = em, sem_padded = s, sem_mask = sm, **fixed),
+            rows or block_rows(epi_padded.shape[0]), epi_padded, epi_mask, sem_padded, sem_mask)

@@ -107,6 +107,15 @@ authoritative: 46 fields, sentinels instead of NULL (-1 / -1.0 / False / '' /
   Heavy GPU-probing imports (`sentence_transformers`) stay inside functions.
   `tests/test_runtime_device.py` guards it (with a flash-attn stub);
   `device=gpu` without a working GPU fails loudly (`verify_runtime_device`).
+- COMPILE TRAP: XLA compiles a jitted function once per input SHAPE, and an
+  op run outside jit is its own compiled program. On GPU a compile costs tens
+  of ms (one op) to seconds (a forward pass): a 127-trace platform run spent
+  176 of 220 s compiling. Inference-style calls go through `over_blocks` with
+  one row count per training run (`PreparedData.infer_rows`), model init is one
+  jitted program (`TRAIN.make_train_state`). Don't call a jitted forward on
+  each split's own size; check `metrics.resources.xla_top` (one name with many
+  compiles = per-shape recompiles; `add`/`mul`/... = op-by-op code).
+  `tests/test_compile_reuse.py` guards it.
 - The experiment grid lives in `ars/configuration/experiments/e2__detector.py`;
   `detector.experiments/epochs/patience` in config override it. The grid is
   BUILT from the requested codes (any well-formed code, not only `CODES`;

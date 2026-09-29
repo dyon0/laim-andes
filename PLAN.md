@@ -135,6 +135,18 @@ single agent, no real labels — metrics measure injected anomalies):
   p_anomaly < 0.75 (`anomaly_report/main.py` `min_confidence`); needs a
   product decision (keep+document / filter by RCA verdict / separate
   threshold for RCA input) before any code change.
+* PERF (2026-09-29, operator reports of low GPU utilization): a 127-trace
+  / 10-epoch platform run was 80% XLA compilation (176 of 220 s, 981
+  programs) — a fixed cost per run and per experiment, the same on master
+  (1137 vs 1133 compiles locally), which no small run can amortize. Compile
+  reuse (one-program init, fixed-size inference blocks — CLAUDE.md "COMPILE
+  TRAP") cut 1133 -> 905 compiles on CPU. Next op-by-op hotspot: the s1
+  injector's per-(kind, agent)-cell statistics (~600 compiles, grows with
+  cells). Judge GPU use on the real config (3216 traces, 500 epochs, three
+  experiments) from `manifest.metrics.resources` (`by_step`, `xla_top`);
+  the operator's "old version at 83%" screenshot (12 s of user code, RAM at
+  its 30 GB limit, 21 GB GPU memory) does not look like a comparable
+  training run — its log / form settings were requested.
 
 ## Remaining work (not in this engagement's budget, recorded honestly)
 * s3 nested-CV redesign (M8 long-term); currently guarded, biases documented.

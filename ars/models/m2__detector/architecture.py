@@ -1,6 +1,6 @@
-from    typing              import Tuple, Any, Literal, Callable
+from    typing              import Tuple, Any, Literal, Callable, Iterator
 from    dataclasses         import dataclass
-from    functools           import reduce
+from    functools           import reduce, partial
 from    itertools           import starmap, chain, tee
 
 import  jax                 as jx
@@ -105,6 +105,56 @@ class PreparedData:
     test_sem_pad    : Array
     test_sem_mask   : Array
     test_labels     : Tuple[int, ...]
+
+    def infer_rows(self, cap: int = 1024) -> int:
+        '''ONE row count for every inference-style call of a training run
+        (latents, branch errors, calibration on train / val / test): the
+        bucket of the largest split — each jitted forward compiles once'''
+        return block_rows(max(self.train_epi_pad.shape[0], self.val_epi_pad_mixed.shape[0],
+                              self.test_epi_pad.shape[0]), cap)
+
+
+def block_rows(n: int, cap: int = 1024) -> int:
+    '''Rows of each jitted inference call over n traces: n's power-of-two
+    bucket, at most cap. XLA compiles a jitted forward per input SHAPE: called
+    on every split's own size it compiled once per split — seconds each on
+    GPU, where a small run spends most of its time compiling. See over_blocks.'''
+    return max(1, min(int(cap), 1 << max(int(n) - 1, 0).bit_length()))
+
+
+@partial(jx.jit, static_argnums = (1,))
+def _pad_rows(arrays: Tuple[Array, ...], rows: int) -> Tuple[Array, ...]:
+    return tuple(jp.pad(a, ((0, rows - a.shape[0]),) + ((0, 0),) * (a.ndim - 1)) for a in arrays)
+
+
+@partial(jx.jit, static_argnums = (1,))
+def _head_rows(tree: Any, n: int) -> Any:
+    return jx.tree_util.tree_map(lambda a: a[:n], tree)
+
+
+def row_blocks(arrays: Tuple[Array, ...], rows: int) -> Iterator[Tuple[Tuple[Array, ...], int]]:
+    '''(block, k): consecutive blocks of exactly `rows` rows of the row-aligned
+    arrays, the last one zero-padded (a padded trace has mask False and
+    length 0); k = real rows in the block'''
+    n = int(arrays[0].shape[0])
+    for start in range(0, n, rows):
+        part    = arrays if (start == 0 and n <= rows) else tuple(a[start:start + rows] for a in arrays)
+        k       = int(part[0].shape[0])
+        yield (part if k == rows else _pad_rows(part, rows)), k
+
+
+def over_blocks(fn: Callable[..., Any], rows: int, *arrays: Array) -> Any:
+    '''fn(*block) over row_blocks, the padding cut from fn's row-aligned
+    outputs and the blocks concatenated. Callers' per-row outputs depend on
+    that row alone (forward passes in inference mode, per-trace errors), so
+    this equals one call on the whole arrays up to float32 rounding (XLA picks
+    matmul kernels by shape; tests/test_compile_reuse.py) — while fn compiles
+    for one shape instead of once per input size.'''
+    if int(arrays[0].shape[0]) == 0:
+        return fn(*arrays)
+    parts = tuple(out if k == rows else _head_rows(out, k)
+                  for out, k in ((fn(*block), k) for block, k in row_blocks(arrays, rows)))
+    return parts[0] if len(parts) == 1 else jx.tree_util.tree_map(lambda *xs: jp.concatenate(xs, axis = 0), *parts)
 
 
 jx.tree_util.register_pytree_node(
@@ -409,24 +459,28 @@ class TRAIN:
             case LSTM_AE():
                 if input_shape is None:
                     raise ValueError('для LSTM_AE необходимо указать input_shape')
-                dummy_input         = jp.ones((1,) + input_shape, dtype = jp.float32)
-                dummy_seq_lengths   = jp.full((1,), input_shape[0], dtype = jp.int32)
-                variables           = model.init(rng, dummy_input, dummy_seq_lengths, training = True)
-                params              = variables['params']
-                batch_stats         = variables.get('batch_stats', {})
+                dummies = lambda: (jp.ones((1,) + input_shape, dtype = jp.float32),
+                                   jp.full((1,), input_shape[0], dtype = jp.int32))
             case FMLP_AE():
-                epi_dummy   = jp.ones((1, model.hp.sz_latent_epi))
-                sem_dummy   = jp.ones((1, model.hp.sz_latent_sem))
-                variables   = model.init(rng, epi_dummy, sem_dummy, training = True)
-                params      = variables['params']
-                batch_stats = variables.get('batch_stats', {})
+                dummies = lambda: (jp.ones((1, model.hp.sz_latent_epi)),
+                                   jp.ones((1, model.hp.sz_latent_sem)))
             case _: raise TypeError('неизвестный тип модели')
 
         schedule    = schedule_fn if schedule_fn is not None else ox.constant_schedule(learning_rate)
         optimizer   = ox.chain(
             ox.clip_by_global_norm(clip_grad),
             ox.adamw(learning_rate = schedule, weight_decay = weight_decay))
-        return TrainState.create(apply_fn = model.apply, params = params, tx = optimizer, batch_stats = batch_stats)
+
+        def build(key: jx.Array) -> TrainState:
+            variables = model.init(key, *dummies(), training = True)
+            return TrainState.create(apply_fn = model.apply, params = variables['params'], tx = optimizer,
+                                     batch_stats = variables.get('batch_stats', {}))
+
+        # ONE compiled program. Run op by op, flax + optax init compiled 70-100
+        # single-op XLA programs per model (~40% of a branch's compile time;
+        # every one costs tens of ms on GPU). Same values bit for bit
+        # (tests/test_compile_reuse.py).
+        return jx.jit(build)(rng)
 
     @staticmethod
     @jx.jit(static_argnames = ('training', 'loss_type', 'huber_delta'))
@@ -504,34 +558,43 @@ class TRAIN:
 
 @dataclass(frozen = True)
 class Branch:
-    @staticmethod
-    def encode(model: LSTM_AE, state: TrainState, padded: Array, mask: Array, chunk: int = 1024) -> Array:
-        seq_lengths = jp.sum(mask, axis = 1).astype(jp.int32)
-        bounds      = range(0, padded.shape[0], chunk)
-
-        return jp.concatenate(tuple(map(
-            lambda i: TRAIN.lstm_ae_encode_batch(state.params, model, padded[i:i + chunk], seq_lengths[i:i + chunk]),
-            bounds)), axis = 0)
+    # rows: see over_blocks — None = the input's own bucket (block_rows);
+    # a training run passes PreparedData.infer_rows so every split shares it
 
     @staticmethod
-    def lstm_recon_mse(model: LSTM_AE, state: TrainState, padded: Array, mask: Array, chunk: int = 1024) -> Array:
-        bounds      = range(0, padded.shape[0], chunk)
-        sse, cnt    = map(jp.stack, zip(*map(
-            lambda i: TRAIN.lstm_ae_sse_count(state.params, model, padded[i:i + chunk],
-                jp.sum(mask[i:i + chunk], axis = 1).astype(jp.int32), mask[i:i + chunk]),
-            bounds)))
+    def encode(model: LSTM_AE, state: TrainState, padded: Array, mask: Array, chunk: int = 1024,
+               rows: None | int = None) -> Array:
+        return over_blocks(
+            lambda x, m: TRAIN.lstm_ae_encode_batch(state.params, model, x, jp.sum(m, axis = 1).astype(jp.int32)),
+            rows or block_rows(padded.shape[0], chunk), padded, mask)
+
+    @staticmethod
+    def lstm_recon_mse(model: LSTM_AE, state: TrainState, padded: Array, mask: Array, chunk: int = 1024,
+                       rows: None | int = None) -> Array:
+        # padded rows have mask False: they add nothing to either sum
+        sse, cnt    = map(jp.stack, zip(*(
+            TRAIN.lstm_ae_sse_count(state.params, model, x, jp.sum(m, axis = 1).astype(jp.int32), m)
+            for (x, m), _ in row_blocks((padded, mask), rows or block_rows(padded.shape[0], chunk)))))
 
         return sse.sum() / cnt.sum()
 
     @staticmethod
-    def combined_recon_mse(state: TrainState, model: FMLP_AE, epi_lat: Array, sem_lat: Array) -> Array:
-        recon   = TRAIN.fmlp_ae_forward(state, model, epi_lat, sem_lat, training = False)
+    def combined_forward(state: TrainState, model: FMLP_AE, epi_lat: Array, sem_lat: Array,
+                         rows: None | int = None) -> Array:
+        return over_blocks(lambda e, s: TRAIN.fmlp_ae_forward(state, model, e, s, training = False),
+                           rows or block_rows(epi_lat.shape[0]), epi_lat, sem_lat)
+
+    @staticmethod
+    def combined_recon_mse(state: TrainState, model: FMLP_AE, epi_lat: Array, sem_lat: Array,
+                           rows: None | int = None) -> Array:
+        recon   = Branch.combined_forward(state, model, epi_lat, sem_lat, rows)
         target  = jp.concatenate((epi_lat, sem_lat), axis = -1)
         return jp.mean((recon - target) ** 2)
 
     @staticmethod
-    def combined_errors(state: TrainState, model: FMLP_AE, epi_lat: Array, sem_lat: Array) -> Array:
-        recon       = TRAIN.fmlp_ae_forward(state, model, epi_lat, sem_lat, training = False)
+    def combined_errors(state: TrainState, model: FMLP_AE, epi_lat: Array, sem_lat: Array,
+                        rows: None | int = None) -> Array:
+        recon       = Branch.combined_forward(state, model, epi_lat, sem_lat, rows)
         target      = jp.concatenate((epi_lat, sem_lat), axis = -1)
         pointwise   = Loss.pointwise(recon, target, model.hp.loss_type, model.hp.huber_delta)
         return jp.mean(pointwise, axis = -1)

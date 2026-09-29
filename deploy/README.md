@@ -96,7 +96,12 @@ per stage (`prepare`, `train_detector`, `train_classifier`, `eval`, `infer`)
 and per step (the Russian step names of the node log) — wall seconds, CPU
 core-seconds and average busy cores, GPU utilization and memory, peak RSS,
 XLA compile seconds. A step with high `cpu_cores_avg` and low
-`gpu_util_avg_pct` is where the GPU waits for the CPU.
+`gpu_util_avg_pct` is where the GPU waits for the CPU; when its
+`xla_compile_s` is close to its `wall_s`, the CPU is compiling
+(`resources.xla_top` names the programs). Compilation is a fixed cost per run
+and per experiment, a few minutes on an H100 instance: a small corpus (a 127-trace run
+spent 176 of 220 s compiling) shows a low average GPU utilization whatever
+the code does — judge GPU use on the production corpus and epochs.
 
 ### Multi-GPU
 

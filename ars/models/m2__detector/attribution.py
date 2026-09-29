@@ -21,7 +21,7 @@ import numpy as np
 from flax.core import FrozenDict
 
 from ars.models.m2__detector.architecture import (
-    FMLP_AE, LSTM_AE, TRAIN, Array, Params, TrainState)
+    FMLP_AE, LSTM_AE, TRAIN, Array, Params, TrainState, block_rows, row_blocks)
 from ars.models.metrics import Loss
 
 # traces per jitted call: bounds the transient [chunk, T, D] error tensors
@@ -126,9 +126,12 @@ def explain(model: LSTM_AE, params: Params, padded: Array, mask: Array,
     n, t, d = padded.shape
     ks, kf, kd = min(k_spans, t), min(k_feats, d), min(k_drivers, d)
     eligible = jp.asarray(np.ones(d, dtype=bool) if driver_mask is None else driver_mask, dtype=bool)
+    # fixed-size blocks: one compile per model, not one per input size; the
+    # padding is cut on the host (row_blocks in architecture.py)
     parts = tuple(
-        jx.device_get(_explain_chunk(params, model, padded[i:i + chunk], mask[i:i + chunk], eligible, ks, kf, kd))
-        for i in range(0, n, chunk))
+        {key: v[:k] for key, v in jx.device_get(
+            _explain_chunk(params, model, x, m, eligible, ks, kf, kd)).items()}
+        for (x, m), k in row_blocks((padded, mask), block_rows(n, chunk)))
     if not parts:
         return {}
     return {key: np.concatenate(tuple(p[key] for p in parts)) for key in parts[0]}
